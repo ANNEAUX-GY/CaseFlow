@@ -1,0 +1,9 @@
+# 案件指派系统 - Python 开发脚本依赖
+# 安装：.venv\Scripts\python.exe -m pip install -r requirements.txt
+pymysql>=1.1.0
+openpyxl>=3.1.2
+requests>=2.31.0
+
+# 可选：start_lan.py 用它把访问地址画成二维码，方便手机扫码打开。
+# 不装也能正常启动，只是不打印二维码。
+segno>=1.6.0

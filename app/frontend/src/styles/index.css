@@ -1,0 +1,1703 @@
+/* ==========================================================
+   公安配色：警蓝（藏蓝）+ 警徽金，弱装饰、强信息密度、状态一眼可辨
+   ========================================================== */
+:root {
+  /* 主色：警蓝 / 藏蓝 */
+  --cf-primary: #1b4a8c;
+  --cf-primary-hover: #2a5da6;
+  --cf-navy: #12294a;          /* 深藏蓝：侧边栏、顶栏压边 */
+  --cf-navy-2: #1d3a63;        /* 藏蓝浅一档：登录页背景渐变 */
+  --cf-gold: #c8a45c;          /* 警徽金：强调与激活态 */
+
+  --cf-bg: #f2f4f7;
+  --cf-panel: #ffffff;
+  --cf-text: #1b2430;
+  --cf-text-2: #5a6472;
+  --cf-text-3: #8a929e;
+  --cf-border: #dfe4ea;
+  --cf-head-bg: #eff3f8;       /* 表头：浅警蓝 */
+
+  --cf-danger: #c62a2a;        /* 逾期 */
+  --cf-warn: #d98a0b;          /* 临期 */
+  --cf-ok: #1e8e58;            /* 办结 */
+
+  --el-color-primary: var(--cf-primary);
+  --el-border-radius-base: 4px;
+  --el-font-size-base: 13px;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #app {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: radial-gradient(circle at 100% 0%, #f8fbff 0, var(--cf-bg) 42%, #edf1f6 100%);
+  color: var(--cf-text);
+  font-size: 13px;
+  font-family: "Microsoft YaHei", "PingFang SC", -apple-system, "Segoe UI", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 页面容器 */
+.cf-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.cf-panel {
+  background: var(--cf-panel);
+  border: 1px solid var(--cf-border);
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(18, 41, 74, 0.035);
+  transition: box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.cf-panel:hover {
+  border-color: #cbd7e6;
+  box-shadow: 0 5px 18px rgba(18, 41, 74, 0.07);
+}
+
+.cf-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 44px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--cf-border);
+  font-weight: 600;
+  font-size: 13px;
+}
+/* 面板标题左侧金色竖条 */
+.cf-panel__head > span:first-child { display: inline-flex; align-items: center; gap: 6px; }
+.cf-panel__head > span:first-child::before {
+  content: "";
+  width: 3px;
+  height: 13px;
+  background: var(--cf-gold);
+  border-radius: 1px;
+}
+
+/* 标题右侧的说明文字（次要信息，不抢标题） */
+.cf-panel__head-tip {
+  flex: 1;
+  margin-left: 12px;
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--cf-text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cf-panel__head-actions { display: inline-flex; align-items: center; gap: 8px; }
+
+/* 表单里字段下方的灰色小提示 */
+.cf-form-tip {
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--cf-text-3);
+}
+
+/* 标签页签上的数量角标 */
+.cf-badge {
+  display: inline-block;
+  margin-left: 6px;
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--cf-danger);
+  color: #fff;
+  font-size: 12px;
+  line-height: 18px;
+  text-align: center;
+}
+
+.cf-panel__body { padding: 14px 16px; }
+
+/* 标题 */
+.cf-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.cf-subtitle {
+  color: var(--cf-text-3);
+  font-size: 12px;
+}
+
+/* KPI 数字块：数字最大、标签最小
+   列数写死（而不是 auto-fit），窗口宽度变化时不会突然换行导致整页往下窜 */
+.cf-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 8px;
+}
+@media (max-width: 1440px) { .cf-kpi-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 860px) { .cf-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+.cf-kpi {
+  background: var(--cf-panel);
+  border: 1px solid var(--cf-border);
+  border-left: 3px solid var(--cf-primary);
+  border-radius: 4px;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.cf-kpi:hover { border-color: var(--cf-primary-hover); background: #fafcff; }
+.cf-kpi--danger { border-left-color: var(--cf-danger); }
+.cf-kpi--warn { border-left-color: var(--cf-warn); }
+
+.cf-kpi__value {
+  font-size: 26px;
+  line-height: 30px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--cf-navy);
+}
+
+.cf-kpi__label {
+  margin-top: 2px;
+  color: var(--cf-text-2);
+  font-size: 12px;
+}
+
+.cf-kpi--danger .cf-kpi__value { color: var(--cf-danger); }
+.cf-kpi--warn .cf-kpi__value { color: var(--cf-warn); }
+
+/* 「我的案件」概览只有 4 个口径，单独指定列数，避免沿用 8 列在右侧留半屏空档 */
+.cf-kpi-grid--mine { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 860px) { .cf-kpi-grid--mine { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* 「我的案件」顶部的实名范围说明条：先讲清数据从哪来，再谈数字 */
+.cf-mine-banner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  padding: 10px 14px;
+  background: linear-gradient(90deg, #eef4fd 0%, #ffffff 72%);
+  border: 1px solid var(--cf-border);
+  border-left: 3px solid var(--cf-primary);
+  border-radius: 4px;
+}
+/* 未关联员工档案：降级为「只看本人录入」，用临期色提醒去补档案 */
+.cf-mine-banner--warn {
+  border-left-color: var(--cf-warn);
+  background: linear-gradient(90deg, #fdf6e8 0%, #ffffff 72%);
+}
+.cf-mine-banner__name { font-size: 15px; font-weight: 600; color: var(--cf-navy); }
+.cf-mine-banner__role { color: var(--cf-text-2); font-size: 12px; }
+.cf-mine-banner__desc { color: var(--cf-text-2); }
+.cf-mine-banner__grow { flex: 1 1 auto; }
+@media (max-width: 860px) {
+  .cf-mine-banner { align-items: flex-start; flex-direction: column; }
+  .cf-mine-banner__grow { display: none; }
+}
+
+/* 文本状态色 */
+.cf-danger { color: var(--cf-danger); }
+.cf-warn { color: var(--cf-warn); }
+.cf-ok { color: var(--cf-ok); }
+.cf-muted { color: var(--cf-text-3); }
+
+/* 表格行状态 */
+.cf-row--overdue > td { background: #fbeded !important; }
+.cf-row--soon > td { background: #fff6e6 !important; }
+
+/* 紧凑表格 */
+.el-table { font-size: 13px; }
+.el-table th {
+  background: var(--cf-head-bg) !important;
+  color: var(--cf-navy) !important;
+  font-weight: 600 !important;
+}
+.el-table td { padding: 7px 0 !important; }
+
+/* 侧边导航：深藏蓝
+   —— 本系统使用者多为四五十岁，侧栏文字按「远距离 + 中等老花」取值：
+      字号 17px、行高 56px、字重 500 起步，激活项再加重并加强调色 */
+.cf-aside {
+  background: var(--cf-navy);
+  border-right: none;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* 导航面板（NavPanel）：桌面侧栏与手机抽屉共用同一套内部结构，
+   容器换、内容不换，两端的导航样式天然一致 */
+.cf-nav {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--cf-navy);
+  overflow: hidden;
+}
+
+.cf-nav__menu { flex: 1; min-height: 0; overflow: auto; }
+
+/* 侧栏底部落款：固定高度，菜单变长也不会把它顶走 */
+.cf-aside__foot {
+  margin-top: auto;
+  padding: 12px 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  font-size: 12px;
+  line-height: 1.7;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.cf-aside__foot span { display: block; }
+
+.cf-logo {
+  height: 74px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: 1px;
+}
+
+.cf-logo svg { flex: none; }
+
+.cf-logo__sub {
+  display: block;
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 1.4px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.cf-nav .el-menu {
+  --el-menu-bg-color: transparent;
+  --el-menu-text-color: #dbe5f3;          /* 比原来更亮，深蓝底上对比度更足 */
+  --el-menu-hover-bg-color: rgba(255, 255, 255, 0.10);
+  --el-menu-active-text-color: #ffffff;
+  --el-menu-item-height: 56px;
+  background: transparent;
+  border-right: none;
+  padding-top: 8px;
+}
+
+/* 一级导航条目 */
+.cf-nav .el-menu-item {
+  height: 56px;
+  line-height: 56px;
+  font-size: 17px;
+  font-weight: 500;
+  letter-spacing: 0.6px;
+  padding-left: 15px !important;
+  border-left: 5px solid transparent;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.cf-nav .el-menu-item .el-icon {
+  width: 26px;
+  margin-right: 12px;
+  font-size: 21px;
+}
+
+.cf-nav .el-menu-item:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.10);
+}
+
+/* 当前页：左侧警徽金粗竖条 + 明显提亮 + 加粗，扫一眼就能定位 */
+.cf-nav .el-menu-item.is-active {
+  background: rgba(255, 255, 255, 0.16);
+  border-left-color: var(--cf-gold);
+  color: #fff;
+  font-weight: 700;
+}
+
+.cf-nav .el-menu-item.is-active .el-icon { color: var(--cf-gold); }
+
+/* 侧栏「账号管理」上的待审核红点 */
+.cf-nav-badge {
+  margin-left: auto;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: var(--cf-danger);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 20px;
+  text-align: center;
+}
+
+/* 顶栏：白色 + 底部警蓝压边 */
+.cf-header {
+  height: 62px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 18px;
+  background: #ffffff;
+  border-bottom: 2px solid var(--cf-navy);
+}
+
+.cf-header__right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.cf-header__user { font-size: 15px; color: var(--cf-text-2); }
+
+/* 顶栏角色标签：让人一眼确认自己是以什么身份在操作 */
+.cf-header__role {
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--cf-primary);
+  color: var(--cf-primary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.cf-header__logout.el-button { font-size: 15px; font-weight: 600; }
+
+.cf-header__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cf-header__title::before {
+  content: "";
+  width: 4px;
+  height: 18px;
+  background: var(--cf-gold);
+  border-radius: 1px;
+}
+
+/* 页脚：底部留白 + 标语条 */
+.cf-foot { margin: 20px 0 16px; }
+
+.cf-foot__space {
+  height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cf-foot__line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--cf-border) 30%, var(--cf-border) 70%, transparent);
+}
+
+.cf-foot__seal {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--cf-border);
+  background: #fff;
+  color: var(--cf-gold);
+}
+
+.cf-foot__band {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 120px;
+  padding: 22px 26px;
+  border-radius: 4px;
+  border-top: 2px solid var(--cf-gold);
+  background: linear-gradient(100deg, #12294a 0%, #1d3a63 52%, #1b4a8c 100%);
+  color: #fff;
+}
+
+.cf-foot__slogan {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
+.cf-foot__slogan:hover { color: var(--cf-gold); }
+
+.cf-foot__divider {
+  width: 1px;
+  align-self: stretch;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.cf-foot__col { min-width: 0; }
+
+.cf-foot__sub {
+  font-size: 11px;
+  letter-spacing: 1.6px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.cf-foot__hint {
+  margin-top: 7px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.cf-foot__grow { flex: 1; }
+
+.cf-foot__meta {
+  text-align: right;
+  font-size: 12px;
+  line-height: 1.8;
+  color: rgba(255, 255, 255, 0.5);
+  white-space: nowrap;
+}
+
+/* 工具条 */
+.cf-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.cf-spacer { flex: 1; }
+
+/* 登录页：藏蓝底 + 徽标 */
+.cf-login {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  background: radial-gradient(120% 120% at 50% 0%, #1d3a63 0%, #12294a 55%, #0d1f38 100%);
+}
+
+.cf-login__emblem { display: flex; justify-content: center; }
+
+.cf-login__brand {
+  text-align: center;
+  color: #fff;
+}
+
+.cf-login__brand h1 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 3px;
+}
+
+.cf-login__brand p {
+  margin: 4px 0 0;
+  font-size: 11px;
+  letter-spacing: 2px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.cf-login__box {
+  width: 340px;
+  background: #fff;
+  border-radius: 4px;
+  padding: 22px 24px 24px;
+  border-top: 3px solid var(--cf-gold);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
+}
+
+.cf-login__title { font-size: 16px; font-weight: 700; margin: 0 0 14px; color: var(--cf-navy); }
+.cf-login__tip { color: var(--cf-text-3); font-size: 12px; margin-bottom: 18px; }
+
+/* 登录页底部的注册入口 */
+.cf-login__more {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--cf-border);
+  font-size: 14px;
+  color: var(--cf-text-2);
+}
+
+/* 「还没有账号？」不能被拆成两行 */
+.cf-login__more > span:first-child { white-space: nowrap; }
+
+.cf-login__more .el-button { font-size: 14px; padding: 0 2px; }
+
+/* 审核说明另起一行，别和「还没有账号？注册账号」挤在同一行（窄卡片里会折得很难看） */
+.cf-login__more-tip {
+  flex: 0 0 100%;
+  margin-left: 0;
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--cf-text-3);
+}
+
+/* 注册卡片比登录卡片宽一些：字段更多，窄了会挤 */
+.cf-register { width: 460px; padding: 20px 24px 18px; }
+.cf-register .el-form-item { margin-bottom: 14px; }
+
+.cf-register__notice {
+  background: var(--cf-head-bg);
+  border-left: 3px solid var(--cf-primary);
+  border-radius: 3px;
+  padding: 8px 10px;
+  margin-bottom: 16px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--cf-text-2);
+}
+
+.cf-register__notice strong { color: var(--cf-navy); }
+
+/* 登录页底部标语 */
+.cf-login__foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 340px;
+  margin-top: 8px;
+}
+
+.cf-login__rule {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(200, 164, 92, 0.55), transparent);
+}
+
+.cf-login__slogan {
+  color: var(--cf-gold);
+  font-size: 12px;
+  letter-spacing: 2px;
+  white-space: nowrap;
+}
+
+.cf-login__copyright {
+  margin-bottom: 24px;
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+/* ==========================================================
+   统一美化 + 布局稳定：防止加载 / 翻页 / 切页时内容跳动
+   ========================================================== */
+
+/* 内容区独立滚动；scrollbar-gutter 预留滚动条位置，
+   避免出现/消失滚动条时整页横向抖一下 */
+.cf-main {
+  padding: 16px !important;
+  background: var(--cf-bg);
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+html { scrollbar-gutter: stable; }
+
+/* 滚动条：细、藏蓝，不抢视觉 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #b6c2d4 transparent;
+}
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: #c3cddb;
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--cf-primary); background-clip: content-box; }
+
+/* 页面切换过渡：out-in 保证新旧页面不重叠，不会互相挤位 */
+.cf-fade-enter-active { transition: opacity 0.18s ease, transform 0.18s ease; }
+.cf-fade-leave-active { transition: opacity 0.12s ease; }
+.cf-fade-enter-from { opacity: 0; transform: translateY(6px); }
+.cf-fade-leave-to { opacity: 0; }
+
+/* 面板：轻描边 + 极淡投影，层次清楚又不厚重 */
+.cf-panel {
+  box-shadow: 0 1px 2px rgba(18, 41, 74, 0.05);
+}
+
+/* 表格区：最小高度占位，数据从 20 条变 3 条时下方内容不会被拽上来 */
+.cf-table-wrap {
+  width: 100%;
+  min-height: 300px;
+}
+
+/* 表格：统一分隔线、hover 高亮柔和、长文本单行省略 */
+.el-table {
+  --el-table-border-color: #e8ecf2;
+  --el-table-header-bg-color: var(--cf-head-bg);
+}
+
+.el-table__row:hover > td { background: #f4f8ff !important; }
+.el-table__row.cf-row--overdue:hover > td { background: #f9e4e4 !important; }
+.el-table__row.cf-row--soon:hover > td { background: #fdefdc !important; }
+
+.el-table .cell { white-space: nowrap; }
+.el-table__empty-block { min-height: 120px; }
+
+/* 表头在卡片内滚动时保持吸顶 */
+.el-table__header-wrapper th { position: sticky; top: 0; z-index: 2; }
+
+/* 顶栏日期 */
+.cf-header__date {
+  font-size: 14px;
+  color: var(--cf-text-2);
+  padding-right: 14px;
+  margin-right: 0;
+  border-right: 1px solid var(--cf-border);
+}
+
+/* 分页条：固定在表格下方，翻页时位置不动 */
+.cf-pager {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px;
+  border-top: 1px solid var(--cf-border);
+}
+
+/* 工具条：控件不换行挤压，窄屏才允许折行 */
+.cf-toolbar { row-gap: 8px; }
+
+/* 到期提醒的 Tab 与下方卡片间距统一 */
+.cf-page .el-tabs { margin-bottom: -4px; }
+.cf-page .el-tabs__header { margin: 0 0 8px; }
+
+/* 表单：员工图谱右栏与左栏视觉等高 */
+.el-form-item { margin-bottom: 12px; }
+.el-form-item__label { color: var(--cf-text-2); }
+
+/* 同一行内的卡片等高：切换员工 / 导入数据时旁边那块不会忽高忽低 */
+.cf-panel--fill { height: 100%; display: flex; flex-direction: column; }
+.cf-panel--fill > .cf-panel__body { flex: 1; }
+
+/* 组织树「树状图」模式：与列表模式同高，切换时页面高度不跳 */
+.cf-orgchart__tip {
+  margin-bottom: 4px;
+  font-size: 11px;
+  color: var(--cf-text-3);
+}
+
+/* ==========================================================
+   最近操作：每条都可点开看「这一步到底做了什么」，并支持 Ctrl+Z 撤回
+   ========================================================== */
+.cf-oplog {
+  display: flex;
+  flex-direction: column;
+  /* 必须是确定高度：靠 flex 从兄弟列撑高会形成循环依赖，列表会把整页顶长 */
+  height: 230px;
+  overflow: hidden;
+  padding: 6px 10px 0;
+}
+
+.cf-oplog__list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* 用 button 而不是 div，键盘 Tab 可聚焦、回车可打开 */
+.cf-oplog__item {
+  display: block;
+  width: 100%;
+  padding: 7px 8px;
+  border: none;
+  border-bottom: 1px dashed var(--cf-border);
+  border-radius: 3px;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.cf-oplog__item:hover { background: #f4f8ff; }
+.cf-oplog__item:focus-visible { outline: 2px solid var(--cf-primary); outline-offset: -2px; }
+
+.cf-oplog__row1 { display: flex; align-items: flex-start; gap: 6px; }
+.cf-oplog__row2 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 3px;
+  font-size: 11.5px;
+  color: var(--cf-text-3);
+}
+
+.cf-oplog__tag {
+  flex: none;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 2px;
+  font-size: 11px;
+  line-height: 18px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--cf-primary);
+}
+.cf-oplog__tag.is-assign { background: var(--cf-gold); color: #3a2c0c; }
+.cf-oplog__tag.is-delete,
+.cf-oplog__tag.is-undo { background: var(--cf-danger); }
+.cf-oplog__tag.is-update,
+.cf-oplog__tag.is-status { background: var(--cf-text-2); }
+
+.cf-oplog__text {
+  min-width: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--cf-text);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.cf-oplog__flag {
+  flex: none;
+  color: var(--cf-text-3);
+}
+.cf-oplog__flag--ok { color: var(--cf-ok); font-weight: 600; }
+
+.cf-oplog__hint {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 2px 8px;
+  border-top: 1px solid var(--cf-border);
+  font-size: 11px;
+  color: var(--cf-text-3);
+}
+
+.cf-oplog__kbd {
+  display: inline-block;
+  padding: 0 4px;
+  border: 1px solid var(--cf-border);
+  border-bottom-width: 2px;
+  border-radius: 3px;
+  background: #fff;
+  font-size: 10px;
+  line-height: 15px;
+  color: var(--cf-text-2);
+}
+
+/* ==========================================================
+   设备识别（由 src/utils/device.js 判定后挂到 <html> 上）
+   ========================================================== */
+
+/* 汉堡按钮：仅手机端顶栏出现，热区 44×44 便于手指点 */
+.cf-burger {
+  flex: none;
+  width: 42px;
+  height: 42px;
+  margin-right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--cf-border);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--cf-navy);
+  font-size: 22px;
+  cursor: pointer;
+}
+
+.cf-burger:active { background: var(--cf-head-bg); }
+
+/* 版式标识：把「系统把你认成手机还是电脑」直接摆出来，点一下手动切换 */
+.cf-device-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--cf-border);
+  border-radius: 15px;
+  background: var(--cf-head-bg);
+  color: var(--cf-primary);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.cf-device-chip:active { background: #e2eaf6; }
+
+/* 手机抽屉里的导航：与桌面侧栏同色同结构 */
+.cf-nav-drawer .el-drawer__body {
+  padding: 0;
+  background: var(--cf-navy);
+  overflow: hidden;
+}
+
+.cf-nav__close {
+  flex: none;
+  margin-left: auto;
+  width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.cf-nav__close:active { background: rgba(255, 255, 255, 0.12); }
+
+/* 抽屉底部：用户信息 + 退出 + 版式切换（桌面顶栏里的东西都收在这里） */
+.cf-nav__user {
+  flex: none;
+  padding: 14px 16px calc(14px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.cf-nav__user-row { display: flex; align-items: center; gap: 8px; }
+
+.cf-nav__uname {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 17px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.cf-nav__urole {
+  flex: none;
+  padding: 1px 8px;
+  border: 1px solid var(--cf-gold);
+  border-radius: 10px;
+  color: var(--cf-gold);
+  font-size: 12px;
+}
+
+.cf-nav__udate {
+  margin-top: 5px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.cf-nav__logout {
+  margin-top: 12px;
+  width: 100%;
+  height: 44px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+  background: transparent;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cf-nav__logout:active { background: rgba(255, 255, 255, 0.14); }
+
+.cf-nav__device {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.18);
+}
+
+.cf-nav__device-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.cf-nav__device-kind { flex: none; color: rgba(255, 255, 255, 0.45); }
+
+.cf-nav__modes { display: flex; gap: 6px; margin-top: 8px; }
+
+.cf-nav__modes button {
+  flex: 1;
+  height: 40px;
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  border-radius: 4px;
+  background: transparent;
+  color: #dbe5f3;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.cf-nav__modes button.is-active {
+  border-color: var(--cf-gold);
+  background: var(--cf-gold);
+  color: #2c2208;
+  font-weight: 700;
+}
+
+.cf-nav__auto {
+  margin-top: 8px;
+  width: 100%;
+  border: none;
+  background: none;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* ==========================================================
+   案件卡片：手机端不用表格，改成竖排卡片
+   （表格在 375px 宽下只剩横向滚动，读完一行要来回搓屏，体验很差）
+   ========================================================== */
+.cf-ccards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+}
+
+.cf-ccards__empty {
+  padding: 32px 0;
+  text-align: center;
+  color: var(--cf-text-3);
+}
+
+.cf-ccard {
+  position: relative;
+  padding: 10px 12px 10px 15px;
+  border: 1px solid var(--cf-border);
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+}
+
+/* 左侧状态色条：与表格行的淡红/淡黄一一对应，扫一眼就知道哪条要盯 */
+.cf-ccard::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  border-radius: 4px 0 0 4px;
+  background: var(--cf-primary);
+}
+
+.cf-ccard.cf-row--overdue { background: #fbeded; }
+.cf-ccard.cf-row--overdue::before { background: var(--cf-danger); }
+.cf-ccard.cf-row--soon { background: #fff6e6; }
+.cf-ccard.cf-row--soon::before { background: var(--cf-warn); }
+.cf-ccard.cf-row--closed::before { background: var(--cf-text-3); }
+
+.cf-ccard__top {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.cf-ccard__name {
+  flex: 1;
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--cf-text);
+  word-break: break-all;
+}
+
+.cf-ccard__tags {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cf-ccard__meta {
+  margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 12px;
+  font-size: 12px;
+  color: var(--cf-text-3);
+}
+
+.cf-ccard__meta b {
+  font-weight: 400;
+  color: var(--cf-text-2);
+}
+
+.cf-ccard__foot {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--cf-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.cf-ccard__due {
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.cf-ccard__ops {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* 操作按钮放大到 32px 高，手指点得准 */
+.cf-ccard__ops .el-button {
+  height: 32px;
+  padding: 0 8px;
+  font-size: 14px;
+}
+
+/* 账号管理卡片（仅手机端渲染，所以不必包在媒体查询里） */
+.cf-ucards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 60px;
+}
+
+.cf-ucard {
+  padding: 10px 12px;
+  border: 1px solid var(--cf-border);
+  border-radius: 4px;
+  background: #fff;
+}
+
+.cf-ucard__top {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.cf-ucard__name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--cf-text);
+}
+
+.cf-ucard__meta {
+  margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 12px;
+  font-size: 12px;
+  color: var(--cf-text-3);
+}
+
+.cf-ucard__meta b { font-weight: 400; color: var(--cf-text-2); }
+
+.cf-ucard__ops {
+  margin-top: 9px;
+  padding-top: 9px;
+  border-top: 1px dashed var(--cf-border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.cf-ucard__ops .el-button { margin-left: 0; }
+
+/* ==========================================================
+   手机端（<= 768px）：断点必须与 utils/device.js 的 MOBILE_MAX_WIDTH 一致
+   ========================================================== */
+@media (max-width: 768px) {
+  /* iOS 上输入框字号小于 16px 会触发「聚焦自动放大页面」，
+     表单一聚焦整页乱跳，这里统一抬到 16px 按标准规避 */
+  .el-input__inner,
+  .el-textarea__inner { font-size: 16px !important; }
+
+  body { font-size: 14px; overflow-x: hidden; }
+
+  /* ---- 顶栏：只留汉堡 + 页面标题 + 版式标识 ---- */
+  .cf-header {
+    height: calc(56px + env(safe-area-inset-top, 0px));
+    padding: env(safe-area-inset-top, 0px) 10px 0;
+    gap: 8px;
+  }
+
+  .cf-header__title { flex: 1; min-width: 0; }
+  .cf-header__title .cf-title { font-size: 17px; }
+  .cf-header__right { gap: 8px; }
+
+  /* 日期、用户名、退出都收进抽屉了，顶栏不跟内容抢宽度 */
+  .cf-header__date,
+  .cf-header__user,
+  .cf-header__logout { display: none; }
+
+  /* ---- 内容区 ---- */
+  .cf-main { padding: 10px !important; }
+  .cf-main { padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)) !important; }
+
+  .cf-page { gap: 12px; }
+
+  /* ---- KPI：2 列，数字缩小但仍比正文大，保证一眼可辨 ---- */
+  .cf-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+  .cf-kpi { padding: 8px 10px; }
+  .cf-kpi__value { font-size: 22px; line-height: 26px; }
+  .cf-kpi__label { font-size: 12px; margin-top: 1px; }
+
+  /* ---- 面板 ---- */
+  /* 标题 + 右侧控件在窄屏放不下一行时会折行，所以高度不能写死：
+     写死 42px 时折下来的第二行会溢出面板头、压到正文上 */
+  .cf-panel__head {
+    height: auto;
+    min-height: 42px;
+    flex-wrap: wrap;
+    row-gap: 6px;
+    padding: 7px 10px;
+    gap: 8px;
+    font-size: 14px;
+  }
+  .cf-panel__head > span:first-child { flex: 1 1 auto; min-width: 0; }
+  .cf-panel__head-tip { display: none; }   /* 说明文字在窄屏只会挤标题 */
+  .cf-panel__body { padding: 10px; }
+  .cf-chart__tools { flex: 1 1 auto; flex-wrap: wrap; justify-content: flex-end; }
+  .cf-chart__tools .el-select { width: 96px; }
+  .cf-chart__tools .el-select .el-select__wrapper { padding-left: 8px; padding-right: 8px; }
+
+  /* ---- 工具条：控件两列铺满，不再一行横着挤出屏幕外 ---- */
+  .cf-toolbar { gap: 6px; }
+  .cf-toolbar > .el-input,
+  .cf-toolbar > .el-select,
+  .cf-toolbar > .el-input-number { width: calc(50% - 3px) !important; }
+  .cf-toolbar > .el-radio-group { flex: 1 1 100%; }
+  .cf-toolbar > .cf-spacer { display: none; }
+  .cf-toolbar > .el-button { flex: 1 1 auto; min-width: 84px; margin-left: 0; }
+  .cf-toolbar > .el-upload { flex: 1 1 auto; }
+  .cf-toolbar > .el-upload .el-button { width: 100%; }
+
+  /* ---- 分页：手机上留「总数 + 上下页」就够 ---- */
+  .cf-pager { justify-content: center; }
+  .cf-pager .el-pagination__sizes { display: none; }
+
+  /* ---- 表格容器不再兜最小高度，交给卡片自然排 ---- */
+  .cf-table-wrap { min-height: 0; }
+
+  /* ---- 宽表格（案件详情、员工选择器）：让容器横向滚动，
+         而不是把四五个列压成竖条。el-table 按容器宽度算列宽，
+         所以给它一个最小宽度，手指横滑查看剩余列。
+         阴影提示改用文字（见 .cf-tscroll-hint）：CSS 滚动阴影要表格背景透明，
+         会把表头那条浅警蓝底纹一起抹掉，不值当。 ---- */
+  .cf-tscroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .cf-tscroll > .el-table { min-width: 520px; }
+  /* 横滑容器里的吸顶表头会跟纵向滚动打架，这里取消 */
+  .cf-tscroll .el-table__header-wrapper th { position: static; }
+
+  .cf-tscroll-hint {
+    margin-left: auto;
+    padding-left: 8px;
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--cf-text-3);
+    white-space: nowrap;
+  }
+
+  /* ---- 整屏弹窗：把默认 32px 的上下内边距收一档，多留内容高度 ---- */
+  .el-dialog.is-fullscreen .el-dialog__body { padding: 12px; }
+  .el-dialog.is-fullscreen .el-dialog__footer { padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px)); }
+
+  /* ---- 到期提醒的页签横向滚动，不换行挤压 ---- */
+  .cf-page .el-tabs__nav-wrap::after { height: 1px; }
+  .cf-page .el-tabs__item { padding: 0 12px; font-size: 15px; }
+
+  /* ---- 最近操作：高度略增，两行文字的条目才好点 ---- */
+  .cf-oplog { height: 250px; }
+  .cf-oplog__hint { display: none; }   /* Ctrl+Z 提示在手机上没有意义 */
+
+  /* ---- 页脚：标语条改竖排 ---- */
+  .cf-foot { margin: 16px 0 12px; }
+  .cf-foot__band {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    min-height: 0;
+    padding: 14px 16px;
+  }
+  .cf-foot__slogan { font-size: 18px; letter-spacing: 2px; white-space: normal; }
+  .cf-foot__divider { display: none; }
+  .cf-foot__grow { display: none; }
+  .cf-foot__meta { text-align: left; white-space: normal; }
+
+  /* ---- 表单弹窗内的两列栅格，手机上强制单列 ---- */
+  .el-form-item { margin-bottom: 14px; }
+
+  /* 关键：表单内容区必须允许收缩到 0。
+     el-form-item__content 本身是 flex 容器，它的直接子元素又是 flex 项，
+     两项的 min-width 默认都是 auto = 不小于自身 min-content；
+     而 el-table 的 min-content 等于各列 min-width 之和（承办人选择表 = 570px），
+     于是整行被顶成 642px、撑破全屏弹窗，表现为「搜索框和表格右边被裁掉」。
+     两层的 min-width 都要清零，内层靠 .cf-tscroll 横滑兜住。 */
+  .el-form-item__content,
+  .el-form-item__content > * { min-width: 0; max-width: 100%; }
+  .el-form-item { min-width: 0; }
+  .el-dialog__body,
+  .el-drawer__body { min-width: 0; }
+
+  /* 栅格堆叠：xs 断点下每栏独占一行，el-row 本身不会加纵向间距，得自己兜 */
+  .cf-page .el-col { margin-bottom: 12px; }
+  .cf-page .el-row > .el-col:last-child { margin-bottom: 0; }
+  /* 面板内的表格/卡片替它留了内边距，这里不要再叠一层 */
+  .cf-page .el-col > .cf-panel:last-child { margin-bottom: 0; }
+
+  /* ---- 登录 / 注册：卡片随屏宽收缩，整页可滚动（注册字段多，小屏会超出一屏） ---- */
+  .cf-login {
+    height: 100%;
+    /* safe center：内容装得下就垂直居中，装不下自动退回从顶部开始（可滚动、不裁头）。
+       直接写 center 会在内容超高时把顶部裁掉，注册页在 667px 高的机型上正好踩这个坑。 */
+    justify-content: center;
+    justify-content: safe center;
+    overflow-y: auto;
+    padding: 24px 0 calc(24px + env(safe-area-inset-bottom, 0px));
+    gap: 12px;
+  }
+  .cf-login > * { flex: none; }
+  .cf-login__emblem svg { width: 44px; height: 44px; }
+  .cf-login__brand h1 { font-size: 19px; }
+  .cf-login__box,
+  .cf-register { width: min(460px, calc(100vw - 28px)); }
+  .cf-login__box { padding: 18px 18px 20px; }
+  .cf-login__foot { width: min(460px, calc(100vw - 28px)); }
+}
+
+/* 超窄屏（老机型 320~360）：KPI 数字再收一档，避免「案件总数」折成三行 */
+@media (max-width: 380px) {
+  .cf-kpi__value { font-size: 20px; line-height: 24px; }
+  .cf-kpi__label { font-size: 11px; }
+  .cf-ccard__ops .el-button { padding: 0 6px; }
+}
+
+/* 支持动态视口单位时，用 dvh 顶掉 100%：
+   手机浏览器地址栏收起/展开时 100% 会跳，dvh 不会 */
+@supports (height: 100dvh) {
+  html.cf-device-mobile,
+  html.cf-device-mobile body,
+  html.cf-device-mobile #app { height: 100dvh; }
+}
+
+
+/* ==========================================================
+   视觉规范统一：间距 / 层级 / 对齐 / 按钮与表单
+   目标——同一类信息用同一套尺度，页面之间不再各写各的
+   ========================================================== */
+:root {
+  /* 间距阶梯（4 的倍数）：全站只用这五档，避免 13px / 15px 这类手写值 */
+  --cf-gap-1: 4px;
+  --cf-gap-2: 8px;
+  --cf-gap-3: 12px;
+  --cf-gap-4: 16px;
+  --cf-gap-5: 24px;
+
+  --cf-radius: 6px;
+  --cf-radius-sm: 4px;
+  --cf-shadow-1: 0 1px 2px rgba(18, 41, 74, 0.06);
+  --cf-shadow-2: 0 4px 14px rgba(18, 41, 74, 0.10);
+
+  /* 状态色弱化底：标签 / 提示条统一用这三档，不各写 rgba */
+  --cf-ok-bg: #e8f5ee;
+  --cf-warn-bg: #fdf3e2;
+  --cf-danger-bg: #fbeaea;
+  --cf-primary-bg: #eaf1fb;
+}
+
+/* ---- 层级：标题 / 副标题 / 正文 / 辅助 ---- */
+.cf-title {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 26px;
+  letter-spacing: 0.2px;
+}
+.cf-subtitle {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--cf-text-3);
+}
+.cf-muted { color: var(--cf-text-3); }
+.cf-cell-strong { font-weight: 600; color: var(--cf-text); }
+
+/* ---- 按钮：统一高度与圆角，链接按钮在表格里对齐基线 ---- */
+.el-button {
+  font-weight: 500;
+  border-radius: var(--cf-radius-sm);
+}
+.el-button--primary { box-shadow: none; }
+.el-button.is-link {
+  padding: 0 var(--cf-gap-1);
+  font-weight: 500;
+}
+/* 表格内多个链接按钮横向排列时不换行 */
+.el-table .cell .el-button + .el-button { margin-left: var(--cf-gap-2); }
+
+/* ---- 表单：标签右对齐，控件高度一致 ---- */
+.el-form-item__label {
+  font-weight: 500;
+  color: var(--cf-text-2);
+}
+.el-input__wrapper,
+.el-textarea__inner,
+.el-select__wrapper {
+  border-radius: var(--cf-radius-sm);
+}
+.cf-form-tip { margin-top: var(--cf-gap-1); }
+
+/* ---- 面板头：标题与操作区左右对齐基线，高一致 ---- */
+.cf-panel__head { gap: var(--cf-gap-3); }
+.cf-panel__head > span:first-child { font-size: 14px; }
+
+/* ---- 列表页工具条 / 筛选条：统一为一行，窄屏折行 ---- */
+.cf-filter-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--cf-gap-2);
+  margin-bottom: var(--cf-gap-3);
+}
+.cf-filter-bar__search { width: 260px; }
+
+/* ==========================================================
+   案件待办（to do）
+   ========================================================== */
+.cf-todo__body { padding: var(--cf-gap-4); }
+
+.cf-todo__progress {
+  display: flex;
+  align-items: center;
+  gap: var(--cf-gap-3);
+  margin-bottom: var(--cf-gap-3);
+}
+.cf-todo__progress .el-progress { flex: 1; }
+.cf-todo__progress-text {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--cf-text-2);
+  min-width: 44px;
+  text-align: right;
+}
+
+.cf-todo__list { list-style: none; margin: 0; padding: 0; }
+
+.cf-todo__item {
+  padding: var(--cf-gap-3) 0;
+  border-bottom: 1px solid var(--cf-border);
+}
+.cf-todo__item:last-child { border-bottom: none; }
+.cf-todo__item.is-done .cf-todo__content { color: var(--cf-text-3); }
+
+.cf-todo__main {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--cf-gap-2);
+}
+/* 勾选框与首行文字对齐：复选框本身有内边距，单独顶一下 */
+.cf-todo__main > .el-checkbox { height: 22px; margin-top: 1px; }
+
+.cf-todo__text { flex: 1; min-width: 0; }
+.cf-todo__content {
+  display: flex;
+  gap: var(--cf-gap-1);
+  font-size: 14px;
+  line-height: 22px;
+  word-break: break-word;
+}
+.cf-todo__index {
+  color: var(--cf-text-3);
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+
+.cf-todo__meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--cf-gap-2);
+  margin-top: var(--cf-gap-1);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+/* 佐证材料：文件名 + 元信息左对齐成列，避免长短不一显得乱 */
+.cf-todo__evidence {
+  margin-top: var(--cf-gap-2);
+  padding: var(--cf-gap-2);
+  border-radius: var(--cf-radius-sm);
+  background: var(--cf-primary-bg);
+}
+.cf-todo__file {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--cf-gap-2);
+  padding: 3px 0;
+  font-size: 12px;
+}
+.cf-todo__file-icon { color: var(--cf-primary); }
+.cf-todo__file-name {
+  color: var(--cf-primary);
+  cursor: pointer;
+  font-weight: 500;
+  word-break: break-all;
+}
+.cf-todo__file-name:hover { text-decoration: underline; }
+
+.cf-todo__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--cf-gap-1);
+  flex: none;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.cf-todo__rules {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--cf-gap-3);
+  margin-top: var(--cf-gap-3);
+  padding-top: var(--cf-gap-3);
+  border-top: 1px dashed var(--cf-border);
+  font-size: 12px;
+  color: var(--cf-text-3);
+}
+.cf-todo__rules-title {
+  font-weight: 600;
+  color: var(--cf-text-2);
+}
+
+/* 指派弹窗里的待办编辑器 */
+.cf-todo-editor { width: 100%; }
+.cf-todo-editor__row {
+  display: flex;
+  align-items: center;
+  gap: var(--cf-gap-2);
+  margin-bottom: var(--cf-gap-2);
+}
+.cf-todo-editor__no {
+  flex: none;
+  width: 20px;
+  text-align: right;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--cf-text-3);
+}
+.cf-todo-editor__ops {
+  display: flex;
+  gap: var(--cf-gap-1);
+  flex: none;
+}
+.cf-todo-editor__ops .el-button + .el-button { margin-left: 0; }
+
+/* ==========================================================
+   待办总览（管理员）
+   ========================================================== */
+.cf-todo-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--cf-gap-3);
+  margin-bottom: var(--cf-gap-4);
+}
+.cf-todo-stat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cf-gap-1);
+  padding: var(--cf-gap-3) var(--cf-gap-4);
+  border: 1px solid var(--cf-border);
+  border-left: 3px solid var(--cf-primary);
+  border-radius: var(--cf-radius-sm);
+  background: var(--cf-panel);
+}
+.cf-todo-stat.is-ok { border-left-color: var(--cf-ok); }
+.cf-todo-stat.is-warn { border-left-color: var(--cf-warn); }
+.cf-todo-stat.is-danger { border-left-color: var(--cf-danger); }
+.cf-todo-stat__num {
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 30px;
+  font-variant-numeric: tabular-nums;
+}
+.cf-todo-stat__label {
+  font-size: 12px;
+  color: var(--cf-text-3);
+}
+
+.cf-evidence-list { display: flex; flex-direction: column; gap: 3px; }
+.cf-evidence-item {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--cf-gap-2);
+  font-size: 12px;
+}
+.cf-evidence-item__name {
+  color: var(--cf-primary);
+  cursor: pointer;
+  font-weight: 500;
+  word-break: break-all;
+}
+.cf-evidence-item__name:hover { text-decoration: underline; }
+
+/* 移动端卡片列表：与桌面表格信息等价，改为竖排 */
+.cf-card-list { display: flex; flex-direction: column; gap: var(--cf-gap-3); }
+.cf-todo-card {
+  padding: var(--cf-gap-3);
+  border: 1px solid var(--cf-border);
+  border-radius: var(--cf-radius-sm);
+  background: var(--cf-panel);
+  box-shadow: var(--cf-shadow-1);
+}
+.cf-todo-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--cf-gap-2);
+}
+.cf-todo-card__content {
+  margin: var(--cf-gap-2) 0;
+  font-size: 14px;
+  line-height: 21px;
+}
+.cf-todo-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cf-gap-2);
+  font-size: 12px;
+}
+.cf-todo-card__files {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cf-gap-1);
+  margin-top: var(--cf-gap-2);
+  padding-top: var(--cf-gap-2);
+  border-top: 1px dashed var(--cf-border);
+  font-size: 12px;
+}
+
+/* ==========================================================
+   移动端适配：待办与总览
+   ========================================================== */
+@media (max-width: 768px) {
+  /* 汇总数字两列排布，四项挤一行会看不清 */
+  .cf-todo-stats { grid-template-columns: repeat(2, 1fr); }
+  .cf-todo-stat { padding: var(--cf-gap-2) var(--cf-gap-3); }
+  .cf-todo-stat__num { font-size: 20px; line-height: 26px; }
+
+  /* 筛选控件占满整行，避免搜索框被挤成一小条 */
+  .cf-filter-bar { flex-direction: column; align-items: stretch; }
+  .cf-filter-bar__search { width: 100%; }
+  .cf-filter-bar .el-radio-group { width: 100%; }
+  .cf-filter-bar .el-radio-button { flex: 1; }
+  .cf-filter-bar .el-radio-button__inner { width: 100%; }
+
+  /* 待办：操作区换到下一行，内容不再被挤成窄条 */
+  .cf-todo__main { flex-wrap: wrap; }
+  .cf-todo__actions {
+    width: 100%;
+    justify-content: flex-start;
+    margin-top: var(--cf-gap-1);
+    padding-left: 26px;
+    box-sizing: border-box;
+  }
+  .cf-todo__body { padding: var(--cf-gap-3); }
+  .cf-todo__item { padding: var(--cf-gap-2) 0; }
+
+  /* 指派弹窗的待办行：按钮换行到输入框下方 */
+  .cf-todo-editor__row { flex-wrap: wrap; }
+  .cf-todo-editor__row .el-input { flex: 1 1 100%; order: 2; }
+  .cf-todo-editor__no { order: 1; }
+  .cf-todo-editor__ops { order: 3; width: 100%; padding-left: 20px; }
+
+  .cf-card-list { gap: var(--cf-gap-2); }
+}
+
+/* ==========================================================
+   账号 ↔ 员工绑定（注册页 / 账号管理弹窗共用）
+   规则：新账号必须落到一名员工档案上，没有档案就地建一条
+   ========================================================== */
+.cf-bind { width: 100%; }
+
+.cf-bind__tip {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--cf-gap-1);
+  margin-top: var(--cf-gap-1);
+}
+.cf-bind__tip .cf-form-tip { margin-top: 0; }
+
+.cf-bind__empty {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--cf-gap-2);
+  padding: var(--cf-gap-2) var(--cf-gap-3);
+  font-size: 13px;
+  color: var(--cf-text-3);
+}
+
+/* 待新建档案的预览条：明确告诉用户提交时会连人带号一起创建 */
+.cf-bind__new {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--cf-gap-2);
+  margin-top: var(--cf-gap-2);
+  padding: var(--cf-gap-2) var(--cf-gap-3);
+  border: 1px dashed var(--cf-warn);
+  border-radius: var(--cf-radius-sm);
+  background: var(--cf-warn-bg);
+  font-size: 13px;
+  line-height: 20px;
+}
+.cf-bind__new-name { flex: 1; min-width: 0; font-weight: 500; word-break: break-all; }
+
+/* 弹窗内的就地建档小表单 */
+.cf-bind__form {
+  margin-top: var(--cf-gap-2);
+  padding: var(--cf-gap-3);
+  border: 1px solid var(--cf-border);
+  border-radius: var(--cf-radius-sm);
+  background: var(--cf-panel-2, #f7f9fc);
+}
+.cf-bind__form .el-form-item { margin-bottom: var(--cf-gap-2); }
+.cf-bind__form .el-form-item:last-child { margin-bottom: 0; }
+
+/* 审核时提醒「档案是申请人自建的，要核对」 */
+.cf-bind__alert { margin-bottom: var(--cf-gap-2); }
+
+/* 注册页窄屏：说明文字与按钮分两行，避免挤成一条 */
+@media (max-width: 768px) {
+  .cf-bind__tip { flex-direction: column; align-items: flex-start; }
+  .cf-bind__form { padding: var(--cf-gap-2); }
+}

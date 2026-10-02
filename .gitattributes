@@ -1,0 +1,27 @@
+# 统一行尾，避免 Windows/Linux/macOS 协作时 CRLF/LF 互相污染
+# 文本文件一律在仓库内以 LF 存储，检出时按各平台自动转换
+* text=auto
+
+# 明确声明这些是文本（避免被误判为二进制）
+*.java text
+*.py  text
+*.js  text
+*.vue text
+*.css text
+*.json text
+*.md  text
+*.yml text
+*.yaml text
+*.xml text
+*.sql text
+*.txt text
+
+# 二进制文件不转换（关键：H2 数据库、图片等）
+*.mv.db binary
+*.db binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.docx binary
+*.xlsx binary

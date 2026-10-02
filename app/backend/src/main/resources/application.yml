@@ -1,0 +1,38 @@
+server:
+  # 用 CF_SERVER_PORT 而非 SERVER_PORT，避免与某些工具注入的环境变量冲突
+  port: ${CF_SERVER_PORT:8080}
+  servlet:
+    context-path: /api
+  jackson:
+    default-property-inclusion: non_null
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: GMT+8
+
+spring:
+  # 上传大小上限必须写在 spring.servlet.multipart 下：
+  # 写成 server.servlet.multipart 不会生效，Spring Boot 会退回默认值
+  # （单文件 1MB / 单请求 10MB），表现为「几十 KB 的文件也说超过上限」。
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 100MB
+  profiles:
+    # 默认 dev（内置 H2，无需安装 MySQL 即可一键演示）
+    # 正式使用 MySQL：设置环境变量 SPRING_PROFILES_ACTIVE=mysql
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:sql/schema.sql
+      continue-on-error: true
+
+caseflow:
+  # 附件上传目录（相对路径时基于应用启动目录）
+  upload-dir: ${CASEFLOW_UPLOAD_DIR:./data/uploads}
+  # 登录令牌有效期（小时）
+  token-expire-hours: 12
+
+logging:
+  level:
+    root: info
+    com.caseflow: info

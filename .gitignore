@@ -1,0 +1,36 @@
+# ============================================================
+# CaseFlow 案件指派系统 · 顶层 .gitignore
+# 仓库根 = CaseFlow开发环境包/（app 是源码，tools/release 是本地资产）
+# ============================================================
+
+# ---- 便携工具链（体积大、可离线重建、跨机器有环境绑定，不入库）----
+tools/
+
+# ---- 打包/发布产物（可再生成）----
+release/
+
+# ---- app 内部的依赖与构建产物（详见 app/.gitignore）----
+# 这里再兜底一次，防止误提交
+app/frontend/node_modules/
+app/frontend/dist/
+app/backend/target/
+app/.venv/
+app/backend/data/uploads/
+app/backend/data/h2/*.trace.db
+**/__pycache__/
+
+# ---- 本地日志与临时文件 ----
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
+
+# ---- 本地运行数据 ----
+# 演示库 caseflow.mv.db 已决定入库（团队成员 clone 后即有完整演示数据）。
+# 仅忽略其伴生的 trace 锁文件与上传附件目录。
+# app/backend/data/h2/caseflow.mv.db   —— 保留入库（勿再忽略）
+
+# ---- 环境变量真实值（可能含密钥，永不入库）----
+.env
+.env.local
+.env.*.local

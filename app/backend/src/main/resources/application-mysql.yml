@@ -1,0 +1,36 @@
+# MySQL 环境（本地免安装实例与正式库共用一套配置，仅靠环境变量区分）
+#
+# 本地免安装实例：scripts/mysql_local.py init 会建好库表和 caseflow/caseflow 账号，
+#                这里的默认值即为该实例的配置，无需额外设置环境变量。
+# 正式库：务必用环境变量注入，不要依赖下面的默认值：
+#        MYSQL_HOST / MYSQL_PORT / MYSQL_DB / MYSQL_USER / MYSQL_PASSWORD
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    # 注意：characterEncoding 要写 **Java 字符集名**（UTF-8），不能写 MySQL 的
+    # utf8mb4——Connector/J 8 会抛 "Unsupported character encoding 'utf8mb4'"。
+    # 服务端/库表仍是 utf8mb4，驱动连接时会自动协商到 utf8mb4，不会退回三字节 utf8。
+    url: jdbc:mysql://${MYSQL_HOST:127.0.0.1}:${MYSQL_PORT:3306}/${MYSQL_DB:case_flow}?useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_general_ci&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true
+    username: ${MYSQL_USER:caseflow}
+    password: ${MYSQL_PASSWORD:caseflow}
+    hikari:
+      # 正式使用建议按「应用实例数 × maximum-pool-size < 数据库 max_connections」估算
+      pool-name: CaseFlowHikari
+      maximum-pool-size: ${MYSQL_POOL_SIZE:10}
+      minimum-idle: 2
+      connection-timeout: 10000
+      idle-timeout: 600000
+      max-lifetime: 1740000
+      connection-test-query: SELECT 1
+  sql:
+    init:
+      # 建表交给 scripts/init_db.py（或 mysql_local.py setup）；启动时仍跑一次
+      # schema.sql（全是 CREATE TABLE IF NOT EXISTS，幂等），但不再吞掉错误：
+      # 若 MySQL 上建表语句有方言问题，直接启动失败而不是静默带病运行。
+      mode: always
+      schema-locations: classpath:sql/schema.sql
+      continue-on-error: false
+
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.nologging.NoLoggingImpl

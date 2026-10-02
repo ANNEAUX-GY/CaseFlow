@@ -1,0 +1,29 @@
+# 可再生成的依赖、构建产物和本地缓存
+frontend/node_modules/
+frontend/dist/
+backend/target/
+.venv/
+.workbuddy/
+**/__pycache__/
+
+# PyCharm 工程配置：保留可共享的部分（解释器声明、运行配置），
+# 只忽略个人的本地状态文件（见 .idea/.gitignore）。
+# 注意别整体忽略 .idea/，否则别人拿到项目后没有任何运行配置可直接用。
+.idea/workspace.xml
+.idea/shelf/
+.idea/httpRequests/
+.idea/dataSources/
+.idea/dataSources.local.xml
+.idea/usage.statistics.xml
+.idea/dictionaries/
+
+# 本地运行数据与日志（保留目录结构时可手动创建）
+backend/data/uploads/
+backend/data/h2/*.trace.db
+*.log
+*.tmp
+
+# 环境变量：示例文件入库，真实值（可能含密钥）不入库
+.env
+.env.local
+.env.*.local
