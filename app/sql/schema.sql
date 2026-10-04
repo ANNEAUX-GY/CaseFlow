@@ -156,10 +156,8 @@ CREATE TABLE IF NOT EXISTS case_todo_feedback (
     CONSTRAINT fk_todo_feedback_todo FOREIGN KEY (todo_id) REFERENCES case_todo(id) ON DELETE CASCADE
 );
 
--- 按任务取全部反馈（主查询：todo_id + 时间正序），一条索引覆盖
-CREATE INDEX IF NOT EXISTS idx_todo_feedback_todo ON case_todo_feedback(todo_id, created_at);
--- 按案件清理时用
-CREATE INDEX IF NOT EXISTS idx_todo_feedback_case ON case_todo_feedback(case_id);
+-- 反馈表的两条二级索引（todo_id+created_at / case_id）放 index-mysql.sql：
+-- 「CREATE INDEX IF NOT EXISTS」是 H2 语法，MySQL 8 不支持，写在通用脚本里会让 init_db 在建表段直接失败
 
 -- 5.1 嫌疑人（案件关联的身份信息；随案件快照一并存档，支持撤回还原）
 CREATE TABLE IF NOT EXISTS case_suspect (

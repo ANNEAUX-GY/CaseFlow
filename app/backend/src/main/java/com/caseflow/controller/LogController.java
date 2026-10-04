@@ -26,28 +26,32 @@ public class LogController {
     @Resource
     private OperationLogService operationLogService;
 
-    /** 日志分页；module 可选（CASE / EMPLOYEE / FILE / AUTH） */
+    /** 日志分页；module 可选（CASE / EMPLOYEE / FILE / AUTH）。操作日志是全所人员行为留痕，仅管理层可查 */
     @GetMapping
+    @FullAccessOnly("查看操作日志")
     public Result<PageResult<LogVO>> page(@RequestParam(required = false) Integer page,
                                           @RequestParam(required = false) Integer size,
                                           @RequestParam(required = false) String module) {
         return Result.ok(operationLogService.page(page, size, module));
     }
 
-    /** 最近 N 条（工作台面板） */
+    /** 最近 N 条（工作台面板）。仅管理层：普通民警的工作台本就不给 recentLogs */
     @GetMapping("/recent")
+    @FullAccessOnly("查看操作日志")
     public Result<List<LogVO>> recent(@RequestParam(defaultValue = "20") int limit) {
         return Result.ok(operationLogService.recent(limit));
     }
 
-    /** 单个案件的办理进度（详情抽屉时间线，按时间正序） */
+    /** 单个案件的办理进度（详情抽屉时间线，按时间正序）。仅管理层：普通员工不展示办理进度 */
     @GetMapping("/case/{caseId}")
+    @FullAccessOnly("查看办理进度")
     public Result<List<LogVO>> caseLogs(@PathVariable Long caseId) {
         return Result.ok(operationLogService.caseLogs(caseId));
     }
 
-    /** 日志详情：含「字段 / 变更前 / 变更后」明细 */
+    /** 日志详情：含「字段 / 变更前 / 变更后」明细。仅管理层（与列表同一口径） */
     @GetMapping("/{id}")
+    @FullAccessOnly("查看操作日志")
     public Result<LogVO> detail(@PathVariable Long id) {
         return Result.ok(operationLogService.detail(id));
     }

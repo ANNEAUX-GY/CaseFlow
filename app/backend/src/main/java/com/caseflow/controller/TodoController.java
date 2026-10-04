@@ -69,8 +69,9 @@ public class TodoController {
         return Result.ok(staffTodoService.myTodos(status, sortBy, urgencyOrder, importanceOrder, keyword));
     }
 
-    /** 民警端调整待办的紧急/重点程度（只能改本人相关案件的） */
+    /** 调整待办的紧急/重点程度。分级是领导定的口径（2026-10 收紧）：仅管理层可改，民警只读 */
     @PostMapping("/mine/{id}/grade")
+    @FullAccessOnly("调整待办紧急/重点程度")
     public Result<CaseTodoVO> updateGrade(@PathVariable Long id,
                                         @RequestBody Map<String, Object> body) {
         Object u = body == null ? null : body.get("urgency");
@@ -107,15 +108,27 @@ public class TodoController {
     }
 
     /** 编辑待办内容（管理层） */
+    /**
+     * 修改待办 / 子任务内容。
+     *
+     * <p>不加 {@code @FullAccessOnly}：权限分层在 Service——
+     * 改主任务仅管理层，改子任务承办人即可（子任务是干活的人自己拆的，
+     * 写错了却改不了不合理）。
+     */
     @PutMapping("/{todoId}")
-    @FullAccessOnly("维护案件待办")
     public Result<CaseTodoVO> update(@PathVariable Long todoId, @Validated @RequestBody TodoSaveRequest req) {
         return Result.ok(todoService.update(todoId, req.getContent()));
     }
 
-    /** 删除待办（管理层） */
+    /**
+     * 删除待办 / 子任务。
+     *
+     * <p><b>这里不能加 {@code @FullAccessOnly}</b>：那个注解由PermissionInterceptor
+     * 在方法执行前拦截，会把民警挡在门外。但子任务恰恰是民警自己拆的，
+     * 让他加得了一直删不掉不合理。
+     * 真正的权限分层放在 {@code TodoService.remove}：删主任务仅管理层，删子任务承办人即可。
+     */
     @DeleteMapping("/{todoId}")
-    @FullAccessOnly("维护案件待办")
     public Result<Void> remove(@PathVariable Long todoId) {
         todoService.remove(todoId);
         return Result.ok();
@@ -158,11 +171,13 @@ public class TodoController {
         return Result.ok(todoService.addSubtask(todoId, req == null ? null : req.getContent()));
     }
 
-    /** 提交反馈（累积一条记录，不改状态） */
+    /** 提交反馈（累积一条记录，不改任务状态；status = 落实状态 DONE/IN_PROGRESS/NOT_DONE） */
     @PostMapping("/{todoId}/feedbacks")
     public Result<CaseTodoVO> addFeedback(@PathVariable Long todoId,
                                           @RequestBody TodoSaveRequest req) {
-        return Result.ok(todoService.addFeedback(todoId, req == null ? null : req.getContent()));
+        return Result.ok(todoService.addFeedback(todoId,
+                req == null ? null : req.getStatus(),
+                req == null ? null : req.getContent()));
     }
 
     /** 勾选 / 撤销子任务完成（done=false 即撤销） */

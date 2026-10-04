@@ -25,7 +25,7 @@
           <span class="cf-sort">
             <span class="cf-sort__label">紧急程度</span>
             <el-button link type="primary" size="small" class="cf-sort__btn" @click="toggleSort('urgency')">
-              {{ URGENCY_META[todoUrgencyOf({ urgency: 'URGENT' })].label }}优先
+              {{ URGENCY_META.URGENT.label }}优先
               <span class="cf-sort__arrow">{{ query.urgencyOrder === 'asc' ? '↑' : '↓' }}</span>
             </el-button>
           </span>
@@ -66,20 +66,28 @@
 
           <el-table-column label="紧急程度" width="96">
             <template #default="{ row }">
-              <!-- 可就地切换：民警有权调整自己待办的紧急程度 -->
-              <el-select :model-value="todoUrgencyOf(row)" size="small" class="cf-mtodo__grade"
+              <!-- 分级由领导/管理员统一设定（2026-10 收紧）：管理层可就地切换，普通用户只读标签 -->
+              <el-select v-if="canEditGrade" :model-value="todoUrgencyOf(row)" size="small" class="cf-mtodo__grade"
                 @click.stop @change="(v) => setGrade(row, { urgency: v })">
                 <el-option v-for="(m, k) in URGENCY_META" :key="k" :label="m.label" :value="k" />
               </el-select>
+              <el-tag v-else size="small" effect="plain"
+                :type="URGENCY_META[todoUrgencyOf(row)].type">
+                {{ URGENCY_META[todoUrgencyOf(row)].label }}
+              </el-tag>
             </template>
           </el-table-column>
 
           <el-table-column label="重点程度" width="96">
             <template #default="{ row }">
-              <el-select :model-value="todoImportanceOf(row)" size="small" class="cf-mtodo__grade"
+              <el-select v-if="canEditGrade" :model-value="todoImportanceOf(row)" size="small" class="cf-mtodo__grade"
                 @click.stop @change="(v) => setGrade(row, { importance: v })">
                 <el-option v-for="(m, k) in TODO_IMPORTANCE_META" :key="k" :label="m.label" :value="k" />
               </el-select>
+              <el-tag v-else size="small" effect="plain"
+                :type="TODO_IMPORTANCE_META[todoImportanceOf(row)].type">
+                {{ TODO_IMPORTANCE_META[todoImportanceOf(row)].label }}
+              </el-tag>
             </template>
           </el-table-column>
 
@@ -124,6 +132,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { todoApi } from '../api'
 import { useMyTodoStore } from '../store/myTodo'
+import { useUserStore } from '../store/user'
 import {
   TODO_URGENCY_META as URGENCY_META,
   TODO_IMPORTANCE_META,
@@ -137,6 +146,8 @@ const route = useRoute()
 const router = useRouter()
 // 改了分级会影响侧栏红点的口径，操作后刷新
 const myTodoStore = useMyTodoStore()
+// 分级由领导/管理员设定（2026-10 收紧）：普通用户只读展示
+const canEditGrade = computed(() => useUserStore().isFullAccess)
 
 const list = ref([])
 const loading = ref(false)
@@ -208,7 +219,7 @@ const load = async () => {
   }
 }
 
-/** 民警调整自己待办的紧急/重点程度 */
+/** 管理层调整待办的紧急/重点程度（普通用户列已置为只读标签） */
 const setGrade = async (row, patch) => {
   const payload = {
     urgency: patch.urgency !== undefined ? patch.urgency : todoUrgencyOf(row),

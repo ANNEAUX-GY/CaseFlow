@@ -213,9 +213,11 @@ public class CaseService {
                 q.and(w -> w.isNull(CaseInfo::getCaseMeasure).or().eq(CaseInfo::getCaseMeasure, "NONE"))
                         .notIn(CaseInfo::getStatus, new ArrayList<>(java.util.Arrays.asList("DONE", "CANCELLED")));
             } else if ("DETENTION".equals(m)) {
-                q.eq(CaseInfo::getCaseMeasure, "DETENTION");
+                q.eq(CaseInfo::getCaseMeasure, "DETENTION")
+                        .notIn(CaseInfo::getStatus, new ArrayList<>(java.util.Arrays.asList("DONE", "CANCELLED")));
             } else if ("BAIL_RESIDENCE".equals(m)) {
-                q.in(CaseInfo::getCaseMeasure, new ArrayList<>(java.util.Arrays.asList("BAIL", "RESIDENCE")));
+                q.in(CaseInfo::getCaseMeasure, new ArrayList<>(java.util.Arrays.asList("BAIL", "RESIDENCE")))
+                        .notIn(CaseInfo::getStatus, new ArrayList<>(java.util.Arrays.asList("DONE", "CANCELLED")));
             }
         }
         if (StringUtils.hasText(query.getInvestigationStatus())) {
@@ -495,14 +497,18 @@ public class CaseService {
                 sourceType = detected;
             }
             c.setSourceFileId(fileId);
-            fileService.bindToCase(fileId, c.getId());
         }
         c.setSourceType(StringUtils.hasText(sourceType) ? sourceType : "MANUAL");
 
+        // 先落库拿到案件 id，再把来源附件绑定到案件——绑定必须放在 insert 之后：
+        // 新建时 c.getId() 在 insert 前是 null，先绑定会因 MyBatis-Plus 跳过 null 字段而静默失效
         if (isNew) {
             caseMapper.insert(c);
         } else {
             caseMapper.updateById(c);
+        }
+        if (fileId != null) {
+            fileService.bindToCase(fileId, c.getId());
         }
 
         // 创建时直接指派
@@ -524,8 +530,21 @@ public class CaseService {
     private String generateCaseNo() {
         String day = LocalDate.now().format(DAY);
         String prefix = "CA-" + day + "-";
-        long count = caseMapper.selectCount(new LambdaQueryWrapper<CaseInfo>().likeRight(CaseInfo::getCaseNo, prefix));
-        return prefix + String.format("%03d", count + 1);
+        // 取当天编号最大值 +1，而不是 count+1：删除案件后 count 变小会导致编号复用
+        List<CaseInfo> latest = caseMapper.selectList(new LambdaQueryWrapper<CaseInfo>()
+                .likeRight(CaseInfo::getCaseNo, prefix)
+                .orderByDesc(CaseInfo::getCaseNo)
+                .last("LIMIT 1"));
+        int next = 1;
+        if (!latest.isEmpty() && latest.get(0).getCaseNo() != null) {
+            String no = latest.get(0).getCaseNo();
+            try {
+                next = Integer.parseInt(no.substring(prefix.length())) + 1;
+            } catch (Exception ignored) {
+                // 历史编号格式异常时退回 1，最多与旧编号撞号由唯一约束兜底
+            }
+        }
+        return prefix + String.format("%03d", next);
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -563,17 +582,7 @@ public class CaseService {
 
     /** 案件当前所属盯办子模块：DETENTION刑拘在办 / INITIAL初查 / BAIL_RESIDENCE取保监居 */
     private String moduleOf(CaseInfo c) {
-        String m = c.getCaseMeasure();
-        if (!StringUtils.hasText(m) || "NONE".equals(m)) {
-            return "INITIAL";
-        }
-        if ("DETENTION".equals(m)) {
-            return "DETENTION";
-        }
-        if ("BAIL".equals(m) || "RESIDENCE".equals(m)) {
-            return "BAIL_RESIDENCE";
-        }
-        return "INITIAL";
+        return com.caseflow.flow.PoliceGroup.moduleOfMeasure(c.getCaseMeasure());
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -627,47 +636,68 @@ public class CaseService {
    }
         }
 
-        // 旧指派关系全部置为历史（改派留痕），再写入新关系
+        // 旧指派关系按目标集合对齐（改派留痕）：
+        //   目标集合里的人 → 保留原关系行（避免重复插入破坏历史），角色与 ownerId 对齐；
+        //   不在目标集合里的人 → 置 REPLACED 留痕。
+        // 旧实现把所有旧行一律置 REPLACED、只重新激活主办人，结果「保留的协办人」会被整体踢掉；
+        // 且协办转主办时只恢复状态不改角色，导致案件没有任何 OWNER。
         String beforeSnapshot = snapshotService.capture(c.getId());
         List<CaseAssignee> oldList = assigneeMapper.selectList(new LambdaQueryWrapper<CaseAssignee>()
                 .eq(CaseAssignee::getCaseId, c.getId()).eq(CaseAssignee::getStatus, "ACTIVE"));
         LocalDateTime now = LocalDateTime.now();
-        for (CaseAssignee old : oldList) {
-            if (target.contains(old.getEmployeeId())) {
-                target.remove(old.getEmployeeId());
-            }
-            old.setStatus("REPLACED");
-            old.setClosedAt(now);
-            assigneeMapper.updateById(old);
-        }
 
-        List<Long> ordered = new ArrayList<>(target);
         Long ownerId = req.getOwnerId();
-        boolean ownerFromOld = false;
         if (ownerId == null) {
             for (CaseAssignee old : oldList) {
                 if ("OWNER".equals(old.getAssignRole())) {
                     ownerId = old.getEmployeeId();
-                    ownerFromOld = true;
                     break;
                 }
             }
         }
-        if (ownerId == null && !ordered.isEmpty()) {
-            ownerId = ordered.get(0);
+        if (ownerId == null && !target.isEmpty()) {
+            ownerId = target.iterator().next();
         }
-        if (ownerFromOld || (ownerId != null && !target.contains(ownerId))) {
-            // 主办人沿用旧值且未被替换：重新激活该关系
-            for (CaseAssignee old : oldList) {
-                if (old.getEmployeeId().equals(ownerId)) {
-                    old.setStatus("ACTIVE");
-                    old.setClosedAt(null);
+        // 主办人必须落在承办人集合里（前端一般会带上，这里兜底补齐）
+        if (ownerId != null) {
+            target.add(ownerId);
+        }
+
+        Set<Long> kept = new HashSet<>();
+        for (CaseAssignee old : oldList) {
+            if (!target.contains(old.getEmployeeId()) || !kept.add(old.getEmployeeId())) {
+                // 不再承办（或同一员工的多余历史行）→ 置 REPLACED
+                if (!"REPLACED".equals(old.getStatus())) {
+                    old.setStatus("REPLACED");
+                    old.setClosedAt(now);
                     assigneeMapper.updateById(old);
                 }
+                continue;
+            }
+            // 保留：状态保持 ACTIVE，角色按是否主办对齐
+            String wantRole = old.getEmployeeId().equals(ownerId) ? "OWNER" : "MEMBER";
+            boolean dirty = false;
+            if (!wantRole.equals(old.getAssignRole())) {
+                old.setAssignRole(wantRole);
+                dirty = true;
+            }
+            if (!"ACTIVE".equals(old.getStatus())) {
+                old.setStatus("ACTIVE");
+                old.setClosedAt(null);
+                dirty = true;
+            }
+            if (dirty) {
+                assigneeMapper.updateById(old);
             }
         }
 
+        // 新增的承办人（原关系里没有的）逐个插入
+        List<Long> ordered = new ArrayList<>(target);
+        java.util.Collections.sort(ordered);
         for (Long empId : ordered) {
+            if (oldList.stream().anyMatch(o -> o.getEmployeeId().equals(empId))) {
+                continue;
+            }
             CaseAssignee a = new CaseAssignee();
             a.setCaseId(c.getId());
             a.setEmployeeId(empId);

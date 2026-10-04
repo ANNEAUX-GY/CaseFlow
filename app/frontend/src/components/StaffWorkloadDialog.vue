@@ -4,6 +4,7 @@
     :title="data?.name ? `${data.name} · 承办负荷` : '承办负荷'"
     :width="isMobile ? '96%' : '720px'"
     append-to-body
+    class="cf-wl-dialog"
     @closed="onClosed"
   >
     <div v-if="loading" class="cf-wl__loading">加载中…</div>
@@ -50,9 +51,10 @@
         <span class="cf-wl__mod">取保及监居 <b>{{ data.bailCount || 0 }}</b></span>
       </div>
 
-      <!-- 逐案明细 -->
+      <!-- 逐案明细：点案件行在本页直接打开案件详情抽屉（不跳转页面） -->
       <el-table v-if="(data.cases || []).length" :data="data.cases" size="small"
-        :row-class-name="rowClass" style="width: 100%; margin-top: 10px" max-height="320">
+        :row-class-name="rowClass" style="width: 100%; margin-top: 10px" max-height="320"
+        @row-click="openCase">
         <el-table-column label="案件编号" width="140">
           <template #default="{ row }">
             <span class="cf-wl__case-no">{{ row.caseNo }}</span>
@@ -98,18 +100,22 @@
 
     <template #footer>
       <span class="cf-muted" style="font-size: 12px">
-        排序：主办优先 › 已超期优先 › 期限近的优先
+        点击案件行可在本页查看案件详情 · 排序：主办优先 › 已超期优先 › 期限近的优先
       </span>
       <span class="cf-spacer"></span>
       <el-button @click="visible = false">关闭</el-button>
     </template>
   </el-dialog>
+
+  <!-- 案件详情抽屉：盖在负荷弹窗上方，关闭后回到本弹窗（不跳转路由） -->
+  <CaseDetailDrawer v-model="detailVisible" :case-id="detailCaseId" />
 </template>
 
 <script setup>
 import { ref, watch } from 'vue'
 import { caseApi } from '../api'
 import { useDevice } from '../utils/device'
+import CaseDetailDrawer from './CaseDetailDrawer.vue'
 
 /**
  * 民警承办负荷详情（盯办详情点主办人/协办人时弹出）。
@@ -166,6 +172,15 @@ watch(() => props.modelValue, (v) => {
   fetchData()
 })
 
+// ---- 案件行点击 → 本页打开案件详情抽屉 ----
+const detailVisible = ref(false)
+const detailCaseId = ref(null)
+const openCase = (row) => {
+  if (!row || !row.caseId) return
+  detailCaseId.value = row.caseId
+  detailVisible.value = true
+}
+
 const dueText = (row) => {
   const dt = String(row.deadline).replace('T', ' ').slice(5, 16)
   if (row.overdue) return `${dt}（已超期 ${-row.daysLeft} 天）`
@@ -212,6 +227,9 @@ defineExpose({ show })
 .cf-wl__due.is-soon { color: #d98a0b }
 .cf-wl__due.is-overdue { color: #c62a2a; font-weight: 600 }
 .cf-wl__row-overdue { background: #fdf6f6 }
+/* 案件行可点击：指针 + 悬停提示色（限定本弹窗内，不影响其他表格） */
+.cf-wl-dialog tbody .el-table__row { cursor: pointer }
+.cf-wl-dialog tbody .el-table__row:hover > td { background: #eef3fa !important }
 .cf-wl__empty { padding: 30px 0; text-align: center; color: #8a929e; font-size: 13px }
 
 @media (max-width: 768px) {

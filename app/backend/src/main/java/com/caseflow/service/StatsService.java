@@ -269,29 +269,13 @@ public class StatsService {
         for (int i = 0; i < DUE_CODES.length; i++) {
             m.put(DUE_CODES[i], new StatsVO.NameValue(DUE_CODES[i], DUE_NAMES[i], 0));
         }
-        LocalDate today = now.toLocalDate();
         for (CaseInfo c : all) {
-            if (CLOSED.contains(c.getStatus())) {
+            // 分桶统一走 dueBucketOf，避免同一规则在三处各写一份后口径漂移
+            String bucket = dueBucketOf(c, now);
+            if ("CLOSED".equals(bucket)) {
                 continue;
             }
-            if (c.getDeadline() == null) {
-                bump(m, "NONE");
-                continue;
-            }
-            if (c.getDeadline().isBefore(now)) {
-                bump(m, "OVERDUE");
-                continue;
-            }
-            long d = ChronoUnit.DAYS.between(today, c.getDeadline().toLocalDate());
-            if (d == 0) {
-                bump(m, "TODAY");
-            } else if (d <= 3) {
-                bump(m, "D3");
-            } else if (d <= 7) {
-                bump(m, "D7");
-            } else {
-                bump(m, "LATER");
-            }
+            bump(m, bucket);
         }
         return new ArrayList<>(m.values());
     }
@@ -325,9 +309,6 @@ public class StatsService {
                 case "PRELIMINARY":
                     p.setPreliminary(p.getPreliminary() + 1);
                     break;
-                case "CIVIL":
-                    p.setCivil(p.getCivil() + 1);
-                    break;
                 default:
                     break;
             }
@@ -341,27 +322,10 @@ public class StatsService {
         for (int i = 0; i < DUE_CODES.length; i++) {
             m.put(DUE_CODES[i], new StatsVO.DueBucketByType(DUE_CODES[i], DUE_NAMES[i]));
         }
-        LocalDate today = now.toLocalDate();
         for (CaseInfo c : all) {
-            if (CLOSED.contains(c.getStatus())) {
+            String bucket = dueBucketOf(c, now);
+            if ("CLOSED".equals(bucket)) {
                 continue;
-            }
-            String bucket;
-            if (c.getDeadline() == null) {
-                bucket = "NONE";
-            } else if (c.getDeadline().isBefore(now)) {
-                bucket = "OVERDUE";
-            } else {
-                long d = ChronoUnit.DAYS.between(today, c.getDeadline().toLocalDate());
-                if (d == 0) {
-                    bucket = "TODAY";
-                } else if (d <= 3) {
-                    bucket = "D3";
-                } else if (d <= 7) {
-                    bucket = "D7";
-                } else {
-                    bucket = "LATER";
-                }
             }
             StatsVO.DueBucketByType row = m.get(bucket);
             if (row == null) {
@@ -377,8 +341,6 @@ public class StatsService {
                 row.setAdministrative(row.getAdministrative() + 1);
             } else if ("PRELIMINARY".equals(t)) {
                 row.setPreliminary(row.getPreliminary() + 1);
-            } else if ("CIVIL".equals(t)) {
-                row.setCivil(row.getCivil() + 1);
             } else {
                 row.setNoneType(row.getNoneType() + 1);
             }

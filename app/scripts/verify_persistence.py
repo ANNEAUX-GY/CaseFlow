@@ -73,6 +73,12 @@ def main():
         with conn.cursor() as cur:
             cur.execute("SELECT id, name FROM org_employee WHERE status=1 ORDER BY id LIMIT 2")
             emps = cur.fetchall()
+        # 2026-10-04 起指派有办案组别校验：演示员工默认「不限」会被拒派，
+        # 先临时设为初查组，结束时恢复（与 verify_undo.py 同一做法）
+        emp_ids = tuple(e[0] for e in emps)
+        with conn.cursor() as cur:
+            cur.execute("UPDATE org_employee SET police_group=%s WHERE id IN (%s,%s)",
+                        ("INITIAL",) + emp_ids)
 
         # ---------- 增 ----------
         print("\n1. 增（POST /cases）")
@@ -139,6 +145,14 @@ def main():
         print("=" * 68)
         return 0 if not FAILED else 1
     finally:
+        # 恢复员工组别，不污染演示数据
+        try:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE org_employee SET police_group=NULL WHERE id IN (%s,%s)",
+                            emp_ids)
+            conn.commit()
+        except Exception:
+            pass
         conn.close()
 
 

@@ -260,13 +260,33 @@ public class FlowService {
 
         // ---- 2. 切换阶段（进度随即归零）----
         c.setFlowStage(targetStage);
-        // 取保 / 监居流转时同步强制措施，盯办模块的措施期限才能对上
-        if (CaseFlowTemplate.STEP_EXECUTE_BAIL.equals(targetStep)) {
+        // 流转与强制措施保持同步，盯办模块归类与指派组别校验才能对上：
+        //   刑拘 → 登记为 DETENTION（此前只认盯办审批录入，流转建案的措施会漏登记）；
+        //   取保 → BAIL；
+        //   释放 → 清空措施（否则案件已终结仍会按旧措施归入刑拘/取保模块）。
+        // updateById 跳过 null 字段，清空必须显式 set null。
+        boolean clearMeasure = false;
+        if (CaseFlowTemplate.STEP_ASSIGN_CLEAR.equals(targetStep)) {
+            if (c.getCaseMeasure() == null || c.getCaseMeasure().trim().isEmpty()
+                    || "NONE".equals(c.getCaseMeasure())) {
+                c.setCaseMeasure("DETENTION");
+            }
+        } else if (CaseFlowTemplate.STEP_EXECUTE_BAIL.equals(targetStep)) {
             c.setCaseMeasure("BAIL");
-        } else if (CaseFlowTemplate.STEP_DETAIN.equals(targetStep)) {
-            c.setCaseMeasure("DETENTION");
+        } else if ("RELEASE".equals(action)) {
+            c.setCaseMeasure(null);
+            c.setMeasureDate(null);
+            c.setDetainDeadline(null);
+            clearMeasure = true;
         }
         caseMapper.updateById(c);
+        if (clearMeasure) {
+            caseMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<CaseInfo>()
+                    .eq(CaseInfo::getId, caseId)
+                    .set(CaseInfo::getCaseMeasure, null)
+                    .set(CaseInfo::getMeasureDate, null)
+                    .set(CaseInfo::getDetainDeadline, null));
+        }
 
         // ---- 3. 生成新阶段任务（全新 PENDING，进度从 0% 起算）----
         generateStageTasks(caseId, targetStage);

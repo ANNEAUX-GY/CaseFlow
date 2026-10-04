@@ -114,7 +114,6 @@ export function dueText(row) {
     return `${row.deadlineText}（逾期 ${Math.abs(row.daysLeft || 0)} 天）`
   }
   if (row.dueLevel === 'TODAY') return `${row.deadlineText}（今天到期）`
-  if (row.dueLevel === 'SOON') return `${row.deadlineText}（剩 ${row.daysLeft} 天）`
   return `${row.deadlineText}（剩 ${row.daysLeft} 天）`
 }
 

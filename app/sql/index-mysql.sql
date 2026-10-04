@@ -13,3 +13,7 @@ CREATE INDEX idx_assignee_emp  ON case_assignee (employee_id, status);
 CREATE INDEX idx_file_case     ON case_file (case_id);
 CREATE INDEX idx_suspect_case   ON case_suspect (case_id);
 CREATE INDEX idx_log_target    ON operation_log (target_type, target_id, created_at);
+
+-- 待办反馈（2026-10-04）：主查询 todo_id + 时间正序；按案件清理用 case_id
+CREATE INDEX idx_todo_feedback_todo ON case_todo_feedback(todo_id, created_at);
+CREATE INDEX idx_todo_feedback_case ON case_todo_feedback(case_id);

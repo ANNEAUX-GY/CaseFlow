@@ -83,6 +83,28 @@ public final class PoliceGroup {
     }
 
     /**
+     * 强制措施 → 盯办子模块。
+     *
+     * <p>组别校验（{@link #requiredOf}）、案件列表的子模块过滤、承办负荷统计
+     * 都依赖同一套「措施 → 模块」映射，收在这里避免各处各写一份后口径漂移。
+     *
+     * @param measure 强制措施：NONE/空=初查，DETENTION=刑拘在办，BAIL/RESIDENCE=取保监居
+     */
+    public static String moduleOfMeasure(String measure) {
+        if (measure == null || measure.trim().isEmpty() || "NONE".equalsIgnoreCase(measure.trim())) {
+            return "INITIAL";
+        }
+        String m = measure.trim().toUpperCase();
+        if ("DETENTION".equals(m)) {
+            return "DETENTION";
+        }
+        if ("BAIL".equals(m) || "RESIDENCE".equals(m)) {
+            return "BAIL_RESIDENCE";
+        }
+        return "INITIAL";
+    }
+
+    /**
      * 判断某人能否承接该案件。
      *
      * <p><b>规则刻意分两档</b>：

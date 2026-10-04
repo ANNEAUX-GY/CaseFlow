@@ -3,12 +3,14 @@ package com.caseflow.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.caseflow.entity.CaseAssignee;
 import com.caseflow.entity.CaseInfo;
+import com.caseflow.entity.CaseLeaderOpinion;
 import com.caseflow.entity.CaseTodo;
 import com.caseflow.entity.CaseTodoFeedback;
 import com.caseflow.entity.SysUser;
 import com.caseflow.exception.BizException;
 import com.caseflow.mapper.CaseAssigneeMapper;
 import com.caseflow.mapper.CaseInfoMapper;
+import com.caseflow.mapper.CaseLeaderOpinionMapper;
 import com.caseflow.mapper.CaseTodoFeedbackMapper;
 import com.caseflow.mapper.CaseTodoMapper;
 import com.caseflow.mapper.SysUserMapper;
@@ -50,6 +52,9 @@ public class TodoService {
     private CaseTodoFeedbackMapper feedbackMapper;
     @Resource
     private LogService logService;
+    /** 意见派生待办在完成/反馈时需要回写对应意见的落实状态 */
+    @Resource
+    private CaseLeaderOpinionMapper opinionMapper;
 
     /** 单个案件待办条数上限，防止误批量粘贴把详情页撑爆 */
     private static final int MAX_PER_CASE = 50;
@@ -81,7 +86,42 @@ public class TodoService {
             vo.setSubtaskDone(st == null ? 0 : st[1]);
             vos.add(vo);
         }
+        fillOpinionInfo(vos);
         return vos;
+    }
+
+    /**
+     * 给意见派生的待办填充意见侧信息（重要性 / 截止 / 提出人 / 落实状态）。
+     *
+     * <p>合并面板一次展示「待办 + 意见」，这些字段原来只存在于意见表；
+     * 一次批量查回，避免列表逐行查库。
+     */
+    private void fillOpinionInfo(List<CaseTodoVO> vos) {
+        java.util.Set<Long> opinionIds = new java.util.HashSet<>();
+        for (CaseTodoVO vo : vos) {
+            if (vo.getOpinionId() != null) {
+                opinionIds.add(vo.getOpinionId());
+            }
+        }
+        if (opinionIds.isEmpty()) {
+            return;
+        }
+        java.util.Map<Long, CaseLeaderOpinion> map = new java.util.HashMap<>();
+        for (CaseLeaderOpinion o : opinionMapper.selectList(new LambdaQueryWrapper<CaseLeaderOpinion>()
+                .in(CaseLeaderOpinion::getId, opinionIds))) {
+            map.put(o.getId(), o);
+        }
+        for (CaseTodoVO vo : vos) {
+            CaseLeaderOpinion o = vo.getOpinionId() == null ? null : map.get(vo.getOpinionId());
+            if (o == null) {
+                continue;
+            }
+            vo.setOpinionImportance(o.getImportance());
+            vo.setOpinionDeadline(o.getDeadline());
+            vo.setOpinionCreatorName(o.getCreatorName());
+            vo.setOpinionCreatedAt(o.getCreatedAt());
+            vo.setOpinionFeedbackStatus(o.getFeedbackStatus());
+        }
     }
 
     /** 某案件各任务的反馈条数：todoId → 条数（一次 group by 查完） */
@@ -280,7 +320,12 @@ public class TodoService {
     public CaseTodoVO update(Long todoId, String content) {
         CaseTodo t = requireTodo(todoId);
         CaseInfo c = requireCase(t.getCaseId());
-        requireAdmin("维护案件待办");
+        // 同remove 的分层：改主任务是管理动作（清单结构），改子任务是承办人自己的事
+        if (t.getParentId() == null) {
+            requireAdmin("维护案件待办");
+        } else {
+            checkOperate(c);
+        }
         if (!StringUtils.hasText(content)) {
             throw new BizException("请填写待办内容");
         }
@@ -289,6 +334,14 @@ public class TodoService {
         t.setContent(content.trim());
         t.setUpdatedAt(LocalDateTime.now());
         todoMapper.updateById(t);
+        // 意见派生待办：内容改了要同步回意见正文，两边不漂移
+        if (t.getOpinionId() != null) {
+            CaseLeaderOpinion o = opinionMapper.selectById(t.getOpinionId());
+            if (o != null && !content.trim().equals(o.getContent())) {
+                o.setContent(content.trim());
+                opinionMapper.updateById(o);
+            }
+        }
         touchCase(c);
 
         logService.log("CASE", "TODO_UPDATE", "CASE", t.getCaseId(),
@@ -300,14 +353,56 @@ public class TodoService {
     public void remove(Long todoId) {
         CaseTodo t = requireTodo(todoId);
         CaseInfo c = requireCase(t.getCaseId());
-        requireAdmin("维护案件待办");
+        // 权限分层（2026-10-04）：
+        //- 删**主任务**是管理动作（改的是案件的任务清单结构）→ 仅管理层
+        //   - 删**子任务**是干活的人自己的事（子任务就是他自己拆的）→ 承办人即可
+        // 混在一起会导致民警加错一个子任务却删不掉，只能干等。
+        if (t.getParentId() == null) {
+            requireAdmin("删除主待办");
+        } else {
+            checkOperate(c);
+        }
 
         String before = snapshotService.capture(t.getCaseId());
-        todoMapper.deleteById(todoId);
+        // 连同子任务与反馈记录一起删：只删主任务会留下看不见的孤儿任务，
+        // countsOf 按 caseId 统计会把它们算进分母，案件详情的进度从此虚高
+        removeAllOfTodo(todoId);
         touchCase(c);
 
         logService.log("CASE", "TODO_DELETE", "CASE", t.getCaseId(),
-                "删除待办：" + abbrev(t.getContent()), before, snapshotService.capture(t.getCaseId()));
+                (t.getParentId() == null ? "删除待办：" : "删除子任务：") + abbrev(t.getContent()),
+                before, snapshotService.capture(t.getCaseId()));
+    }
+
+    /** 删除任务及其子任务与全部反馈记录（级联清理，防孤儿数据） */
+    public void removeAllOfTodo(Long todoId) {
+        if (todoId == null) {
+            return;
+        }
+        List<CaseTodo> subs = todoMapper.selectList(new LambdaQueryWrapper<CaseTodo>()
+                .eq(CaseTodo::getParentId, todoId));
+        for (CaseTodo s : subs) {
+            feedbackMapper.delete(new LambdaQueryWrapper<CaseTodoFeedback>()
+                    .eq(CaseTodoFeedback::getTodoId, s.getId()));
+        }
+        todoMapper.delete(new LambdaQueryWrapper<CaseTodo>().eq(CaseTodo::getParentId, todoId));
+        feedbackMapper.delete(new LambdaQueryWrapper<CaseTodoFeedback>()
+                .eq(CaseTodoFeedback::getTodoId, todoId));
+        todoMapper.deleteById(todoId);
+    }
+
+    /** 意见移除时级联删除其派生待办（含子任务与反馈记录） */
+    public void removeTodoByOpinion(Long opinionId) {
+        if (opinionId == null) {
+            return;
+        }
+        CaseTodo t = todoMapper.selectOne(new LambdaQueryWrapper<CaseTodo>()
+                .eq(CaseTodo::getOpinionId, opinionId)
+                .isNull(CaseTodo::getParentId)
+                .last("LIMIT 1"));
+        if (t != null) {
+            removeAllOfTodo(t.getId());
+        }
     }
 
     /** 按给定 ID 顺序重排（顺序即 sort） */
@@ -377,9 +472,10 @@ public class TodoService {
                         String.join("、", undone) + "。全部完成后才能勾选本任务。");
             }
         }
-        // 规则 1：主任务必须有反馈说明（本次填的 remark，或历史已积累的反馈记录）
+        // 规则 1：主任务必须有反馈说明（本次填的 remark，或历史已积累的反馈记录）。
+        // 子任务不设此限制——它的说明由主任务承载（见类注释），本次填了 remark 也会照常留痕
         boolean hasNote = StringUtils.hasText(remark) && !remark.trim().isEmpty();
-        if (!hasNote && feedbackMapper.selectCount(new LambdaQueryWrapper<CaseTodoFeedback>()
+        if (t.getParentId() == null && !hasNote && feedbackMapper.selectCount(new LambdaQueryWrapper<CaseTodoFeedback>()
                 .eq(CaseTodoFeedback::getTodoId, todoId)) <= 0) {
             throw new BizException("请先填写反馈说明，再勾选完成");
         }
@@ -396,8 +492,10 @@ public class TodoService {
         todoMapper.updateById(t);
         // 反馈说明留痕：本次填的写进累积表，历史 remark 作为首条
         if (hasNote) {
-            addFeedback(t, remark.trim());
+            addFeedback(t, remark.trim(), CaseLeaderOpinion.FB_DONE);
         }
+        // 意见派生待办：完成状态回写到对应意见的落实状态（单一事实源在待办，意见只读展示）
+        syncOpinion(t);
         touchCase(c);
 
         logService.log("CASE", "TODO_DONE", "CASE", t.getCaseId(),
@@ -415,17 +513,68 @@ public class TodoService {
                 .orderByAsc(CaseTodo::getSort).orderByAsc(CaseTodo::getId));
     }
 
-    /** 追加一条反馈记录（累积式，见 CaseTodoFeedback 说明） */
-    private void addFeedback(CaseTodo t, String content) {
+    /** 追加一条反馈记录（累积式，见 CaseTodoFeedback 说明）。status 为本次落实状态 */
+    private void addFeedback(CaseTodo t, String content, String status) {
         CaseTodoFeedback f = new CaseTodoFeedback();
         f.setTodoId(t.getId());
         f.setCaseId(t.getCaseId());
         f.setContent(content);
-        f.setStatusAt(t.getStatus());
+        f.setStatusAt(normalizeFeedbackStatus(status));
         f.setCreatorId(AuthContext.userId());
         f.setCreatorName(AuthContext.userName());
         f.setCreatedAt(LocalDateTime.now());
         feedbackMapper.insert(f);
+    }
+
+    /** 落实状态归一：只认 完成/进行中/未完成 三档，空或非法值回落「进行中」 */
+    public static String normalizeFeedbackStatus(String status) {
+        if (CaseLeaderOpinion.FB_DONE.equals(status) || CaseLeaderOpinion.FB_NOT_DONE.equals(status)) {
+            return status;
+        }
+        return CaseLeaderOpinion.FB_IN_PROGRESS;
+    }
+
+    /**
+     * 把待办的最新反馈状态回写到源意见（仅意见派生的主任务）。
+     *
+     * <p>合并面板后待办是办案人唯一操作入口，意见的落实状态从这里派生：
+     * 任务已完成 → 取最新一条反馈（即完成时写入的记录）；
+     * 任务未完成（撤销完成后）→ 取最新一条「非完成」反馈（进行中/未完成），
+     * 没有则清空——不能拿撤销前那条完成记录，否则意见会显示已完成而待办其实还没做完。
+     */
+    private void syncOpinion(CaseTodo t) {
+        if (t == null || t.getOpinionId() == null || t.getParentId() != null) {
+            return;
+        }
+        CaseLeaderOpinion o = opinionMapper.selectById(t.getOpinionId());
+        if (o == null) {
+            return;
+        }
+        boolean taskDone = "DONE".equals(t.getStatus());
+        List<CaseTodoFeedback> rows = feedbackMapper.selectList(new LambdaQueryWrapper<CaseTodoFeedback>()
+                .eq(CaseTodoFeedback::getTodoId, t.getId())
+                .orderByDesc(CaseTodoFeedback::getId));
+        CaseTodoFeedback hit = null;
+        for (CaseTodoFeedback f : rows) {
+            if (taskDone || !CaseLeaderOpinion.FB_DONE.equals(f.getStatusAt())) {
+                hit = f;
+                break;
+            }
+        }
+        if (hit == null) {
+            o.setFeedbackStatus(null);
+            o.setFeedbackNote(null);
+            o.setFeedbackBy(null);
+            o.setFeedbackByName(null);
+            o.setFeedbackAt(null);
+        } else {
+            o.setFeedbackStatus(hit.getStatusAt());
+            o.setFeedbackNote(hit.getContent());
+            o.setFeedbackBy(hit.getCreatorId());
+            o.setFeedbackByName(hit.getCreatorName());
+            o.setFeedbackAt(hit.getCreatedAt());
+        }
+        opinionMapper.updateById(o);
     }
 
     /** 撤销完成（退回待办）。管理员操作，便于纠错。 */
@@ -451,6 +600,9 @@ public class TodoService {
                 .eq(CaseTodo::getId, todoId)
                 .set(CaseTodo::getDoneAt, null)
                 .set(CaseTodo::getDoneBy, null));
+
+        // 意见派生待办：撤销完成同步回意见（回落到最近一次「进行中/未完成」反馈或待反馈）
+        syncOpinion(t);
 
         logService.log("CASE", "TODO_REOPEN", "CASE", t.getCaseId(),
                 "撤销待办完成：" + abbrev(t.getContent()), before, snapshotService.capture(t.getCaseId()));
@@ -544,12 +696,11 @@ public class TodoService {
     /**
      * 提交反馈（累积一条记录，不改任务状态）。
      *
-     * <p>与 done() 的分工：这里只留痕，完成与否由 done() 决定。
-     * 之所以拆开，是因为「主任务至少要有一条反馈说明才能完成」
-     * 要求反馈和完成是两个动作——先反馈再勾选。
+     * <p>与 done() 的分工：这里只留痕并标记落实状态（完成/进行中/未完成），
+     * 完成与否由 done() 决定。反馈弹窗里选「完成」提交时应走 done()。
      */
     @Transactional(rollbackFor = Exception.class)
-    public CaseTodoVO addFeedback(Long todoId, String content) {
+    public CaseTodoVO addFeedback(Long todoId, String status, String content) {
         if (!StringUtils.hasText(content)) {
             throw new BizException("请填写反馈内容");
         }
@@ -557,9 +708,11 @@ public class TodoService {
         CaseInfo c = requireCase(t.getCaseId());
         checkOperate(c);
 
-        addFeedback(t, content.trim());
+        addFeedback(t, content.trim(), status);
         t.setUpdatedAt(LocalDateTime.now());
         todoMapper.updateById(t);
+        // 意见派生待办：落实状态同步回意见
+        syncOpinion(t);
         touchCase(c);
 
         logService.log("CASE", "TODO_FEEDBACK", "CASE", t.getCaseId(),
@@ -567,23 +720,48 @@ public class TodoService {
         return detail(todoId);
     }
 
+    /** 兼容旧调用：不带落实状态的反馈按「进行中」处理 */
+    @Transactional(rollbackFor = Exception.class)
+    public CaseTodoVO addFeedback(Long todoId, String content) {
+        return addFeedback(todoId, null, content);
+    }
+
     /**
      * 勾选 / 撤销子任务完成。
      *
-     * <p>走统一的 done/reopen，规则自动生效：
-     * 子任务无「必须有反馈说明」的限制（说明由主任务承载），
-     * 且子任务没有下级故不触发「子任务全完成」检查。
+     * <p>勾选走统一的 done（子任务无「必须有反馈说明」的限制）；
+     * 撤销允许承办人本人纠错（原来只放管理员，与「承办人可以勾」不对称，
+     * 民警点掉勾选框会直接 403），管理层同样可撤。
      */
+    @Transactional(rollbackFor = Exception.class)
     public CaseTodoVO toggleSubtask(Long subId, boolean done) {
         CaseTodo s = requireTodo(subId);
         if (s.getParentId() == null) {
             throw new BizException("这是主任务，请在待办列表里勾选");
         }
         if (done) {
-            CaseTodoVO vo = done(subId, "（子任务完成）");
-            return vo;
+            return done(subId, null);
         }
-        return reopen(subId);
+        // 撤销子任务完成：承办人或管理层（与勾选完成同一套 checkOperate 判定）
+        CaseInfo c = requireCase(s.getCaseId());
+        checkOperate(c);
+        if (!"DONE".equals(s.getStatus())) {
+            throw new BizException("该子任务尚未完成，无需撤销");
+        }
+        String before = snapshotService.capture(s.getCaseId());
+        s.setStatus("PENDING");
+        s.setDoneAt(null);
+        s.setDoneBy(null);
+        s.setUpdatedAt(LocalDateTime.now());
+        todoMapper.updateById(s);
+        todoMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<CaseTodo>()
+                .eq(CaseTodo::getId, subId)
+                .set(CaseTodo::getDoneAt, null)
+                .set(CaseTodo::getDoneBy, null));
+        touchCase(c);
+        logService.log("CASE", "TODO_SUBTASK_REOPEN", "CASE", s.getCaseId(),
+                "撤销子任务完成：" + abbrev(s.getContent()));
+        return toVO(s, false);
     }
 
     // ------------------------------------------------------------------
@@ -633,6 +811,14 @@ public class TodoService {
         // 已完成且带佐证的项永不自动删除——那是留痕
         for (CaseTodo t : existing) {
             boolean stillWanted = want.contains(t.getContent());
+            // 意见派生的待办只「认领」内容避免重复创建，但绝不参与删除——
+            // 它是领导要求的留痕，不能因为指派清单没抄到就被静默清掉
+            if (t.getOpinionId() != null) {
+                if (stillWanted) {
+                    want.remove(t.getContent());
+                }
+                continue;
+            }
             if (stillWanted) {
                 want.remove(t.getContent()); // 认领一条，重复内容也能一一对应
                 continue;
@@ -657,6 +843,8 @@ public class TodoService {
     /** 删除案件时清掉它的待办（内部调用，不做权限校验） */
     public void removeAllOfCase(Long caseId) {
         if (caseId != null) {
+            feedbackMapper.delete(new LambdaQueryWrapper<CaseTodoFeedback>()
+                    .eq(CaseTodoFeedback::getCaseId, caseId));
             todoMapper.delete(new LambdaQueryWrapper<CaseTodo>().eq(CaseTodo::getCaseId, caseId));
         }
     }
@@ -754,6 +942,16 @@ public class TodoService {
         vo.setCreatedAt(t.getCreatedAt());
         vo.setUpdatedAt(t.getUpdatedAt());
         vo.setParentId(t.getParentId());
+        vo.setOpinionId(t.getOpinionId());
+        // 分级字段与截止时间：与 StaffTodoService.toVO 同一归一口径（NULL 视为一般），
+        // 合并面板与待办总览的展示、排序都读这些字段
+        String u = StringUtils.hasText(t.getUrgency()) ? t.getUrgency() : CaseTodo.URG_NORMAL;
+        String im = StringUtils.hasText(t.getImportance()) ? t.getImportance() : CaseTodo.IMP_NORMAL;
+        vo.setUrgency(u);
+        vo.setUrgencyName(urgencyName(u));
+        vo.setImportance(im);
+        vo.setImportanceName(importanceName(im));
+        vo.setDeadline(t.getDeadline());
         // 反馈条数：列表页判断「能否勾选完成」需要它，但不必拉全量 feedback 明细。
         // feedbackCount 为 null 表示由本方法自己查（单条场景）；列表页会传入预聚合的值。
         vo.setFeedbackCount(feedbackCount != null ? feedbackCount
@@ -776,6 +974,27 @@ public class TodoService {
         }
         SysUser u = userMapper.selectById(id);
         return u == null ? null : u.getDisplayName();
+    }
+
+
+    private String urgencyName(String u) {
+        if (CaseTodo.URG_URGENT.equals(u)) {
+            return "紧急";
+        }
+        if (CaseTodo.URG_HIGH.equals(u)) {
+            return "较急";
+        }
+        return "一般";
+    }
+
+    private String importanceName(String s2) {
+        if (CaseTodo.IMP_KEY.equals(s2)) {
+            return "重点";
+        }
+        if (CaseTodo.IMP_MEDIUM.equals(s2)) {
+            return "次重点";
+        }
+        return "一般";
     }
 
     private String abbrev(String s) {

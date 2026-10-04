@@ -18,4 +18,7 @@ public class TodoSaveRequest {
 
     /** 完成说明（标记完成时可选填） */
     private String remark;
+
+    /** 反馈落实状态：DONE完成 / IN_PROGRESS进行中 / NOT_DONE未完成（提交反馈时用，空=进行中） */
+    private String status;
 }

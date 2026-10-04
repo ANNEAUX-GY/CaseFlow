@@ -21,7 +21,7 @@
         </span>
       </div>
 
-      <!-- 反馈记录（累积，时间正序） -->
+      <!-- 反馈记录（累积，时间正序；带落实状态标签） -->
       <div class="cf-td__sec">
         <div class="cf-td__sec-head">
           <span>反馈记录</span>
@@ -32,7 +32,7 @@
             <div class="cf-td__fb-meta">
               <span class="cf-td__fb-time">{{ fmt(f.createdAt) }}</span>
               <span class="cf-td__fb-by">{{ f.creatorName || '-' }}</span>
-              <!-- status_at 是反馈当时的快照，不是当前状态 -->
+              <!-- statusAt 是反馈当时的落实状态快照，不是当前状态 -->
               <el-tag v-if="f.statusAt" size="small" effect="plain"
                 :type="(STATUS_META[f.statusAt] || {}).type">
                 {{ (STATUS_META[f.statusAt] || {}).label }}
@@ -55,6 +55,8 @@
         <ul v-if="subtasks.length" class="cf-td__sub-list">
           <li v-for="s in subtasks" :key="s.id" class="cf-td__sub"
             :class="{ 'is-done': s.status === 'DONE' }">
+            <!-- 勾选 = 走同一个落实反馈弹窗（选「完成」才真正勾上）；
+                 取消勾选 = 撤销该子任务完成（承办人本人与管理员均可） -->
             <el-checkbox
               :model-value="s.status === 'DONE'"
               :disabled="savingId === s.id"
@@ -63,6 +65,24 @@
             <span v-if="s.status === 'DONE' && s.doneAt" class="cf-muted">
               {{ fmt(s.doneAt) }} · {{ s.doneByName || '-' }}
             </span>
+            <!-- 编辑子任务内容：写错了要能改，不能只能删了重加 -->
+            <el-button v-if="editingSubId !== s.id" link type="primary" size="small"
+              class="cf-td__sub-del" @click="startEditSub(s)">
+              编辑
+            </el-button>
+            <template v-else>
+              <el-input v-model="editingSubText" size="small" maxlength="200" class="cf-td__sub-edit"
+                @keyup.enter="commitEditSub(s)" @keyup.esc="cancelEditSub" />
+              <el-button link type="primary" size="small" @click="commitEditSub(s)">存</el-button>
+              <el-button link size="small" @click="cancelEditSub">取消</el-button>
+            </template>
+            <!-- 删除子任务：误加的不能只能干等。
+                 权限同「添加子任务」（普通用户与管理员均可）——
+                 子任务是干活的人自己拆的，没理由只有领导能删。 -->
+            <el-button link type="danger" size="small" class="cf-td__sub-del"
+              :disabled="savingId === s.id" @click="removeSub(s)">
+              删除
+            </el-button>
           </li>
         </ul>
         <div v-else class="cf-muted cf-td__empty">暂无子任务，可点下方添加</div>
@@ -82,22 +102,12 @@
         </div>
       </div>
 
-      <!-- 提交反馈 -->
+      <!-- 提交反馈入口：走落实反馈弹窗（状态+说明+上传声明） -->
       <div class="cf-td__sec">
         <div class="cf-td__sec-head"><span>提交反馈</span></div>
-        <el-input
-          v-model="newFb"
-          type="textarea"
-          :rows="3"
-          maxlength="600"
-          show-word-limit
-          :placeholder="isParent
-            ? '填写本任务的反馈说明（完成本任务前至少需要一条）'
-            : '填写该子任务的反馈说明'" />
         <div class="cf-td__actions">
-          <el-button type="primary" size="small" :loading="savingFb"
-            :disabled="!newFb.trim()" @click="submitFeedback">
-            提交反馈
+          <el-button type="primary" size="small" @click="openRecord">
+            提交反馈（选落实状态）
           </el-button>
           <span class="cf-muted cf-td__hint">
             {{ isParent ? '反馈与完成是两个动作：先反馈说明，再点下方「标记完成」' : '' }}
@@ -108,29 +118,51 @@
 
     <template #footer>
       <el-button @click="visible = false">关闭</el-button>
-      <!-- 主任务完成：子任务全完成 + 已有反馈说明才允许 -->
+      <!-- 撤销完成仅管理层（后端 reopen 限管理员）；标记完成走落实反馈弹窗 -->
       <el-button
-        v-if="isParent"
-        :type="done ? 'warning' : 'primary'"
+        v-if="isParent && isAdmin && done"
+        type="warning"
         size="small"
         :loading="savingDone"
-        :disabled="done || !canDone"
-        @click="toggleMain">
-        {{ done ? '撤销完成' : '标记完成' }}
+        @click="undoMain">
+        撤销完成
+      </el-button>
+      <el-button
+        v-if="isParent && !done"
+        type="primary"
+        size="small"
+        :loading="savingDone"
+        :disabled="!canDone"
+        @click="openCompleteMain">
+        标记完成
       </el-button>
     </template>
+
+    <!-- 落实反馈弹窗（主任务/子任务共用，图二口径） -->
+    <FeedbackDialog
+      v-model="fb.visible"
+      :title="fb.title"
+      :quote="fb.quote"
+      :default-status="fb.status"
+      :loading="fb.loading"
+      @submit="submitFeedback"
+    />
   </el-dialog>
 </template>
 
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { todoApi } from '../api'
 import { useDevice } from '../utils/device'
+import { useUserStore } from '../store/user'
+import FeedbackDialog from './FeedbackDialog.vue'
 
 const emit = defineEmits(['changed'])
 
 const { isMobile } = useDevice()
+const userStore = useUserStore()
+const isAdmin = computed(() => userStore.isFullAccess)
 
 const visible = ref(false)
 const loading = ref(false)
@@ -139,14 +171,15 @@ const data = ref({})
 
 const savingId = ref(null)
 const addingSub = ref(false)
-const savingFb = ref(false)
 const savingDone = ref(false)
 const newSub = ref('')
-const newFb = ref('')
+const editingSubId = ref(null)
+const editingSubText = ref('')
 
 const STATUS_META = {
   DONE: { label: '已完成', type: 'success' },
   IN_PROGRESS: { label: '进行中', type: 'warning' },
+  NOT_DONE: { label: '未完成', type: 'danger' },
   PENDING: { label: '待办', type: 'info' }
 }
 
@@ -191,9 +224,84 @@ const load = async () => {
 const open = async (id) => {
   todoId.value = id
   newSub.value = ''
-  newFb.value = ''
   visible.value = true
   await load()
+}
+
+/** 勾选主任务时直接打开「标记完成」的反馈弹窗（完成必须带落实状态） */
+const openComplete = async (id) => {
+  await open(id)
+  openCompleteMain()
+}
+
+defineExpose({ open, openComplete })
+
+// ---- 落实反馈弹窗状态 ----
+const fb = reactive({
+  visible: false, title: '反馈落实情况', quote: '', status: 'DONE',
+  loading: false,
+  // complete = 提交后要标记完成；subId 非空 = 反馈对象是子任务
+  complete: false, subId: null
+})
+
+const openFeedbackDlg = ({ target = 'main', subId = null, complete = false }) => {
+  const row = subId ? subtasks.value.find((s) => s.id === subId) : detail.value
+  fb.complete = complete
+  fb.subId = subId
+  fb.title = complete
+    ? (subId ? '完成子任务' : '标记完成')
+    : (subId ? '反馈子任务落实情况' : '反馈落实情况')
+  fb.quote = row?.content || ''
+  fb.status = complete ? 'DONE' : 'IN_PROGRESS'
+  fb.visible = true
+}
+
+const openRecord = () => openFeedbackDlg({ target: 'main', complete: false })
+const openCompleteMain = () => {
+  if (!canDone.value) return
+  openFeedbackDlg({ target: 'main', complete: true })
+}
+
+const undoMain = async () => {
+  savingDone.value = true
+  try {
+    await todoApi.reopen(todoId.value)
+    ElMessage.success('已撤销完成')
+    await load()
+    emit('changed')
+  } catch (e) {
+    await load()
+  } finally {
+    savingDone.value = false
+  }
+}
+
+/** 反馈弹窗提交：complete=标记完成（主/子任务），否则只记录一条带状态的反馈 */
+const submitFeedback = async ({ status, note }) => {
+  fb.loading = true
+  try {
+    if (fb.complete) {
+      if (fb.subId) {
+        await todoApi.done(fb.subId, note)
+      } else {
+        await todoApi.done(todoId.value, note)
+      }
+      ElMessage.success('已标记完成')
+    } else if (fb.subId) {
+      await todoApi.addFeedback(fb.subId, { status, content: note })
+      ElMessage.success('反馈已记录')
+    } else {
+      await todoApi.addFeedback(todoId.value, { status, content: note })
+      ElMessage.success('反馈已记录')
+    }
+    fb.visible = false
+    await load()
+    emit('changed')
+  } catch (e) {
+    await load()
+  } finally {
+    fb.loading = false
+  }
 }
 
 const addSub = async () => {
@@ -211,57 +319,71 @@ const addSub = async () => {
   }
 }
 
-const toggleSub = async (s, checked) => {
-  savingId.value = s.id
+/* ---- 子任务内容就地编辑 ---- */
+const startEditSub = (s) => {
+  editingSubId.value = s.id
+  editingSubText.value = s.content || ''
+}
+const cancelEditSub = () => {
+  editingSubId.value = null
+  editingSubText.value = ''
+}
+const commitEditSub = async (s) => {
+  const text = (editingSubText.value || '').trim()
+  if (!text) { ElMessage.warning('请填写子任务内容'); return }
+  if (text === (s.content || '').trim()) { cancelEditSub(); return }
+  const prev = s.content
+  s.content = text
+  editingSubId.value = null
   try {
-    await todoApi.toggleSubtask(s.id, !!checked)
+    await todoApi.update(s.id, text)
+    ElMessage.success('已保存')
     await load()
     emit('changed')
   } catch (e) {
-    // 后端已给出中文原因（axios 拦截器会弹），这里只需恢复到服务端状态
+    s.content = prev
+    ElMessage.error('保存失败，已恢复原文')
+  }
+}
+
+/** 删除子任务：二次确认，防手滑。已完成的也能删（删掉即从主任务的完成条件里移除）。 */
+const removeSub = async (s) => {
+  try {
+    await ElMessageBox.confirm(
+      `确认删除子任务「${s.content}」？`,
+      '删除子任务',
+      { type: 'warning', confirmButtonText: '确认删除', cancelButtonText: '再想想' }
+    )
+  } catch { return }   // 用户取消
+  savingId.value = s.id
+  try {
+    await todoApi.removeSubtask(s.id)
+    ElMessage.success('子任务已删除')
+    await load()
+    emit('changed')
+  } catch (e) {
     await load()
   } finally {
     savingId.value = null
   }
 }
 
-const submitFeedback = async () => {
-  const content = (newFb.value || '').trim()
-  if (!content) return
-  savingFb.value = true
-  try {
-    data.value = await todoApi.addFeedback(todoId.value, content) || data.value
-    newFb.value = ''
-    ElMessage.success('反馈已记录')
-    emit('changed')
-  } finally {
-    savingFb.value = false
-  }
-}
-
-const toggleMain = async () => {
-  if (done.value) {
-    savingDone.value = true
-    try {
-      await todoApi.reopen(todoId.value)
-      ElMessage.success('已撤销完成')
-      await load()
-      emit('changed')
-    } finally {
-      savingDone.value = false
-    }
+const toggleSub = async (s, checked) => {
+  if (checked) {
+    // 勾选子任务 = 打开同一个落实反馈弹窗，选「完成」才真正完成
+    openFeedbackDlg({ subId: s.id, complete: true })
     return
   }
-  savingDone.value = true
+  savingId.value = s.id
   try {
-    await todoApi.done(todoId.value, newFb.value.trim() || '')
-    ElMessage.success('已标记完成')
+    await todoApi.toggleSubtask(s.id, false)
     await load()
     emit('changed')
   } catch (e) {
+    // 后端已给出中文原因（axios 拦截器会弹），这里恢复到服务端状态
     await load()
   } finally {
-    savingDone.value = false
+    savingId.value = null
   }
 }
 
@@ -271,8 +393,6 @@ const onClosed = () => {
 }
 
 watch(visible, (v) => { if (!v) onClosed() })
-
-defineExpose({ open })
 </script>
 
 <style>
@@ -293,7 +413,10 @@ defineExpose({ open })
 .cf-td__fb-time { font-variant-numeric: tabular-nums }
 .cf-td__fb-text { font-size: 13px; color: #1b2430; margin-top: 3px; line-height: 1.6; white-space: pre-wrap }
 .cf-td__sub { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 13px }
-.cf-td__sub.is-done .cf-td__sub-text { color: #8a929e; text-decoration: line-through }
+.cf-td__sub.is-done /* 子任务行尾的操作按钮：删除/编辑。固定宽度避免点一个按钮整行跳动 */
+.cf-td__sub-del { flex: none; font-size: 12px; padding: 0 2px; margin-left: 4px }
+.cf-td__sub-edit { width: 150px }
+.cf-td__sub-text { color: #8a929e; text-decoration: line-through }
 .cf-td__sub-text { flex: 1; min-width: 0; word-break: break-all }
 .cf-td__add-row { display: flex; gap: 8px; margin-top: 8px }
 .cf-td__actions { display: flex; align-items: center; gap: 10px; margin-top: 8px; flex-wrap: wrap }

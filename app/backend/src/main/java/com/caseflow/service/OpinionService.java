@@ -52,6 +52,9 @@ public class OpinionService {
      */
     @Resource
     private StaffTodoService staffTodoService;
+    /** 派生待办的级联清理（意见移除时把对应待办一起删掉） */
+    @Resource
+    private TodoService todoService;
 
     public List<CaseLeaderOpinion> listOf(Long caseId) {
         List<CaseLeaderOpinion> list = opinionMapper.selectList(new LambdaQueryWrapper<CaseLeaderOpinion>()
@@ -122,15 +125,11 @@ public class OpinionService {
         + "（重要性 " + o.getImportance() + "）");
 
         // 自动派生民警待办（2026-10-04）：领导提意见 = 民警收到一条待办。
-        // 放在 log 之后、同一事务内：派生失败会连带回滚这条意见，
-        // 避免出现"有意见但没待办"的漏项。
-        try {
-      staffTodoService.deriveFromOpinion(o);
-        } catch (Exception e) {
-        logService.log("CASE", "OPINION_TODO_DERIVE_FAIL", "CASE", caseId,
-   "意见已记录但派生待办失败：" + e.getMessage());
-     }
-   return o;
+        // 同一事务内直接派生，失败即整体回滚——避免出现"有意见但没待办"的漏项
+        //（这里刻意不 catch：部门反查等软失败已在 deriveFromOpinion 内部兜底，
+        //  能抛出来的都是真故障，吞掉反而制造漏项）。
+        staffTodoService.deriveFromOpinion(o);
+        return o;
     }
 
     /** 下一条意见的排序位次：现有最大值 + 1；无记录则 1。 */
@@ -216,6 +215,8 @@ public class OpinionService {
         o.setDeadline(parseDeadline(deadline));
         o.setImportance(normalizeImportance(importance));
         opinionMapper.updateById(o);
+        // 截止时间/重要性变化同步到派生待办（合并面板与民警端都读待办数据）
+        staffTodoService.syncFromOpinion(o);
 
         logService.log("CASE", "OPINION_UPDATE_META", "CASE", o.getCaseId(),
                 "修改意见设置[" + importanceName(o.getImportance())
@@ -295,6 +296,8 @@ public class OpinionService {
         }
         o.setContent(now);
         opinionMapper.updateById(o);
+        // 正文变化同步到派生待办，两个入口看到的内容一致
+        staffTodoService.syncFromOpinion(o);
 
         logService.log("CASE", "OPINION_UPDATE_CONTENT", "CASE", o.getCaseId(),
                 "修改意见内容：" + abbrev(old) + " → " + abbrev(now));
@@ -334,6 +337,9 @@ public class OpinionService {
         patch.setContent("");
         patch.setSortOrder(null);
         opinionMapper.updateById(patch);
+
+        // 派生待办一并删除：意见没了，待办就成了没人解释的孤儿条目
+        todoService.removeTodoByOpinion(o.getId());
 
         resequence(caseId);
 
@@ -378,22 +384,17 @@ public class OpinionService {
      * <p>撤回到非承办人身份时也要能收到，所以走与反馈入口同一套权限口径，
      * 但**只对现役（ACTIVE）指派**发，历史协办人（已转手）不该再被打扰。
      */
+    /**
+     * 承办人提醒：写一条案件日志，随 SSE 广播给所有在线连接。
+     *
+     * <p>不区分具体承办人逐条发——日志内容对所有看到该案件的人是一样的，
+     * 旧实现按承办人循环发 N 条一模一样的记录，只会把时间线刷出重复项。
+     * 撤回到非承办人身份时也要能收到提醒，所以这里只按案件维度记一条。
+     */
     private void notifyAssignees(Long caseId, String text) {
         try {
-            String name = AuthContext.userName();
-            List<CaseAssignee> actives = assigneeMapper.selectList(new LambdaQueryWrapper<CaseAssignee>()
-                    .eq(CaseAssignee::getCaseId, caseId)
-                    .eq(CaseAssignee::getStatus, "ACTIVE"));
-            if (actives.isEmpty()) {
-                return;
-            }
-            for (CaseAssignee a : actives) {
-                if (a.getEmployeeId() == null) {
-                    continue;
-                }
-                logService.log("CASE", "OPINION_NOTICE", "CASE", caseId,
-                        "致 " + name + "：" + text);
-            }
+            logService.log("CASE", "OPINION_NOTICE", "CASE", caseId,
+                    "提醒承办人：" + text);
         } catch (Exception e) {
             // 提醒是附加价值，失败不该让主操作回滚
             org.slf4j.LoggerFactory.getLogger(OpinionService.class)

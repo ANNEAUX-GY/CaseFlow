@@ -2,10 +2,12 @@ package com.caseflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.caseflow.dto.SuspectSaveRequest;
+import com.caseflow.entity.CaseAssignee;
 import com.caseflow.entity.CaseInfo;
 import com.caseflow.entity.CaseSuspect;
 import com.caseflow.entity.SysUser;
 import com.caseflow.exception.BizException;
+import com.caseflow.mapper.CaseAssigneeMapper;
 import com.caseflow.mapper.CaseInfoMapper;
 import com.caseflow.mapper.CaseSuspectMapper;
 import com.caseflow.mapper.SysUserMapper;
@@ -36,6 +38,8 @@ public class SuspectService {
     @Resource
     private CaseSuspectMapper suspectMapper;
     @Resource
+    private CaseAssigneeMapper assigneeMapper;
+    @Resource
     private CaseInfoMapper caseMapper;
     @Resource
     private SysUserMapper userMapper;
@@ -65,6 +69,7 @@ public class SuspectService {
         if (!StringUtils.hasText(req.getName())) {
             throw new BizException("请填写嫌疑人姓名");
         }
+        checkOperate(c);
         String before = snapshotService.capture(c.getId());
         CaseSuspect s = new CaseSuspect();
         s.setCaseId(c.getId());
@@ -96,6 +101,7 @@ public class SuspectService {
         if (old == null) {
             throw new BizException("嫌疑人记录不存在");
         }
+        checkOperate(requireCase(old.getCaseId()));
         String before = snapshotService.capture(old.getCaseId());
         old.setName(StringUtils.hasText(req.getName()) ? req.getName().trim() : old.getName());
         if (req.getGender() != null) {
@@ -122,6 +128,7 @@ public class SuspectService {
             throw new BizException("嫌疑人记录不存在");
         }
         Long caseId = s.getCaseId();
+        checkOperate(requireCase(caseId));
         String before = snapshotService.capture(caseId);
         suspectMapper.deleteById(id);
 
@@ -146,6 +153,27 @@ public class SuspectService {
             throw new BizException("案件不存在");
         }
         return c;
+    }
+
+    /**
+     * 写操作权限：管理层 或 本案现职承办人。
+     * 原来完全无校验，任何登录账号都能改任意案件的嫌疑人——与待办/计划同一口径补齐。
+     */
+    private void checkOperate(CaseInfo c) {
+        if (AuthContext.isFullAccess()) {
+            return;
+        }
+        Long empId = AuthContext.get() == null ? null : AuthContext.get().getEmployeeId();
+        if (empId == null) {
+            throw new BizException(403, "只有案件承办人或管理层可以维护嫌疑人信息");
+        }
+        Long cnt = assigneeMapper.selectCount(new LambdaQueryWrapper<CaseAssignee>()
+                .eq(CaseAssignee::getCaseId, c.getId())
+                .eq(CaseAssignee::getEmployeeId, empId)
+                .eq(CaseAssignee::getStatus, "ACTIVE"));
+        if (cnt == null || cnt == 0) {
+            throw new BizException(403, "只有案件承办人或管理层可以维护嫌疑人信息");
+        }
     }
 
     /** 性别只认 MALE / FEMALE，其余一律当未填写，不让脏值进库 */

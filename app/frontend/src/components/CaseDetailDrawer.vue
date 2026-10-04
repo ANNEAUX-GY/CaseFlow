@@ -43,13 +43,8 @@
         <el-descriptions-item label="备注" :span="isMobile ? 1 : 2">{{ detail.description || '-' }}</el-descriptions-item>
       </el-descriptions>
 
-      <!-- 案件待办：承办人在这里逐项完成并上传佐证，管理员在这里维护清单 -->
+      <!-- 案件待办（含领导意见）：提意见/定级/落实反馈都在这一个面板，避免同一事项两处展示 -->
       <CaseTodoPanel :case-id="detail.id" style="margin-top: 12px" @changed="reload" />
-
-      <!-- 领导意见与落实反馈：管理层提意见，办案人对每条意见反馈完成/进行中/未完成 -->
-      <div class="cf-panel" style="margin-top: 12px">
-        <OpinionPanel ref="opinionPanel" :case-id="detail.id" :detail="detail" :is-full-access="canManage" />
-      </div>
 
       <div class="cf-panel" style="margin-top: 12px">
         <div class="cf-panel__head">
@@ -121,12 +116,20 @@
         </div>
       </div>
 
-      <div class="cf-panel" style="margin-top: 12px">
-        <div class="cf-panel__head">
+      <!-- 办理进度 = 全所操作留痕，仅管理层可见（后端 /logs/** 已同步拦截） -->
+      <div v-if="canManage" class="cf-panel" style="margin-top: 12px">
+        <!-- 办理进度默认收起：老案件动辄上百步，全部铺开会把详情抽屉撑得很长；
+             需要追溯时点头部（或按钮）手动展开 -->
+        <div class="cf-panel__head cf-progress__toggle" @click="progressExpanded = !progressExpanded">
           <span>办理进度</span>
           <span class="cf-muted">共 {{ progress.length }} 步</span>
+          <span class="cf-spacer"></span>
+          <el-button link type="primary" size="small">
+            {{ progressExpanded ? '收起' : '展开查看' }}
+          </el-button>
         </div>
-        <div style="padding: 14px 16px">
+        <el-collapse-transition>
+          <div v-show="progressExpanded" style="padding: 14px 16px">
           <el-timeline v-if="progress.length">
             <el-timeline-item
               v-for="p in progress"
@@ -169,6 +172,7 @@
           </el-timeline>
           <span v-else class="cf-muted">暂无进度记录</span>
         </div>
+        </el-collapse-transition>
       </div>
       <div class="cf-toolbar" style="margin-top: 14px">
         <el-button v-if="detail.status === 'ASSIGNED'" type="primary" @click="changeStatus('IN_PROGRESS')">
@@ -241,10 +245,10 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { ElCollapseTransition } from 'element-plus'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { caseApi, fileApi, suspectApi, logApi, watchApi } from '../api'
 import CaseTodoPanel from './CaseTodoPanel.vue'
-import OpinionPanel from './OpinionPanel.vue'
 import { STATUS_META, PRIORITY_META, SOURCE_META, DUE_META, CASE_TYPE_META, dueText } from '../utils/format'
 import { useUserStore } from '../store/user'
 import { useEventStore } from '../store/events'
@@ -281,6 +285,7 @@ const currentAssignees = computed(() => {
 
 watch(() => props.modelValue, async (v) => {
   visible.value = v
+  if (v) progressExpanded.value = false   // 每次打开默认收起
   if (v && props.caseId) await reload()
 })
 watch(visible, (v) => emit('update:modelValue', v))
@@ -288,11 +293,12 @@ watch(visible, (v) => emit('update:modelValue', v))
 const reload = async () => {
   if (!props.caseId) return
   detail.value = await caseApi.detail(props.caseId)
-  // 办理进度：该案件全部操作按时间正序，回答「做到哪里了」
-  progress.value = await logApi.caseLogs(props.caseId)
-  // 批注与领导意见随详情一并刷新（失败不阻塞主信息展示）
+  // 办理进度：仅管理层加载（普通员工面板已隐藏，接口也在后端拦截）
+  if (canManage.value) {
+    progress.value = await logApi.caseLogs(props.caseId)
+  }
+  // 批注随详情一并刷新（待办面板自己订阅 SSE 刷新，失败不阻塞主信息展示）
   try { comments.value = await watchApi.comments(props.caseId) } catch { /* 忽略 */ }
-  if (opinionPanel.value?.reload) { try { await opinionPanel.value.reload() } catch { /* 忽略 */ } }
 }
 
 // ---- 全局监听：抽屉打开期间，其他入口推进本案件时进度时间线自动刷新 ----
@@ -319,8 +325,9 @@ onBeforeUnmount(() => {
   if (unsubscribe) unsubscribe()
 })
 
-// 办理进度时间线（操作日志按时间正序）
+// 办理进度时间线（操作日志按时间正序）；默认收起，展开才渲染
 const progress = ref([])
+const progressExpanded = ref(false)
 const PROGRESS_TYPE = {
   CREATE: 'primary', UPDATE: 'info', ASSIGN: 'warning',
   STATUS: 'success', DELETE: 'danger', UNDO: 'info'
@@ -328,7 +335,6 @@ const PROGRESS_TYPE = {
 const progressType = (action) => PROGRESS_TYPE[action] || 'info'
 
 // ---- 批注（功能1）：挂在进度时间线上，写操作仅管理层 ----
-const opinionPanel = ref(null)
 const comments = ref([])
 const commentsByLog = computed(() => {
   const map = {}
@@ -415,6 +421,10 @@ const removeSuspect = async (row) => {
 </script>
 
 <style>
+/* 办理进度折叠头：整行可点，热区大一点方便手抖的用户 */
+.cf-progress__toggle { cursor: pointer; user-select: none }
+.cf-progress__toggle:hover .cf-muted { color: #1b4a8c }
+
 /* 批注卡（类似 Word 批注）：左竖线 + 浅底，挂在对应进度下方 */
 .cf-pcomment {
   margin-top: 8px; padding: 8px 10px;

@@ -243,9 +243,13 @@ public class UserService {
                     EmployeeBindingService.ORIGIN_MANUAL, id));
         }
         upd.setPhone(checkPhone(req.getPhone(), id));
-   upd.setDept(req.getDept());
-   // 组别：审核/编辑时可改，帮申请人纠正填错的
-        upd.setPoliceGroup(com.caseflow.flow.PoliceGroup.normalize(req.getPoliceGroup()));
+        upd.setDept(req.getDept());
+        // 组别：编辑时传了才改（帮申请人纠正填错的）。
+        // 不传就跳过——normalize() 对空值会返回「不限」，无条件写入会把
+        // 没带这个字段的编辑请求里的组别静默重置成 NONE。
+        if (req.getPoliceGroup() != null && !req.getPoliceGroup().trim().isEmpty()) {
+            upd.setPoliceGroup(com.caseflow.flow.PoliceGroup.normalize(req.getPoliceGroup()));
+        }
         upd.setUpdatedAt(LocalDateTime.now());
         userMapper.updateById(upd);
         logService.log("AUTH", "UPDATE_USER", "USER", id,

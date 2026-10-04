@@ -69,7 +69,7 @@ public class ApprovalService {
                 // 待初查 -> 侦查中：**仅本案现职承办人（办案人）**。
                 // 开始侦查 = 办案人表示"我开始干了"，是工作者的自我认领动作，
                 // 不由领导代点（管理层的职责是审批与提意见，见权限划分文档）。
-                requireState(cur, null, "PENDING_INITIAL");
+                requireState(cur, "PENDING_INITIAL");
                 requireActiveHandler(c);
                 if (!hasOwner(caseId)) {
                     throw new BizException("请先指派主办人再开始侦查");
@@ -78,7 +78,7 @@ public class ApprovalService {
                 break;
             case "SUBMIT":
                 // 侦查中 -> 待审批：经办人或管理层；至少 1 条已完成计划
-                requireState(cur, null, "INVESTIGATING");
+                requireState(cur, "INVESTIGATING");
                 checkHandlerOrManager(c);
                 Long doneCnt = planMapper.selectCount(new LambdaQueryWrapper<CasePlan>()
                         .eq(CasePlan::getCaseId, caseId).eq(CasePlan::getStatus, "DONE"));
@@ -89,14 +89,14 @@ public class ApprovalService {
                 break;
             case "APPROVE":
                 // 待审批 -> 侦查终结：管理层
-                requireState(cur, null, "PENDING_APPROVAL");
+                requireState(cur, "PENDING_APPROVAL");
                 requireManager("审批侦查终结");
                 c.setInvestigationStatus("INVESTIGATION_DONE");
                 insertApproval(caseId, "INVESTIGATION_DONE", "APPROVED", comment);
                 break;
             case "REJECT":
                 // 待审批 -> 侦查中（退回补侦）：管理层，意见必填
-                requireState(cur, null, "PENDING_APPROVAL");
+                requireState(cur, "PENDING_APPROVAL");
                 requireManager("退回补侦");
                 if (!StringUtils.hasText(comment)) {
                     throw new BizException("退回补侦必须填写审批意见");
@@ -144,6 +144,15 @@ public class ApprovalService {
         }
         c.setUpdatedAt(LocalDateTime.now());
         caseMapper.updateById(c);
+        // 「无措施」要把旧措施清空：updateById 会跳过 null 字段，
+        // 三个时间/措施字段必须显式 set null，否则登记 NONE 后库里仍是旧措施
+        if ("NONE".equals(measure)) {
+            caseMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<CaseInfo>()
+                    .eq(CaseInfo::getId, caseId)
+                    .set(CaseInfo::getCaseMeasure, null)
+                    .set(CaseInfo::getMeasureDate, null)
+                    .set(CaseInfo::getDetainDeadline, null));
+        }
 
         insertApproval(caseId, "MEASURE", "APPROVED",
                 "登记强制措施：" + DictHolder.name("CASE_MEASURE", measure)
@@ -184,7 +193,7 @@ public class ApprovalService {
         return c;
     }
 
-    private void requireState(String current, String ignored, String expected) {
+    private void requireState(String current, String expected) {
         boolean ok = expected == null
                 ? current == null
                 : expected.equals(current) || (current == null && "PENDING_INITIAL".equals(expected));

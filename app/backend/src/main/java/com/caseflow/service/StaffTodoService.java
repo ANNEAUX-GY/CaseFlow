@@ -104,7 +104,9 @@ public class StaffTodoService {
         // 意见的重要性映射为待办的紧急 + 重点两档，领导可再调整
         t.setUrgency(urgencyOfOpinion(op.getImportance()));
         t.setImportance(importanceOfOpinion(op.getImportance()));
-        t.setSort(0);
+        // 递增排序：排在案件现有待办最大序号之后——新意见永远出现在列表末尾，
+        // 序号接着前面的递增（原 sort=0 会让新意见跳到列表顶部，打乱既有顺序）
+        t.setSort(nextSortOfCase(op.getCaseId()));
         t.setCreatedBy(op.getCreatorId());
         t.setCreatedAt(LocalDateTime.now());
         t.setUpdatedAt(t.getCreatedAt());
@@ -261,16 +263,21 @@ public class StaffTodoService {
     // ==================================================================
 
     /**
-     * 民警端调整待办的紧急/重点程度（只能改自己承办案件的）。
-     * 状态流转仍走done/reopen（那里要校验佐证材料），这里只管分级。
+     * 调整待办的紧急/重点程度。
+     *
+     * <p><b>2026-10 收紧</b>：分级由领导/管理员统一设定，普通民警只读——
+     * 民警自改紧急度会让排序口径漂移，也和领导意见的 A/B/C 定级冲突。
+     * 状态流转仍走 done/reopen（那里校验承办人），这里只管分级。
      */
     @Transactional(rollbackFor = Exception.class)
     public CaseTodoVO updateGrade(Long todoId, String urgency, String importance) {
+        if (!AuthContext.isFullAccess()) {
+            throw new BizException(403, "紧急程度与重点程度由所长/法制员/管理员设定，如需调整请联系他们");
+        }
         CaseTodo t = todoMapper.selectById(todoId);
         if (t == null) {
             throw new BizException("待办不存在或已被删除");
         }
-        requireMine(t.getCaseId());
         if (StringUtils.hasText(urgency)) {
             t.setUrgency(normalizeUrgency(urgency));
         }
@@ -325,9 +332,9 @@ public class StaffTodoService {
         }
         List<CaseTodo> todos = todoMapper.selectList(new LambdaQueryWrapper<CaseTodo>()
                 .in(CaseTodo::getCaseId, mine)
-                .eq(CaseTodo::getStatus, "PENDING")   // 只算未完成的
-                .ne(CaseTodo::getStatus, "CANCELLED"));
+                .eq(CaseTodo::getStatus, "PENDING"));   // 只算未完成的
         LocalDateTime now = LocalDateTime.now();
+        LocalDateTime dayStart = now.toLocalDate().atStartOfDay();
         LocalDateTime todayEnd = now.toLocalDate().atTime(23, 59, 59);
         int today = 0, dueSoon = 0, overdue = 0;
         for (CaseTodo t : todos) {
@@ -335,11 +342,12 @@ public class StaffTodoService {
             if (dl == null) {
                 continue;
             }
-            if (!dl.isAfter(todayEnd)) {
-                today++;
-            }
             if (dl.isBefore(now)) {
                 overdue++;
+            }
+            // 「今日需完成」只算截止就在今天的：更早的是「已超期」，别混进今天
+            if (!dl.isBefore(dayStart) && !dl.isAfter(todayEnd)) {
+                today++;
             }
             if (!dl.isAfter(now.plusDays(DUE_SOON_DAYS))) {
                 dueSoon++;
@@ -372,8 +380,12 @@ public class StaffTodoService {
      */
     @Transactional(rollbackFor = Exception.class)
     public int backfillFromOpinions() {
+        // 跳过已移除的意见（content 置空的软删行）——给已删除的意见派生待办只会造出空条目
         List<CaseLeaderOpinion> all = opinionMapper.selectList(
-                new LambdaQueryWrapper<CaseLeaderOpinion>().orderByAsc(CaseLeaderOpinion::getId));
+                new LambdaQueryWrapper<CaseLeaderOpinion>()
+                        .isNotNull(CaseLeaderOpinion::getContent)
+                        .ne(CaseLeaderOpinion::getContent, "")
+                        .orderByAsc(CaseLeaderOpinion::getId));
         int made = 0;
         for (CaseLeaderOpinion op : all) {
             CaseTodo before = todoMapper.selectOne(new LambdaQueryWrapper<CaseTodo>()
@@ -386,9 +398,46 @@ public class StaffTodoService {
         return made;
     }
 
+    /**
+     * 意见元信息（正文 / 截止时间 / 重要性）变化后同步到派生待办。
+     *
+     * <p>合并面板后待办是主要展示面，意见的这些字段在待办上有冗余副本；
+     * 意见侧修改后调用本方法保持两边一致。待办不存在（如已被清理）时静默跳过。
+     */
+    public void syncFromOpinion(CaseLeaderOpinion op) {
+        if (op == null || op.getId() == null) {
+            return;
+        }
+        CaseTodo t = todoMapper.selectOne(new LambdaQueryWrapper<CaseTodo>()
+                .eq(CaseTodo::getOpinionId, op.getId())
+                .isNull(CaseTodo::getParentId)
+                .last("LIMIT 1"));
+        if (t == null) {
+            return;
+        }
+        t.setContent(abbrev(op.getContent(), 500));
+        t.setDeadline(op.getDeadline());
+        t.setUrgency(urgencyOfOpinion(op.getImportance()));
+        t.setImportance(importanceOfOpinion(op.getImportance()));
+        t.setUpdatedAt(LocalDateTime.now());
+        todoMapper.updateById(t);
+    }
+
     // ==================================================================
     // 内部工具
     // ==================================================================
+
+    /** 案件待办当前最大 sort + 1：新增项追加到列表末尾，序号递增 */
+    private int nextSortOfCase(Long caseId) {
+        List<CaseTodo> list = todoMapper.selectList(new LambdaQueryWrapper<CaseTodo>()
+                .eq(CaseTodo::getCaseId, caseId)
+                .orderByDesc(CaseTodo::getSort)
+                .last("LIMIT 1"));
+        if (list.isEmpty() || list.get(0).getSort() == null) {
+            return 1;
+        }
+        return list.get(0).getSort() + 1;
+    }
 
     /** 校验该案件是当前用户承办/协办的（复用统一口径，不另立权限） */
     private void requireMine(Long caseId) {

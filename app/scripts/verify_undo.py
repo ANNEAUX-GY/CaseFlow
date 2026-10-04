@@ -92,6 +92,12 @@ def main():
         e1, e2, e3 = emps[0][0], emps[1][0], emps[2][0]
         print(f"   在职员工：{emps[0][1]}({e1}) / {emps[1][1]}({e2}) / {emps[2][1]}({e3})")
 
+        # 2026-10-04 起指派有办案组别校验（初查案件只能派初查组）。
+        # 演示员工默认「不限」会被拒派，先把前 3 名员工临时设为初查组，结束时恢复。
+        with conn.cursor() as cur:
+            cur.execute("UPDATE org_employee SET police_group=%s WHERE id IN (%s,%s,%s)",
+                        ("INITIAL", e1, e2, e3))
+
         # ================= 1. 撤回「新建」 =================
         print("\n1. 撤回「新建」——应当把案件整个撤掉")
         r = requests.post(f"{api}/cases", json={"name": f"{MARK}-新建", "priority": "NORMAL",
@@ -237,6 +243,14 @@ def main():
         print("=" * 70)
         return 0 if not FAILED else 1
     finally:
+        # 恢复员工组别，不污染演示数据
+        try:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE org_employee SET police_group=NULL WHERE id IN (%s,%s,%s)",
+                            (e1, e2, e3))
+            conn.commit()
+        except Exception:
+            pass
         conn.close()
 
 

@@ -105,45 +105,24 @@ export const categoryApi = {
 export const watchApi = {
   cases: (params) => http.get('/watch/cases', { params }),
   board: (params) => http.get('/watch/board', { params }),
-  plans: (caseId) => http.get(`/watch/cases/${caseId}/plans`),
-  addPlan: (caseId, data) => http.post(`/watch/cases/${caseId}/plans`, data),
-  updatePlan: (id, data) => http.put(`/watch/plans/${id}`, data),
-  donePlan: (id, doneNote) => http.post(`/watch/plans/${id}/done`, { doneNote }),
-  cancelPlan: (id) => http.post(`/watch/plans/${id}/cancel`),
-  /** 撤销完成（阶段流程面板的任务勾选框双向切换用） */
-  revertPlan: (id) => http.post(`/watch/plans/${id}/revert`),
+  /** 侦查进度流转：action = START/SUBMIT/APPROVE/REJECT（盯办抽屉顶部按钮） */
   transition: (caseId, data) => http.post(`/watch/cases/${caseId}/transition`, data),
+  /** 强制措施登记 / 变更（管理层） */
   measure: (caseId, data) => http.post(`/watch/cases/${caseId}/measure`, data),
-  approvals: (caseId) => http.get(`/watch/cases/${caseId}/approvals`),
   // ---- 办理进度批注（写=管理层，读=所有能看案件的人） ----
   comments: (caseId) => http.get(`/watch/cases/${caseId}/comments`),
   addComment: (logId, content) => http.post(`/watch/logs/${logId}/comments`, { content }),
   updateComment: (id, content) => http.put(`/watch/comments/${id}`, { content }),
   removeComment: (id) => http.delete(`/watch/comments/${id}`),
-  // ---- 领导意见与落实反馈（提=管理层，反馈=本案办案人） ----
+  // ---- 领导意见（合并面板用：提意见/定级/移除；落实状态由待办反馈单向同步，不再单独反馈） ----
   opinions: (caseId) => http.get(`/watch/cases/${caseId}/opinions`),
   /** 新增意见。deadline 可空（'' 或 null），importance 缺省由后端落C */
   addOpinion: (caseId, data) => http.post(`/watch/cases/${caseId}/opinions`,
     typeof data === 'string' ? { content: data } : data),
-  /** 拖拽排序：传拖拽后的 opinionId 完整有序数组（仅管理层） */
-  reorderOpinions: (caseId, opinionIds) =>
-    http.post(`/watch/cases/${caseId}/opinions/reorder`, { opinionIds }),
   /** 修改截止时间与重要性（仅管理层）；deadline 传 '' 即清空 */
   updateOpinionMeta: (id, data) => http.post(`/watch/opinions/${id}/meta`, data),
-  /** 修改意见正文（仅管理层） */
-  updateOpinionContent: (id, content) => http.post(`/watch/opinions/${id}/content`, { content }),
-  /** 移除意见（仅管理层）；后端软删，列表不再返回 */
-  removeOpinion: (id) => http.post(`/watch/opinions/${id}/remove`),
-  feedbackOpinion: (id, data) => http.post(`/watch/opinions/${id}/feedback`, data),
-  // ---- 阶段→环节→任务 流程流转 ----
-  /** 流程视图：环节顺序、每环节任务、进度、可选流转分支 */
-  flow: (caseId) => http.get(`/watch/cases/${caseId}/flow`),
-  /** 仅进度（列表页进度条用，避免每行拉全量流程） */
-  flowProgress: (caseId) => http.get(`/watch/cases/${caseId}/flow/progress`),
-  /** 阶段流转（管理层确认）：action = DETAIN/BAIL/RELEASE/ARREST/PUNISH/CLOSE */
-  flowTransfer: (caseId, action) => http.post(`/watch/cases/${caseId}/flow/transfer`, { action }),
-  /** 补全当前阶段标准任务（幂等，取保流程细化后用） */
-  flowSeed: (caseId) => http.post(`/watch/cases/${caseId}/flow/seed`)
+  /** 移除意见（仅管理层）；后端软删并连带清理派生待办 */
+  removeOpinion: (id) => http.post(`/watch/opinions/${id}/remove`)
 }
 
 export const logApi = {
@@ -186,8 +165,10 @@ export const todoApi = {
   detail: (todoId) => http.get(`/todos/${todoId}/detail`),
   /** 添加子任务（普通用户与管理员均可） */
   addSubtask: (todoId, content) => http.post(`/todos/${todoId}/subtasks`, { content }),
-  /** 提交反馈（累积一条，不改状态） */
-  addFeedback: (todoId, content) => http.post(`/todos/${todoId}/feedbacks`, { content }),
+  /** 提交反馈（累积一条，不改状态）。data: { status: DONE|IN_PROGRESS|NOT_DONE, content } */
+  addFeedback: (todoId, data) => http.post(`/todos/${todoId}/feedbacks`, data),
+  /** 删除子任务（普通用户与管理员均可） */
+  removeSubtask: (subId) => http.delete(`/todos/${subId}`),
   /** 勾选/撤销子任务完成 */
   toggleSubtask: (todoId, done) => http.post(`/todos/${todoId}/subtasks/toggle?done=${done}`),
   overview: (params) => http.get('/todos/overview', { params }),

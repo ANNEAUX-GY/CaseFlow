@@ -32,9 +32,10 @@ export const useMyTodoStore = defineStore('myTodo', {
       try {
         const s = await todoApi.welcomeSummary()
         this.summary = s || this.summary
-        // 红点用「今日需完成 + 即将超期」作参考会重复计数，
-        // 这里取 dueSoon（含今天到期与已超期）作为"需要尽快处理"的规模。
-        this.count = (s?.dueSoonCount || 0) + (s?.todayTodoCount || 0)
+        // 红点用 dueSoon（含今天到期与已超期）作为"需要尽快处理"的规模。
+        // 不要再加 todayTodoCount：它的口径（截止≤今天）完全落在 dueSoon 里，
+        // 相加会把同一条待办数两遍，红点虚高。
+        this.count = (s?.dueSoonCount || 0)
       } catch (e) {
         this.count = 0
         this.summary = {

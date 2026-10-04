@@ -129,7 +129,9 @@ public class StaffWorkloadService {
             if (isOverdue) {
                 overdue++;
             }
-            if (c.getDeadline() != null && !c.getDeadline().isAfter(now.plusDays(DUE_SOON_DAYS))) {
+            // 快逾期 = 还没逾期但只剩 3 天内；已逾期单独计 overdue，别重复进两个桶
+            if (c.getDeadline() != null && c.getDeadline().isAfter(now)
+                    && !c.getDeadline().isAfter(now.plusDays(DUE_SOON_DAYS))) {
                 dueSoon++;
             }
             Map<String, Object> row = new HashMap<>();
@@ -137,7 +139,7 @@ public class StaffWorkloadService {
             row.put("caseNo", c.getCaseNo());
             row.put("caseName", c.getName());
             row.put("caseType", c.getCaseType());
-            row.put("caseTypeName", c.getCaseType());
+            row.put("caseTypeName", com.caseflow.support.DictHolder.name("CASE_TYPE", c.getCaseType()));
             row.put("assignRole", ownerIds.contains(c.getId()) ? "OWNER" : "MEMBER");
             row.put("status", c.getStatus());
             row.put("module", mod);
@@ -145,7 +147,8 @@ public class StaffWorkloadService {
             row.put("deadline", c.getDeadline());
             row.put("daysLeft", days);
             row.put("overdue", isOverdue);
-            row.put("dueSoon", c.getDeadline() != null && !c.getDeadline().isAfter(now.plusDays(DUE_SOON_DAYS)));
+            row.put("dueSoon", c.getDeadline() != null && c.getDeadline().isAfter(now)
+                    && !c.getDeadline().isAfter(now.plusDays(DUE_SOON_DAYS)));
             row.put("planTotal", 0);
             row.put("planDone", 0);
             row.put("current", caseId != null && caseId.equals(c.getId()));
@@ -190,17 +193,38 @@ public class StaffWorkloadService {
         return m;
     }
 
-    /** 批量取这些案件的阶段任务进度 */
+    /**
+     * 批量取这些案件的阶段任务进度。
+     *
+     * <p>与 WatchService.planStats 同一口径：只统计案件当前阶段的任务
+     * （stage 为 NULL 的存量归初查），否则负荷弹窗的进度与盯办列表对不上。
+     */
     private void fillPlanProgress(List<Map<String, Object>> rows) {
         if (rows == null || rows.isEmpty()) {
             return;
         }
         List<Long> ids = rows.stream().map(r -> (Long) r.get("caseId")).collect(Collectors.toList());
+        Map<Long, String> stageOfCase = new HashMap<>();
+        for (CaseInfo c : caseMapper.selectList(new LambdaQueryWrapper<CaseInfo>()
+                .select(CaseInfo::getId, CaseInfo::getFlowStage)
+                .in(CaseInfo::getId, ids))) {
+            stageOfCase.put(c.getId(),
+                    c.getFlowStage() == null || c.getFlowStage().trim().isEmpty()
+                            ? com.caseflow.flow.CaseFlowTemplate.STAGE_INITIAL
+                            : c.getFlowStage());
+        }
         List<CasePlan> plans = planMapper.selectList(new LambdaQueryWrapper<CasePlan>()
                 .in(CasePlan::getCaseId, ids));
         Map<Long, int[]> stat = new HashMap<>();
         for (CasePlan p : plans) {
             if ("CANCELLED".equals(p.getStatus())) {
+                continue;
+            }
+            String st = p.getStage() == null || p.getStage().trim().isEmpty()
+                    ? com.caseflow.flow.CaseFlowTemplate.STAGE_INITIAL
+                    : p.getStage();
+            String cur = stageOfCase.get(p.getCaseId());
+            if (cur == null || !cur.equals(st)) {
                 continue;
             }
             int[] arr = stat.computeIfAbsent(p.getCaseId(), k -> new int[2]);
@@ -217,17 +241,7 @@ public class StaffWorkloadService {
     }
 
     private String moduleOf(CaseInfo c) {
-        String m = c.getCaseMeasure();
-        if (!StringUtils.hasText(m) || "NONE".equals(m)) {
-            return "INITIAL";
-        }
-        if ("DETENTION".equals(m)) {
-            return "DETENTION";
-        }
-        if ("BAIL".equals(m) || "RESIDENCE".equals(m)) {
-            return "BAIL_RESIDENCE";
-        }
-        return "INITIAL";
+        return PoliceGroup.moduleOfMeasure(c.getCaseMeasure());
     }
 
     private String moduleName(String mod) {

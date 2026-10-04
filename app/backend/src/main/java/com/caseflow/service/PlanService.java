@@ -159,6 +159,12 @@ public class PlanService {
         p.setDoneNote(null);
         p.setUpdatedAt(LocalDateTime.now());
         planMapper.updateById(p);
+        // updateById 会跳过 null 字段，done_at / done_note 必须显式清空，
+        // 否则撤销完成后 DB 里残留旧的完成信息
+        planMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<CasePlan>()
+                .eq(CasePlan::getId, planId)
+                .set(CasePlan::getDoneAt, null)
+                .set(CasePlan::getDoneNote, null));
 
         touchCase(p.getCaseId());
         logService.log("CASE", "PLAN_REVERT", "CASE", p.getCaseId(),
@@ -204,9 +210,6 @@ public class PlanService {
      * </ul>
      */
     private void checkOperate(CaseInfo c) {
-        if (AuthContext.isFullAccess()) {
-            // 管理层：放行标准任务，放行民警自建任务在调用方判断
-        }
         Long empId = AuthContext.get() == null ? null : AuthContext.get().getEmployeeId();
         if (empId == null) {
             if (AuthContext.isFullAccess()) {

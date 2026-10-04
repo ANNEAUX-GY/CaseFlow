@@ -40,6 +40,18 @@ public class CaseTodoVO implements Serializable {
     private Integer daysLeft;
     /** 源领导意见 ID：点条目可跳到对应意见详情 */
     private Long opinionId;
+
+    // ---- 意见侧信息（意见派生待办才有值，合并面板一次展示待办+意见） ----
+    /** 意见重要性 A/B/C */
+    private String opinionImportance;
+    /** 意见落实截止时间 */
+    private LocalDateTime opinionDeadline;
+    /** 意见提出人姓名 */
+    private String opinionCreatorName;
+    /** 意见提出时间 */
+    private LocalDateTime opinionCreatedAt;
+    /** 意见落实状态：DONE/IN_PROGRESS/NOT_DONE，NULL=待反馈（由待办反馈同步） */
+    private String opinionFeedbackStatus;
     /** 紧急程度排序权重（后端算好给前端用，避免各端各写一套映射） */
     private Integer urgencyWeight;
     /** 重点程度排序权重 */
