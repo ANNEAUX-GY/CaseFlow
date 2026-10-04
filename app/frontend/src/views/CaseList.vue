@@ -1,12 +1,12 @@
 <template>
   <div class="cf-page">
-    <!-- 类型锁定提示条：明示"当前只看得见这一类"，避免用户以为筛漏了数据。
-         按需求不在页内提供类型切换（那会破坏筛选约束），要换类型请用右上角「退出」。 -->
+    <!-- 类型锁定提示条：只说「页内独有、门控管」的信息（条数 + 不能在此改类型）。
+         类型名与"限定在此类型内"已由全局类型条承担，此处不重复。 -->
     <div class="cf-gatebar" :class="'is-' + (caseTypeStore.currentOption?.type || 'info')">
       <span class="cf-gatebar__tag">{{ caseTypeStore.currentOption?.label || '未选择' }}</span>
-      <span>当前只看这一类案件，共 {{ total }} 件；筛选、标签与图表均限定在此类型内</span>
+      <span>当前共 {{ total }} 件</span>
       <span class="cf-spacer"></span>
-      <span class="cf-gatebar__tip">需更换类型请点右上角「退出」</span>
+      <span class="cf-gatebar__tip">需更换类型请用顶部类型条的「退出类型」</span>
     </div>
 
     <div class="cf-toolbar">

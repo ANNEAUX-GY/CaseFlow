@@ -57,12 +57,39 @@ assert staff_emp_id, ("找不到 e2e_staff 对应的员工档案。请先跑 scr
                       "（它会在自检里注册 e2e_staff 并建立绑定的员工档案）。")
 print(f"[管理员] e2e_staff 对应员工 id={staff_emp_id}")
 
+# 组别适配（2026-10）：指派按办案组别校验——无措施的案件属「初查」环节，
+# 要求初查组；刑拘在办要求清案组。本脚本测的是「角色数据可见范围」，
+# 不测组别约束，所以把测试档案固定为「初查组」，
+# 并只挑无强制措施的案件（避开清案组约束），保证自检稳定。
+# 注意：后端 caseMeasure 返回 None（JSON null）而非 "NONE"，
+# 所以下面用 `not measure` 判空。
+call("PUT", f"/employees/{staff_emp_id}",
+     {"id": staff_emp_id, "name": "自检档案-e2e_staff", "policeGroup": "INITIAL"},
+     token=boss)
+
 target = None
+# 组别适配（2026-10）：只挑「无强制措施」的案件。
+# 刑拘在办（case_measure=DETENTION）要求清案组，而本脚本的测试档案是「不限」，
+# 若按「第一个在办案件」挑会撞上刑拘案件被正确拒收 —— 那是组别功能在正常工作，
+# 不是权限范围自检要测的东西，所以这里主动避开。
 for c in all_page["data"]["list"]:
-    if c["status"] not in ("DONE", "CANCELLED"):
+    if c["status"] in ("DONE", "CANCELLED"):
+        continue
+    measure = c.get("caseMeasure")
+    # 注意：后端返回的是 None（JSON null）而非字符串 "NONE"，
+    # 所以要用 `not measure` 判空，不能只比 "NONE"。
+    if not measure or measure == "NONE":
         target = c
         break
-assert target, "没有可指派的在办案件"
+if target is None:
+    # 兜底：没有无措施案件就现建一个，避免依赖存量数据
+    st, r = call("POST", "/cases",
+                 {"name": "自检用案件-角色范围", "caseType": "CRIMINAL", "priority": "LOW"},
+                 boss)
+    if st == 200 and r.get("code") == 0:
+        target = r["data"]
+        print(f"[管理员] 现建专用案件 id={target['id']}")
+assert target, "没有可指派的无措施在办案件"
 print(f"[管理员] 选中案件 id={target['id']} 编号={target.get('caseNo')} 名称={target['name']}")
 
 st, r = call("POST", f"/cases/{target['id']}/assign",

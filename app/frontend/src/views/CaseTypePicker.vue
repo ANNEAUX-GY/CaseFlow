@@ -4,7 +4,7 @@
       <div class="cf-picker__title">请选择案件类型</div>
       <div class="cf-picker__sub">
         选择后，本次浏览的案件列表、看板与统计都只显示该类案件；
-        如需更换类型，请点右上角「退出」
+        选定后顶部会出现类型条，需要换类型时点那条上的「退出类型」
       </div>
     </div>
 
@@ -28,7 +28,7 @@
     </div>
 
     <div class="cf-picker__foot cf-muted">
-      提示：切换侧边栏栏目不会丢失当前选择，只有主动「退出」才会重置
+      提示：切换侧边栏栏目不会丢失当前选择，只有主动「退出类型」才会重置
     </div>
   </div>
 </template>
@@ -106,38 +106,48 @@ defineExpose({ loadCounts })
 </script>
 
 <style>
-.cf-picker { padding: 28px 24px 20px; max-width: 900px; margin: 0 auto }
-.cf-picker__head { text-align: center; margin-bottom: 22px }
-.cf-picker__title { font-size: 19px; font-weight: 600; color: #1b2430 }
-.cf-picker__sub { font-size: 13px; color: #5a6472; margin-top: 8px; line-height: 1.7 }
+/* 2026-10-04 放大：原先容器 852px / 卡片 275×125 偏小，
+   45~50 岁使用者要凑近看字。三档全放开：
+   容器加宽到 1180px、卡片加高到 190px、字号统一上调 2px。 */
+.cf-picker { padding: 40px 32px 28px; max-width: 1180px; margin: 0 auto }
+.cf-picker__head { text-align: center; margin-bottom: 28px }
+.cf-picker__title { font-size: 22px; font-weight: 600; color: #1b2430 }
+.cf-picker__sub { font-size: 15px; color: #5a6472; margin-top: 10px; line-height: 1.75 }
 .cf-picker__cards {
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px;
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;
 }
 .cf-picker__card {
-  border: 1px solid #dfe4ea; border-radius: 6px; padding: 16px 14px;
+  border: 1px solid #dfe4ea; border-radius: 8px; padding: 26px 22px;
   cursor: pointer; background: #fff; transition: all .15s;
   min-width: 0;
+  /* 三卡片等高，长描述不会把某张卡顶矮 */
+  display: flex; flex-direction: column;
 }
-.cf-picker__card:hover { border-color: #1b4a8c; background: #f7faff; transform: translateY(-1px) }
+.cf-picker__card:hover { border-color: #1b4a8c; background: #f7faff; transform: translateY(-2px) }
 .cf-picker__card:focus-visible { outline: 2px solid #1b4a8c; outline-offset: 2px }
-.cf-picker__card.is-active { border-color: #1b4a8c; background: #f2f6fc; box-shadow: 0 0 0 1px #1b4a8c inset }
-.cf-picker__card-top { display: flex; align-items: center; gap: 8px; margin-bottom: 8px }
+.cf-picker__card.is-active { border-color: #1b4a8c; background: #f2f6fc; box-shadow: 0 0 0 2px #1b4a8c inset }
+.cf-picker__card-top { display: flex; align-items: center; gap: 10px; margin-bottom: 14px }
 .cf-picker__badge {
-  display: inline-block; padding: 3px 10px; border-radius: 3px;
-  font-size: 13px; font-weight: 600; color: #fff;
+  display: inline-block; padding: 5px 14px; border-radius: 4px;
+  font-size: 15px; font-weight: 600; color: #fff;
 }
 .cf-picker__badge.is-danger { background: #c62a2a }
 .cf-picker__badge.is-warning { background: #d98a0b }
 .cf-picker__badge.is-info { background: #5a6472 }
-.cf-picker__ok { color: #1b4a8c; font-size: 17px; margin-left: auto }
-.cf-picker__desc { font-size: 12px; color: #5a6472; line-height: 1.6; min-height: 38px }
-.cf-picker__count { font-size: 12px; color: #8a929e; margin-top: 6px }
-.cf-picker__foot { text-align: center; font-size: 12px; margin-top: 18px }
+.cf-picker__ok { color: #1b4a8c; font-size: 20px; margin-left: auto }
+.cf-picker__desc { font-size: 14px; color: #5a6472; line-height: 1.75; flex: 1 }
+/* 案件数是选择前就要看的信息，给足视觉权重并与描述拉开距离 */
+.cf-picker__count {
+  font-size: 14px; color: #1b2430; margin-top: 16px; padding-top: 12px;
+  border-top: 1px dashed #e4e8ee; font-weight: 600;
+}
+.cf-picker__foot { text-align: center; font-size: 13px; margin-top: 24px }
 
 @media (max-width: 768px) {
-  .cf-picker { padding: 16px 12px }
-  .cf-picker__cards { grid-template-columns: 1fr }
-  .cf-picker__title { font-size: 17px }
-  .cf-picker__desc { min-height: 0 }
+  .cf-picker { padding: 18px 12px }
+  .cf-picker__cards { grid-template-columns: 1fr; gap: 12px }
+  .cf-picker__title { font-size: 19px }
+  .cf-picker__card { padding: 18px 16px }
+  .cf-picker__desc { flex: 0 }
 }
 </style>

@@ -101,8 +101,17 @@ def main():
     emps = flatten_employees(a.get("/employees/search", params={"limit": 1000})["data"])
     if not emps:
         raise SystemExit("没有可用员工，请先导入员工图谱")
-    emp = emps[0]
-    other = emps[1] if len(emps) > 1 else emps[0]
+    # 组别适配（2026-10）：指派/改派按办案组别校验，无措施的案件属「初查」环节、
+    # 要求初查组。任取 emps[0] 可能拿到「不限」的档案而被正确拒收，
+    # 那会让本脚本测的是组别约束而非状态机，故先把用到的档案设为「初查组」。
+    # 用完恢复原值，不留痕迹。
+    used = emps[:2]
+    restore = [(e["id"], e.get("policeGroup")) for e in used]
+    for e in used:
+        a.put(f"/employees/{e['id']}",
+              {"id": e["id"], "name": e["name"], "policeGroup": "INITIAL"})
+    emp = used[0]
+    other = used[1] if len(used) > 1 else used[0]
     print(f"    员工：{emp['name']}(id={emp['id']})，改派用：{other['name']}(id={other['id']})")
 
     created = []
@@ -184,6 +193,19 @@ def main():
         for cid in created:
             a.delete(f"/cases/{cid}")
         print(f"    已清理 {len(created)} 条")
+        # 恢复员工原本的组别，不留痕迹
+        for eid, old in restore:
+            try:
+                cur = None
+                for e in emps:
+                    if e["id"] == eid:
+                        cur = e
+                        break
+                body = {"id": eid, "name": cur["name"] if cur else "", "policeGroup": old}
+                a.put(f"/employees/{eid}", body)
+            except Exception:
+                pass
+        print("    已恢复员工组别")
 
     print("\n" + "=" * 52)
     print(f"通过 {len(OK)} 项 / 失败 {len(FAIL)} 项")

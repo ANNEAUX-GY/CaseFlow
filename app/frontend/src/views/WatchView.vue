@@ -5,7 +5,7 @@
       <span class="cf-gatebar__tag">{{ caseTypeStore.currentOption?.label || '未选择' }}</span>
       <span>当前只看这一类案件；看板计数、页签列表与检索均限定在此类型内</span>
       <span class="cf-spacer"></span>
-      <span class="cf-gatebar__tip">需更换类型请点右上角「退出」</span>
+      <span class="cf-gatebar__tip">需更换类型请用顶部类型条的「退出类型」</span>
     </div>
 
     <!-- 盯办看板：三大子模块 + 待审批，点击卡片跳对应页签 -->

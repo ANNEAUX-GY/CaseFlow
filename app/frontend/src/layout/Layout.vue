@@ -42,17 +42,6 @@
 
         <div class="cf-header__right">
           <span class="cf-header__date">{{ today }}</span>
-          <!-- 当前案件类型（统一入口门控）：
-               显示出来是为了让用户随时知道"我现在在看哪一类案件"，
-               退出按钮紧挨着它，语义明确——退的是类型选择，不是登录。 -->
-          <template v-if="caseTypeStore.selected">
-            <span class="cf-header__ctype" :class="'is-' + (caseTypeStore.currentOption?.type || 'info')">
-              {{ caseTypeStore.currentOption?.label }}
-            </span>
-            <el-button link type="warning" class="cf-header__cexit" @click="onExitCaseType">
-              退出
-            </el-button>
-          </template>
           <span class="cf-header__user">
             {{ userStore.userInfo?.displayName || '' }}
             <span v-if="userStore.roleName" class="cf-header__role">{{ userStore.roleName }}</span>
@@ -71,6 +60,23 @@
           <el-button v-if="!isMobile" link type="primary" class="cf-header__logout" @click="onLogout">退出</el-button>
         </div>
       </el-header>
+
+      <!-- 当前案件类型条（统一入口门控，2026-10-04）：
+           独立成第二行，不与顶栏的「退出」登录挤在一行——
+           两个按钮都叫「退出」放同一行，45岁以上的用户极易误点。
+           这里显示"正在看哪一类案件"，右侧给出换类型的出口。 -->
+      <div v-if="caseTypeStore.selected" class="cf-ctypebar">
+        <el-icon class="cf-ctypebar__icon"><Filter /></el-icon>
+        <span class="cf-ctypebar__label">当前案件类型</span>
+        <span class="cf-ctypebar__tag" :class="'is-' + (caseTypeStore.currentOption?.type || 'info')">
+          {{ caseTypeStore.currentOption?.label }}
+        </span>
+        <span class="cf-ctypebar__tip">筛选与统计均限定在此类型内</span>
+        <span class="cf-spacer"></span>
+        <el-button link type="warning" class="cf-ctypebar__exit" @click="onExitCaseType">
+          退出类型
+        </el-button>
+      </div>
 
       <el-main class="cf-main">
         <router-view v-slot="{ Component }">
@@ -92,7 +98,7 @@
 <script setup>
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Fold, Cellphone, Monitor } from '@element-plus/icons-vue'
+import { Fold, Cellphone, Monitor, Filter } from '@element-plus/icons-vue'
 import { useUserStore } from '../store/user'
 import { usePendingStore } from '../store/pending'
 import { useEventStore } from '../store/events'
