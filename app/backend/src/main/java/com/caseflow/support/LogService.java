@@ -29,6 +29,9 @@ public class LogService {
     private OperationLogMapper logMapper;
     @Resource
     private SseHub sseHub;
+    /** 统一信箱：日志落库后派生通知（NotificationService 只依赖 mapper/sseHub，无循环） */
+    @Resource
+    private com.caseflow.service.NotificationService notificationService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     /** 普通日志：不带快照，因而不支持撤回（登录、导入等） */
@@ -59,6 +62,13 @@ public class LogService {
         log.setCreatedAt(LocalDateTime.now());
         logMapper.insert(log);
         broadcast(log);
+        // 派生信箱通知（唯一埋点：全站写操作在此进信箱）。失败绝不影响主流程。
+        try {
+            notificationService.onLog(log);
+        } catch (Exception e) {
+            org.slf4j.LoggerFactory.getLogger(LogService.class)
+                    .warn("[LogService] 信箱通知派生失败（不影响业务）：{}", e.getMessage());
+        }
         return log;
     }
 

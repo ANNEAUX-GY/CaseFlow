@@ -163,6 +163,14 @@ export const questionApi = {
   remove: (id) => http.delete(`/questions/${id}`)
 }
 
+/** 统一信箱（2026-10-04）：与自己有关的操作变更归集 */
+export const notificationApi = {
+  unread: () => http.get('/notifications/unread'),
+  unreadCount: () => http.get('/notifications/unread-count'),
+  markRead: (id) => http.post(),
+  markAllRead: () => http.post('/notifications/read-all')
+}
+
 export const todoApi = {
   listOfCase: (caseId) => http.get(`/todos/case/${caseId}`),
   add: (caseId, data) => http.post(`/todos/case/${caseId}`, data),

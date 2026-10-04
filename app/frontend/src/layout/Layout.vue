@@ -42,6 +42,8 @@
 
         <div class="cf-header__right">
           <span class="cf-header__date">{{ today }}</span>
+          <!-- 统一信箱：管理层与普通用户都有，未读数实时随 SSE 增减 -->
+          <NotificationBell />
           <span class="cf-header__user">
             {{ userStore.userInfo?.displayName || '' }}
             <span v-if="userStore.roleName" class="cf-header__role">{{ userStore.roleName }}</span>
@@ -109,6 +111,7 @@ import { useDevice } from '../utils/device'
 import NavPanel from './NavPanel.vue'
 import WelcomeDialog from '../components/WelcomeDialog.vue'
 import OpinionInboxDialog from '../components/OpinionInboxDialog.vue'
+import NotificationBell from '../components/NotificationBell.vue'
 
 const route = useRoute()
 const router = useRouter()

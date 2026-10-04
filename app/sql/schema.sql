@@ -297,6 +297,22 @@ CREATE TABLE IF NOT EXISTS case_leader_opinion (
     CONSTRAINT ck_leader_opinion_importance CHECK (importance IS NULL OR importance IN ('A','B','C'))
 );
 
+-- 6.3 统一信箱（2026-10-04）：任何与自己有关的操作变更归入信箱。
+--   每收件人一条（read_at 落行上，无需第二张已读表）。
+--   分发口径：普通用户=本人承办案件相关；管理层=全站所有用户的操作（除自己触发）。
+--   不设外键：log/case 删除后通知留档无害。
+CREATE TABLE IF NOT EXISTS case_notification (
+    id         BIGINT       AUTO_INCREMENT PRIMARY KEY COMMENT '主键',
+    user_id    BIGINT       NOT NULL COMMENT '收件人（sys_user.id）',
+    case_id    BIGINT       DEFAULT NULL COMMENT '关联案件（可空，非案件类操作）',
+    log_id     BIGINT       DEFAULT NULL COMMENT '来源操作日志 ID（可空）',
+    type       VARCHAR(32)  DEFAULT NULL COMMENT '通知类型：OPINION/ASSIGN/STATUS/TODO/FILE/OTHER',
+    title      VARCHAR(128) DEFAULT NULL COMMENT '摘要标题',
+    content    VARCHAR(512) DEFAULT NULL COMMENT '正文',
+    read_at    DATETIME     DEFAULT NULL COMMENT 'NULL=未读；非空=已读时间',
+    created_at DATETIME     DEFAULT CURRENT_TIMESTAMP COMMENT '通知时间'
+);
+
 -- 6.2.1 意见已读记录（2026-10-04）：邮件式「新增领导意见」的按人已读标记。
 --   未读口径 = 本人承办案件里 feedback_status 为空【且】本表无 (opinion_id, user_id) 记录。
 --   为什么单独建表而不是在意见上加 read 标志：同一条意见会被主办/协办多人查看，
