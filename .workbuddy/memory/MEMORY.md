@@ -414,3 +414,10 @@ addFeedback（先记反馈再 done，顺序也满足规则1校验）。两条不
 - `import javax.annotation.Resource;`（**不是 jakarta**）
 - `import com.caseflow.security.AuthContext;`（**不是 support 包**）
 - JDK8 没有 `List.of()` → 用 `new java.util.ArrayList<>()`
+
+## 坑：路由白名单要包含「引导页」本身（踩过，commit 178b270）
+普通民警点「到期提醒」无反应：门控引导跳 /case-type，但 STAFF_PAGES 白名单没它 →
+被守卫弹回 /my-cases，形成循环，表现为"点不动"。
+**教训：给角色加路由白名单时，门控引导页（/case-type）等中间页必须一并加，
+否则引导链路自己把自己拦死。** 用 puppeteer 以普通账号实测菜单点击链路才能发现
+（管理员账号永远选过类型，复现不了）。
