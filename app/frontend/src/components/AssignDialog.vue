@@ -66,7 +66,7 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import EmployeePicker from './EmployeePicker.vue'
 import { caseApi, todoApi } from '../api'

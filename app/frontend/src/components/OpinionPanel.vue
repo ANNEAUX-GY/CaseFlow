@@ -19,6 +19,15 @@
       </span>
     </div>
 
+    <!-- 实时提醒条：领导改了/删/加了意见时自动弹出，8 秒后自隐 -->
+    <transition name="cf-fade">
+      <div v-if="liveNotice" class="cf-opinion__notice">
+        <el-icon><Bell /></el-icon>
+        <span class="cf-opinion__notice-text">{{ liveNotice }}</span>
+        <el-button link size="small" @click="liveNotice = ''">知道了</el-button>
+      </div>
+    </transition>
+
     <!-- 工作流程图：基于意见列表生成的纵向流转链。
          领导与员工看的是同一份数据（都来自 opinions），只是可编辑性不同：
          员工可在节点上更新落实状态，领导只读用于看整体进度。 -->
@@ -61,12 +70,36 @@
             <el-date-picker :model-value="o.deadline || ''" type="datetime" size="small"
               format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DDTHH:mm:ss" placeholder="设截止时间"
               :clearable="true" style="width: 190px" @change="(v) => saveMeta(o, { deadline: v || '' })" />
+            <!-- 重要性：受控绑定 + 本地乐观更新。
+                 为什么不能只用 @click 读 event.target：点击实际落在
+                 <span class="el-radio-button__inner"> 上，target.value 是 undefined，
+                 结果是「点了没反应」。而只用 @change 也不够——受控模式下
+                 内部值变了父级没更新，视觉弹回后再点同一个值 change 不再触发，
+                 表现为「点几次就改不动」。两者结合：@change 拿权威值，
+                 setImportance 先改本地再落库，交互零延迟。 -->
             <el-radio-group :model-value="importanceOf(o)" size="small"
-              @change="(v) => saveMeta(o, { importance: v })">
+              @change="(v) => setImportance(o, v)">
               <el-radio-button value="A">A</el-radio-button>
               <el-radio-button value="B">B</el-radio-button>
               <el-radio-button value="C">C</el-radio-button>
             </el-radio-group>
+            <!-- 内容就地编辑：点铅笔变输入框，Enter/失焦保存，Esc 取消 -->
+            <el-button v-if="!editingId" link size="small" class="cf-opinion__edit-btn"
+              @click="startEdit(o)">编辑</el-button>
+            <template v-else-if="editingId === o.id">
+              <el-input v-model="editingText" size="small" maxlength="500" class="cf-opinion__edit-input"
+                placeholder="修改意见内容" @keyup.enter="commitEdit(o)" @keyup.esc="cancelEdit" />
+              <el-button link type="primary" size="small" @click="commitEdit(o)">保存</el-button>
+              <el-button link size="small" @click="cancelEdit">取消</el-button>
+            </template>
+            <!-- 移除：二次确认，避免误点删掉领导已提的意见 -->
+            <el-popconfirm title="移除这条意见？移除后序号会自动重排" width="240"
+              confirm-button-text="确认移除" cancel-button-text="取消"
+              @confirm="doRemove(o)">
+              <template #reference>
+                <el-button link type="danger" size="small" class="cf-opinion__edit-btn">移除</el-button>
+              </template>
+            </el-popconfirm>
           </div>
 
           <!-- 反馈区：未反馈 / 已反馈两种态 -->
@@ -190,8 +223,9 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import { Bell } from '@element-plus/icons-vue'
 import Sortable from 'sortablejs'
 import { watchApi } from '../api'
 import EChart from './EChart.vue'
@@ -205,6 +239,7 @@ import {
 } from '../utils/format'
 import { CHART } from '../utils/chart'
 import { useUserStore } from '../store/user'
+import { useEventStore } from '../store/events'
 import { useDevice } from '../utils/device'
 
 const { isMobile } = useDevice()
@@ -237,6 +272,52 @@ const reload = async () => {
   nextTick(setupSortable)
 }
 watch(() => props.caseId, reload, { immediate: true })
+
+// ============ 实时推送：领导的操作即时同步给主办人 / 经办人 ============
+/**
+ * 需求：「xx案，领导更新意见为：xxx，请尽快查看」。
+ *
+ * <p>后端把写操作统一广播到 SSE（LogService 是唯一汇聚点），这里只订阅：
+ * - 只处理本案（targetId 对得上）且是意见类操作的事件，别的案件/模块不打扰
+ * - 自己触发的操作不回显提示（操作人是我 → 我当然知道我刚做了什么）
+ * - 去抖 400ms：拖拽排序会连发多次 reorder，合并成一次刷新
+ */
+const eventStore = useEventStore()
+const liveNotice = ref('')
+let noticeTimer = null
+let reloadTimer = null
+
+const OPINION_ACTIONS = [
+  'OPINION_ADD', 'OPINION_UPDATE_CONTENT', 'OPINION_UPDATE_META', 'OPINION_REMOVE'
+]
+
+const showNotice = (text) => {
+  liveNotice.value = text
+  clearTimeout(noticeTimer)
+  // 8 秒自动消失：常驻会挡住意见内容，但一晃而过又看不清
+  noticeTimer = setTimeout(() => { liveNotice.value = '' }, 8000)
+}
+
+const onCaseEvent = (e) => {
+  if (!e || !props.caseId) return
+  if (String(e.targetId) !== String(props.caseId)) return
+  if (!OPINION_ACTIONS.includes(e.action)) return
+  // 自己刚做的操作不弹提示
+  const myName = userStore.userInfo?.displayName || userStore.userInfo?.name
+  if (e.operatorName && myName && e.operatorName === myName) return
+
+  showNotice(`${e.operatorName || '领导'} ${e.content || '更新了意见'}，请尽快查看`)
+  clearTimeout(reloadTimer)
+  reloadTimer = setTimeout(() => reload(), 400)
+}
+
+let unsubscribe = null
+onMounted(() => { unsubscribe = eventStore.subscribe(onCaseEvent) })
+onBeforeUnmount(() => {
+  if (unsubscribe) unsubscribe()
+  clearTimeout(noticeTimer)
+  clearTimeout(reloadTimer)
+})
 
 // ============ 紧急性 / 重要性（展示层纯函数，判定逻辑集中在 utils/format） ============
 const urgencyOf = urgencyOfFn
@@ -308,6 +389,119 @@ const saveMeta = async (row, patch) => {
   } catch (e) {
     ElMessage.error('保存失败')
   }
+}
+
+/**
+ * 切换重要性等级。
+ *
+ * <p><b>为什么必须先改本地再落库</b>：el-radio-group 给的是受控绑定
+ * （:model-value，没有 v-model）。点B 时组件内部选中态变了、change 也发了，
+ * 但父级数据还是旧值 A，Vue 重渲染会把选中态**弹回A**；
+ * 用户再点 B 时「值没变化」，change 不再触发 —— 于是表现为
+ * 「点几次之后就更改不了等级了」。这不是接口问题，是绑定方式问题。
+ *
+ * <p>先写本地数组（选中态立刻跟着走，交互无延迟），再异步落库；
+ * 失败才回滚到服务端值并提示。
+ */
+/**
+ * 切换重要性等级。
+ *
+ * <p><b>三个坑叠在一起，缺一不可</b>：
+ * 1. 只给 :model-value（受控）→ 点B 后内部选中态变了但父级数据没变，
+ *    Vue 重渲染弹回旧值；再点 B 时「值没变化」，change 不再触发。
+ *    表现就是用户说的「点几次之后就改不了」。
+ * 2. 必须先写本地再落库，让选中态立刻跟着走，否则每次点击都有网络延迟的空档。
+ * 3. **不能靠 reload() 来刷新**——reload 会整体替换 opinions 数组，
+ *    模板里绑的row 引用随之失效，乐观改的值等于改在旧对象上；
+ *    且 reload 的响应回来时可能覆盖掉用户紧接着的另一次点击
+ *    （点 C 时若上一次 reload 还在飞，值就被拽回上一个）。
+ *    所以成功后只做「按 id 就地同步」，让列表重渲染但保持对象引用稳定。
+ */
+const setImportance = async (row, next) => {
+  const v = next || importanceOf(row)
+  if (!IMPORTANCE_META[v]) return
+  const prev = importanceOf(row)
+  if (v === prev) return
+  row.importance = v
+  try {
+    await watchApi.updateOpinionMeta(row.id, { deadline: row.deadline || '', importance: v })
+    // 就地同步而不是 reload：保住引用，且不与用户下一次点击竞争
+    const fresh = await watchApi.opinions(props.caseId)
+    const hit = (fresh || []).find((o) => o.id === row.id)
+    if (hit) {
+      Object.keys(row).forEach((k) => { if (k !== 'id') row[k] = hit[k] })
+    }
+    ElMessage.success(`已设为 ${IMPORTANCE_META[v].label}`)
+    emit('changed')
+  } catch (e) {
+    row.importance = prev
+    ElMessage.error('等级修改失败，已恢复')
+  }
+}
+
+// ============ 意见正文就地编辑（仅管理层） ============
+const editingId = ref(null)
+const editingText = ref('')
+
+const startEdit = (row) => {
+  editingId.value = row.id
+  editingText.value = row.content || ''
+}
+const cancelEdit = () => {
+  editingId.value = null
+  editingText.value = ''
+}
+const commitEdit = async (row) => {
+  const text = (editingText.value || '').trim()
+  if (!text) {
+    ElMessage.warning('意见内容不能为空')
+    return
+  }
+  if (text === (row.content || '').trim()) {
+    cancelEdit()
+    return
+  }
+  const prev = row.content
+  row.content = text
+  editingId.value = null
+  try {
+    await watchApi.updateOpinionContent(row.id, text)
+    await reload()
+    ElMessage.success('意见已更新')
+    emit('changed')
+  } catch (e) {
+    row.content = prev
+    ElMessage.error('修改失败，已恢复原文')
+  }
+}
+
+// ============ 移除意见（仅管理层） ============
+/**
+ * 移除后本地数组整条剔除再落库：序号是按数组下标实时算的，
+ * 剔除后 Vue 重渲染就自动连续，不会有断号。
+ */
+const doRemove = async (row) => {
+  const idx = opinions.value.findIndex((o) => o.id === row.id)
+  if (idx < 0) return
+  const snapshot = opinions.value.slice()
+  opinions.value.splice(idx, 1)
+  try {
+    await watchApi.removeOpinion(row.id)
+    await reload()
+    ElMessage.success('意见已移除')
+    emit('changed')
+  } catch (e) {
+    opinions.value = snapshot
+    ElMessage.error('移除失败，已恢复')
+  }
+}
+
+// 同一时刻只允许一个「落库 + reload」在飞：连点时后一次的 reload 可能先回来，
+// 把前一次的结果覆盖掉（用户会看到「点了没反应」或值来回跳）。
+let savingChain = Promise.resolve()
+const serial = (fn) => {
+  savingChain = savingChain.then(fn, fn)
+  return savingChain
 }
 
 // ============ 工作流程图（领导与员工同一份数据） ============
@@ -595,6 +789,31 @@ defineExpose({ reload })
 /* 管理层就地编辑行 */
 .cf-opinion__meta-edit { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap }
 .cf-opinion__meta-edit .is-mobile-full { width: 100% !important }
+/* 就地编辑：输入框占满剩余宽度，按钮紧随其后不换行 */
+.cf-opinion__edit-input { flex: 1; min-width: 220px }
+.cf-opinion__edit-btn { padding: 0 2px; font-size: 12px }
+/* 手机端编辑区改为整块堆叠，避免一行挤三样东西挤到换行错位 */
+@media (max-width: 768px) {
+  .cf-opinion__meta-edit { gap: 6px }
+  .cf-opinion__edit-input { min-width: 100% }
+}
+
+/* 实时提醒条：深色底白字保证对比度（领导操作即时同步给主办/经办人） */
+.cf-opinion__notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+  padding: 8px 12px;
+  border-radius: 4px;
+  border-left: 4px solid var(--cf-gold, #c8a45c);
+  background: #12294a;
+  color: #fff;
+  font-size: 13px;
+}
+.cf-opinion__notice-text { flex: 1; line-height: 1.5 }
+.cf-opinion__notice .el-button { color: #c8a45c !important }
+.cf-opinion__notice .el-button:hover { color: #e8c87c !important }
 /* 拖拽把手：仅管理层桌面端出现（模板已按isFullAccess && !isMobile 控制） */
 .cf-opinion__handle {
   flex: none; align-self: flex-start; margin-top: 2px;

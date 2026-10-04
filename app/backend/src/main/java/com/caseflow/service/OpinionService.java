@@ -161,9 +161,11 @@ public class OpinionService {
         if (!AuthContext.isFullAccess()) {
             throw new BizException(403, "只有管理员或领导可以调整意见顺序");
         }
-        // 只能排本案的意见，防止跨案件篡改
+        // 只能排本案的意见，防止跨案件篡改；已软删的不参与排序
         List<CaseLeaderOpinion> own = opinionMapper.selectList(new LambdaQueryWrapper<CaseLeaderOpinion>()
-                .eq(CaseLeaderOpinion::getCaseId, caseId));
+                .eq(CaseLeaderOpinion::getCaseId, caseId)
+                .isNotNull(CaseLeaderOpinion::getContent)
+                .ne(CaseLeaderOpinion::getContent, ""));
         java.util.Map<Long, CaseLeaderOpinion> byId = new java.util.HashMap<>();
         for (CaseLeaderOpinion o : own) {
             byId.put(o.getId(), o);
@@ -177,21 +179,23 @@ public class OpinionService {
                 continue;
             }
             pos++;
-            if (!o.getSortOrder().equals(pos)) {
+            // 注意：旧数据的 sortOrder 可能是 null，直接 .equals 会 NPE（Integer 拆箱）
+            if (o.getSortOrder() == null || o.getSortOrder() != pos) {
                 o.setSortOrder(pos);
                 opinionMapper.updateById(o);
             }
         }
-        // 提交列表没带上的意见（理论上不会）排到末尾，保证 1..N 连续
-        if (pos < own.size()) {
-            for (CaseLeaderOpinion o : own) {
-                if (!seen.contains(o.getId())) {
-                    pos++;
-                    o.setSortOrder(pos);
-                    opinionMapper.updateById(o);
-                }
+        // 提交列表没带上的意见（理论上不会）排到末尾
+        for (CaseLeaderOpinion o : own) {
+            if (!seen.contains(o.getId())) {
+                pos++;
+                o.setSortOrder(pos);
+                opinionMapper.updateById(o);
             }
         }
+        // 统一重排成 1..N：拖拽时前端传的是「当前可见列表」，
+        // 而 own 包含已软删的行，不重排就会在持久化值上留空洞。
+        resequence(caseId);
 
         logService.log("CASE", "OPINION_REORDER", "CASE", caseId,
                 "调整领导意见顺序（" + pos + " 条）");
@@ -301,13 +305,15 @@ public class OpinionService {
     /**
      * 移除意见（仅管理层）。
      *
-     * <p>用软删除（content 置空 + 删除标记）而非物理删除：
-     * 办案人可能已经针对这条意见上传了材料、写了反馈，直接物理删会让那些记录悬空，
-     * 且操作日志的快照也还原不回来。
+     * <p>用软删除（content 置空）而非物理删除：办案人可能已经针对这条意见上传了材料、
+     * 写了反馈，直接物理删会让那些记录悬空，且操作日志的快照也还原不回来。
      *
-     * <p>但序号必须立刻重排——用户要求"移除后序号实时重算、不许断号"。
-     * 列表的显示序号是前端按数组下标算的，所以这里只要把 content 清空、
-     * listOf 过滤掉已删除的，序号自然连续，不用重排 sort_order。
+     * <p><b>移除后必须重排 sort_order</b>：软删的行还留在表里，
+     * 若只把被删项置 NULL，剩下的项会留下空洞（如 1,2,3,5），
+     * 之后再拖拽排序就会从空洞值起算，越拖越乱。所以这里把剩余可见项重排成 1..N。
+     *
+     * <p>用户看到的序号是前端按数组下标算的，与 sort_order 解耦，
+     * 所以重排 sort_order 只为保证数据干净，不影响显示。
      */
     @Transactional(rollbackFor = Exception.class)
     public void remove(Long opinionId) {
@@ -318,16 +324,47 @@ public class OpinionService {
             throw new BizException(403, "只有管理员或领导可以移除意见");
         }
         String old = o.getContent();
+        if (!StringUtils.hasText(old)) {
+            throw new BizException(400, "该意见已被移除，请勿重复操作");
+        }
 
-        // 软删：内容置空 + 标记已删，保留行以便关联的反馈/材料记录不悬空
+        // 软删：内容置空 + 清排序位，保留行以便关联的反馈/材料记录不悬空
         CaseLeaderOpinion patch = new CaseLeaderOpinion();
         patch.setId(o.getId());
         patch.setContent("");
         patch.setSortOrder(null);
         opinionMapper.updateById(patch);
 
+        resequence(caseId);
+
         logService.log("CASE", "OPINION_REMOVE", "CASE", caseId, "移除意见：" + abbrev(old));
         notifyAssignees(caseId, "领导移除了意见：" + abbrev(old));
+    }
+
+    /**
+     * 把某案件下所有可见意见的 sort_order 重排为 1..N（按当前顺序）。
+     *
+     * <p>移除、拖拽后调用，保证持久化的顺序值始终连续——
+     * 空洞的 sort_order 会让后续拖拽从错误的基数起算，越拖越乱。
+     */
+    private void resequence(Long caseId) {
+        List<CaseLeaderOpinion> rest = opinionMapper.selectList(new LambdaQueryWrapper<CaseLeaderOpinion>()
+                .eq(CaseLeaderOpinion::getCaseId, caseId)
+                .isNotNull(CaseLeaderOpinion::getContent)
+                .ne(CaseLeaderOpinion::getContent, "")
+                .last("ORDER BY (CASE WHEN sort_order IS NULL THEN id ELSE sort_order END) ASC, id ASC"));
+        int i = 1;
+        for (CaseLeaderOpinion r : rest) {
+            if (r.getSortOrder() != null && r.getSortOrder() == i) {
+                i++;
+                continue;
+            }
+            CaseLeaderOpinion p = new CaseLeaderOpinion();
+            p.setId(r.getId());
+            p.setSortOrder(i);
+            opinionMapper.updateById(p);
+            i++;
+        }
     }
 
     /**
@@ -408,14 +445,16 @@ public class OpinionService {
     private CaseLeaderOpinion requireOpinion(Long id) {
         CaseLeaderOpinion o = id == null ? null : opinionMapper.selectById(id);
         if (o == null) {
-            throw new BizException("意见不存在或已被删除");
+            // 400 而非默认的 500：这是「请求的东西不存在/已删除」的客户端错误，
+            // 不是服务端故障。前端据code 区分"要提示用户"还是"要报bug"
+            throw new BizException(400, "意见不存在或已被删除");
         }
         return o;
     }
 
     private void requireCase(Long caseId) {
         if (caseId == null || caseMapper.selectById(caseId) == null) {
-            throw new BizException("案件不存在");
+            throw new BizException(400, "案件不存在");
         }
     }
 

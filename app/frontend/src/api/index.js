@@ -130,6 +130,10 @@ export const watchApi = {
     http.post(`/watch/cases/${caseId}/opinions/reorder`, { opinionIds }),
   /** 修改截止时间与重要性（仅管理层）；deadline 传 '' 即清空 */
   updateOpinionMeta: (id, data) => http.post(`/watch/opinions/${id}/meta`, data),
+  /** 修改意见正文（仅管理层） */
+  updateOpinionContent: (id, content) => http.post(`/watch/opinions/${id}/content`, { content }),
+  /** 移除意见（仅管理层）；后端软删，列表不再返回 */
+  removeOpinion: (id) => http.post(`/watch/opinions/${id}/remove`),
   feedbackOpinion: (id, data) => http.post(`/watch/opinions/${id}/feedback`, data),
   // ---- 阶段→环节→任务 流程流转 ----
   /** 流程视图：环节顺序、每环节任务、进度、可选流转分支 */
