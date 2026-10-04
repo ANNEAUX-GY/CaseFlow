@@ -121,3 +121,28 @@ export const useCaseTypeStore = defineStore('caseType', () => {
     isGated: (p) => GATED_PATHS.some(g => p.startsWith(g))
   }
 })
+
+/**
+ * 把当前类型混入查询参数——**所有受门控栏目的请求都必须走这里**。
+ *
+ * <p>为什么不直接在各页面写 `params.caseType = store.scope`：
+ * 那样每个页面都要记得加，漏一个就出现"列表锁了类型、图表没锁"的错位。
+ * 集中成一个函数后，只要新增接口就调它，约束是**默认生效**的。
+ *
+ * <p>与后端的对应关系：
+ * - CRIMINAL / ADMINISTRATIVE → 等值匹配
+ * - OTHER → 后端走 NOT IN(刑事,行政) OR IS NULL
+ * - 未选类型（''）→ 不传该参数。此时理论上已被守卫拦下，
+ *   但留着做兜底：万一有漏网请求，至少不会凭空只显示某一类。
+ *
+ * @param {Object} params 原始查询参数
+ * @returns {Object} 新对象（不改入参），带 caseType
+ */
+export function withCaseType(params) {
+  const store = useCaseTypeStore()
+  const out = { ...(params || {}) }
+  const s = store.scope
+  if (s) out.caseType = s
+  else delete out.caseType
+  return out
+}

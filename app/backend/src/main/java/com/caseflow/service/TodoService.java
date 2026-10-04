@@ -21,6 +21,7 @@ import javax.annotation.Resource;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * 案件待办（to do）：管理员维护，办案人逐项完成。
@@ -91,11 +92,42 @@ public class TodoService {
      *
      * @param status PENDING / DONE / null=全部
      */
-    public List<CaseTodoVO> overview(String status, Long caseId) {
+    /**
+     * 待办总览（按案件类型过滤，2026-10 统一类型选择器）。
+     *
+     * <p>待办表本身没有 case_type 字段，需先按类型筛出案件 id 集合再 in 过滤。
+     * 口径与 {@code CaseService.page} 一致：OTHER = 非刑事、非行政（含未立案与空值）。
+     *
+     * <p>未传 caseType 时按旧行为不过滤（守卫已保证正常路径总会带上类型，
+     * 这里只是兜底，别让接口在缺参数时返回空列表）。
+     */
+    /**
+     * 按案件类型取案件 id 集合（供待办总览过滤）。
+     * 口径必须与 CaseService.page 一致：OTHER = 非刑事、非行政（含未立案与历史空值）。
+     */
+    private List<Long> caseIdsOfType(String caseType) {
+        LambdaQueryWrapper<CaseInfo> w = new LambdaQueryWrapper<>();
+        if ("OTHER".equalsIgnoreCase(caseType)) {
+            w.and(x -> x.notIn(CaseInfo::getCaseType, "CRIMINAL", "ADMINISTRATIVE")
+                    .or().isNull(CaseInfo::getCaseType));
+        } else {
+            w.eq(CaseInfo::getCaseType, caseType);
+        }
+        return caseMapper.selectList(w).stream().map(CaseInfo::getId).collect(Collectors.toList());
+    }
+
+    public List<CaseTodoVO> overview(String status, Long caseId, String caseType) {
         LambdaQueryWrapper<CaseTodo> w = new LambdaQueryWrapper<CaseTodo>()
                 .eq(StringUtils.hasText(status), CaseTodo::getStatus, status)
-                .eq(caseId != null, CaseTodo::getCaseId, caseId)
-                .orderByAsc(CaseTodo::getCaseId)
+                .eq(caseId != null, CaseTodo::getCaseId, caseId);
+        if (StringUtils.hasText(caseType)) {
+            List<Long> typeIds = caseIdsOfType(caseType);
+            if (typeIds.isEmpty()) {
+                return new ArrayList<>();   // 该类型下一件案件都没有，直接空
+            }
+            w.in(CaseTodo::getCaseId, typeIds);
+        }
+        w.orderByAsc(CaseTodo::getCaseId)
                 .orderByAsc(CaseTodo::getSort)
                 .orderByAsc(CaseTodo::getId);
         List<CaseTodo> list = todoMapper.selectList(w);
@@ -120,7 +152,26 @@ public class TodoService {
 
     /** 总览汇总数字：待办 / 已完成 / 待上传佐证 */
     public java.util.Map<String, Object> overviewSummary() {
-        List<CaseTodo> all = todoMapper.selectList(null);
+        return overviewSummary(null);
+    }
+
+    /**
+     * 待办总览汇总（按案件类型过滤，2026-10）。
+     * 与 {@link #overview} 同口径：卡片数字与下面列表必须一致。
+     */
+    public java.util.Map<String, Object> overviewSummary(String caseType) {
+        List<CaseTodo> all;
+        if (StringUtils.hasText(caseType)) {
+            List<Long> typeIds = caseIdsOfType(caseType);
+            if (typeIds.isEmpty()) {
+                all = new ArrayList<>();
+            } else {
+                all = todoMapper.selectList(new LambdaQueryWrapper<CaseTodo>()
+                        .in(CaseTodo::getCaseId, typeIds));
+            }
+        } else {
+            all = todoMapper.selectList(null);
+        }
         int total = all.size();
         int done = 0;
         int doneNoEvidence = 0;

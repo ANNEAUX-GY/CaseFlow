@@ -1,5 +1,14 @@
 <template>
   <div class="cf-page">
+    <!-- 类型锁定提示条：明示"当前只看得见这一类"，避免用户以为筛漏了数据。
+         按需求不在页内提供类型切换（那会破坏筛选约束），要换类型请用右上角「退出」。 -->
+    <div class="cf-gatebar" :class="'is-' + (caseTypeStore.currentOption?.type || 'info')">
+      <span class="cf-gatebar__tag">{{ caseTypeStore.currentOption?.label || '未选择' }}</span>
+      <span>当前只看这一类案件，共 {{ total }} 件；筛选、标签与图表均限定在此类型内</span>
+      <span class="cf-spacer"></span>
+      <span class="cf-gatebar__tip">需更换类型请点右上角「退出」</span>
+    </div>
+
     <div class="cf-toolbar">
       <el-input v-model="query.keyword" placeholder="案件名 / 编号 / 备注" clearable style="width: 220px" @keyup.enter="load" />
       <el-select v-model="query.status" placeholder="状态" clearable style="width: 120px" @change="load">
@@ -148,11 +157,13 @@ import EChart from '../components/EChart.vue'
 import { CHART, lineOption, barOption } from '../utils/chart'
 import { useDevice } from '../utils/device'
 import { useCategoryStore } from '../store/category'
+import { withCaseType, useCaseTypeStore } from '../store/caseType'
 import PageFooter from '../components/PageFooter.vue'
 
 const route = useRoute()
 const { isMobile } = useDevice()
 const categoryStore = useCategoryStore()
+const caseTypeStore = useCaseTypeStore()
 const rows = ref([])
 const total = ref(0)
 const query = reactive({
@@ -222,7 +233,9 @@ const loading = ref(false)
 const load = async () => {
   loading.value = true
   try {
-    const params = { ...query }
+    // 混入当前案件类型（统一入口门控）：列表与下方图表必须同一口径，
+    // 否则会出现"列表是刑事、趋势图是行政"这种看不懂的错位
+    const params = withCaseType(query)
     Object.keys(params).forEach((k) => {
       if (params[k] === '' || params[k] == null) delete params[k]
     })
@@ -234,13 +247,13 @@ const load = async () => {
   }
 }
 
-// ---- 图表 ----
+// ---- 图表（同样锁定类型） ----
 const stats = ref({})
 const trendType = ref('line')
 const distDim = ref('statusDist')
 const distType = ref('bar')
 const loadStats = async () => {
-  stats.value = await caseApi.stats({ days: 14 })
+  stats.value = await caseApi.stats(withCaseType({ days: 14 }))
 }
 
 const trendData = computed(() => stats.value.trend || [])

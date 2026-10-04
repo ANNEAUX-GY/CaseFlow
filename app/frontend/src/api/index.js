@@ -102,7 +102,7 @@ export const categoryApi = {
 
 export const watchApi = {
   cases: (params) => http.get('/watch/cases', { params }),
-  board: () => http.get('/watch/board'),
+  board: (params) => http.get('/watch/board', { params }),
   plans: (caseId) => http.get(`/watch/cases/${caseId}/plans`),
   addPlan: (caseId, data) => http.post(`/watch/cases/${caseId}/plans`, data),
   updatePlan: (id, data) => http.put(`/watch/plans/${id}`, data),
@@ -176,7 +176,7 @@ export const todoApi = {
     }),
   rules: () => http.get('/todos/rules'),
   overview: (params) => http.get('/todos/overview', { params }),
-  summary: () => http.get('/todos/overview/summary')
+  summary: (params) => http.get('/todos/overview/summary', { params })
 }
 
 export const fileApi = {

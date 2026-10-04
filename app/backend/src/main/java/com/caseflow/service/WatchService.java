@@ -57,12 +57,19 @@ public class WatchService {
         return r;
     }
 
-    /** 看板四组计数 */
-    public WatchBoardVO board() {
+    /**
+     * 看板四组计数。
+     *
+     * <p><b>按案件类型过滤</b>（2026-10 统一类型选择器）：看板卡片与下方列表必须同口径，
+     * 否则用户选中「刑事案件」却看到行政案件的计数。caseType 口径与
+     * {@link CaseService#page} 一致：OTHER = 非刑事、非行政（含未立案与空值）。
+     */
+    public WatchBoardVO board(String caseType) {
         LocalDateTime now = LocalDateTime.now();
         WatchBoardVO vo = new WatchBoardVO();
 
-        List<CaseInfo> all = caseMapper.selectList(new LambdaQueryWrapper<CaseInfo>());
+        List<CaseInfo> all = caseMapper.selectList(new LambdaQueryWrapper<CaseInfo>()
+                .apply(caseTypeFilterSql(caseType)));
         List<CaseInfo> open = all.stream().filter(c -> !CLOSED.contains(c.getStatus())).collect(Collectors.toList());
 
         // 初查：无强制措施 + 在办
@@ -102,6 +109,28 @@ public class WatchService {
     /** 期限在 (now, now+days] 区间内（临期未超期） */
     private boolean inDays(LocalDateTime deadline, LocalDateTime now, int days) {
         return deadline != null && !deadline.isBefore(now) && deadline.isBefore(now.plusDays(days));
+    }
+
+    /**
+     * 案件类型过滤 SQL 片段（供 LambdaQueryWrapper.apply 使用）。
+     *
+     * <p>口径必须与 {@link CaseService#page} 完全一致，否则看板与列表数字对不上：
+     * <ul>
+     *   <li>CRIMINAL / ADMINISTRATIVE → 等值；</li>
+     *   <li>OTHER → 非刑事、非行政（含未立案与历史空值）；</li>
+     *   <li>空 → 不过滤。</li>
+     * </ul>
+     * 注意用 {@code last}/{@code apply} 拼的是 WHERE 片段，不要带 ORDER BY。
+     */
+    private String caseTypeFilterSql(String caseType) {
+        if (caseType == null || caseType.trim().isEmpty()) {
+            return "1=1";
+        }
+        String ct = caseType.trim();
+        if ("OTHER".equalsIgnoreCase(ct)) {
+            return "(case_type NOT IN ('CRIMINAL','ADMINISTRATIVE') OR case_type IS NULL)";
+        }
+        return "case_type = '" + ct + "'";
     }
 
     private long countWithSuspect(List<Long> caseIds) {

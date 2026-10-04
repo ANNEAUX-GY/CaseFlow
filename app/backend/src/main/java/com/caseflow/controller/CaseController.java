@@ -150,11 +150,13 @@ public class CaseController {
         return Result.ok(suspectService.remove(suspectId));
     }
 
-    /** 到期提醒清单：OVERDUE / TODAY / D3 / D7 / NONE */
+    /** 到期提醒清单：OVERDUE / TODAY / D3 / D7 / NONE
+     *  caseType 由统一类型选择器注入（2026-10），内部走同一个 page() 查询，口径与案件管理一致 */
     @GetMapping("/reminders")
     public Result<List<CaseVO>> reminders(@RequestParam(defaultValue = "OVERDUE") String bucket,
-                                          @RequestParam(defaultValue = "20") int limit) {
-        return Result.ok(caseService.reminders(bucket, limit));
+                                          @RequestParam(defaultValue = "20") int limit,
+                                          @RequestParam(required = false) String caseType) {
+        return Result.ok(caseService.reminders(bucket, limit, caseType));
     }
 
     /**

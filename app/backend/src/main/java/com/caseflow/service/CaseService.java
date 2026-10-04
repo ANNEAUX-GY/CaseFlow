@@ -721,7 +721,13 @@ public class CaseService {
     // 到期提醒 / 工作台
     // ------------------------------------------------------------------
 
-    public List<CaseVO> reminders(String bucket, int limit) {
+    /**
+     * 到期提醒列表。
+     *
+     * <p>caseType 由统一类型选择器注入（2026-10）：内部走 {@link #page}，
+     * 所以过滤口径与案件管理页完全一致，不会出现两页数字不同。
+     */
+    public List<CaseVO> reminders(String bucket, int limit, String caseType) {
         CaseQuery q = new CaseQuery();
         q.setPage(1);
         q.setSize(limit);
@@ -729,7 +735,12 @@ public class CaseService {
         q.setSortField("deadline");
         q.setSortOrder("asc");
         q.setStatus("OPEN");
+        q.setCaseType(caseType);
         return page(q).getList();
+    }
+
+    public List<CaseVO> reminders(String bucket, int limit) {
+        return reminders(bucket, limit, null);
     }
 
     public DashboardVO dashboard() {

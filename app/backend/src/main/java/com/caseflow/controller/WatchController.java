@@ -86,8 +86,8 @@ public class WatchController {
 
     /** 盯办看板四组计数 */
     @GetMapping("/board")
-    public Result<WatchBoardVO> board() {
-        return Result.ok(watchService.board());
+    public Result<WatchBoardVO> board(@RequestParam(required = false) String caseType) {
+        return Result.ok(watchService.board(caseType));
     }
 
     // ---------------- 侦查计划 ----------------

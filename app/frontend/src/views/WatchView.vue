@@ -1,5 +1,13 @@
 <template>
   <div class="cf-page">
+    <!-- 类型锁定提示条：看板四组卡片与三子模块列表都只统计这一类案件 -->
+    <div class="cf-gatebar" :class="'is-' + (caseTypeStore.currentOption?.type || 'info')">
+      <span class="cf-gatebar__tag">{{ caseTypeStore.currentOption?.label || '未选择' }}</span>
+      <span>当前只看这一类案件；看板计数、页签列表与检索均限定在此类型内</span>
+      <span class="cf-spacer"></span>
+      <span class="cf-gatebar__tip">需更换类型请点右上角「退出」</span>
+    </div>
+
     <!-- 盯办看板：三大子模块 + 待审批，点击卡片跳对应页签 -->
     <el-row :gutter="12" class="cf-watch__board">
       <el-col :span="6" v-for="card in boardCards" :key="card.key">
@@ -154,11 +162,13 @@
 import { computed, reactive, ref, watch, onMounted } from 'vue'
 import { watchApi, employeeApi } from '../api'
 import { useCategoryStore } from '../store/category'
+import { withCaseType, useCaseTypeStore } from '../store/caseType'
 import { CASE_TYPE_META, INVEST_STATUS_META, MEASURE_META, STAGE_META, stageLabel } from '../utils/format'
 import WatchDrawer from '../components/WatchDrawer.vue'
 import PageFooter from '../components/PageFooter.vue'
 
 const categoryStore = useCategoryStore()
+const caseTypeStore = useCaseTypeStore()
 const module = ref('INITIAL')
 const rows = ref([])
 const total = ref(0)
@@ -226,16 +236,20 @@ const goModule = (card) => {
 const load = async () => {
   loading.value = true
   try {
-    const params = { ...query, module: module.value }
+    // withCaseType 最后写入 caseType，会覆盖掉 query 里可能残留的同名字段——
+    // 这是"不允许跨类型混选"的关键：类型只能来自门控，不来自页面筛选
+    const params = withCaseType({ ...query, module: module.value })
     Object.keys(params).forEach((k) => { if (params[k] === '' || params[k] == null) delete params[k] })
     const data = await watchApi.cases(params)
     rows.value = data.list
     total.value = data.total
   } finally { loading.value = false }
 }
-const loadBoard = async () => { board.value = await watchApi.board() }
+// 看板四组计数同样锁类型，否则卡片数字与下方列表对不上
+const loadBoard = async () => { board.value = await watchApi.board(withCaseType()) }
 const reset = () => {
-  Object.assign(query, { page: 1, keyword: '', caseType: '', category: '', suspectName: '', suspectIdCard: '', employeeId: null, investigationStatus: '' })
+  // 不重置 caseType：它归门控管，重置筛选不该把类型也放开
+  Object.assign(query, { page: 1, keyword: '', category: '', suspectName: '', suspectIdCard: '', employeeId: null, investigationStatus: '' })
   cascadeFilter.value = []
   load()
 }

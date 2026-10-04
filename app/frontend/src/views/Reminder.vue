@@ -68,6 +68,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { caseApi } from '../api'
+import { withCaseType } from '../store/caseType'
 import CaseTable from '../components/CaseTable.vue'
 import AssignDialog from '../components/AssignDialog.vue'
 import CaseDetailDrawer from '../components/CaseDetailDrawer.vue'
@@ -91,7 +92,8 @@ const loading = ref(false)
 const load = async () => {
   loading.value = true
   try {
-    rows.value = await caseApi.reminders({ bucket: bucket.value, limit: 100 })
+    // 锁定当前案件类型：提醒清单与下方图表同口径
+    rows.value = await caseApi.reminders(withCaseType({ bucket: bucket.value, limit: 100 }))
   } finally {
     loading.value = false
   }
@@ -102,7 +104,7 @@ const stats = ref({})
 const ageType = ref('bar')
 const upcomingType = ref('line')
 const loadStats = async () => {
-  stats.value = await caseApi.stats({ days: 14 })
+  stats.value = await caseApi.stats(withCaseType({ days: 14 }))
 }
 
 const ageData = computed(() => stats.value.overdueAgeDist || [])

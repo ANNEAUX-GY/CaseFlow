@@ -120,6 +120,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { Search } from '@element-plus/icons-vue'
 import { fileApi, todoApi } from '../api'
+import { withCaseType } from '../store/caseType'
 import { useDevice } from '../utils/device'
 
 const { isMobile } = useDevice()
@@ -143,8 +144,9 @@ const fmtTime = (s) => (s ? String(s).replace('T', ' ').slice(0, 16) : '-')
 const load = async () => {
   loading.value = true
   try {
-    list.value = await todoApi.overview({ status: status.value || undefined })
-    summary.value = await todoApi.summary()
+    // 锁定当前案件类型：卡片汇总与下方列表必须同口径
+    list.value = await todoApi.overview({ status: status.value || undefined, ...withCaseType() })
+    summary.value = await todoApi.summary(withCaseType())
   } finally {
     loading.value = false
   }

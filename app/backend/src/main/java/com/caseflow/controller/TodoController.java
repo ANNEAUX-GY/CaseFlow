@@ -130,18 +130,20 @@ public class TodoController {
     // 总览（管理员）
     // ------------------------------------------------------------------
 
-    /** 各待办的完成状态与对应材料（跨案件） */
+    /** 各待办的完成状态与对应材料（跨案件）
+     *  caseType 由统一类型选择器注入（2026-10），列表与汇总共用同一口径 */
     @GetMapping("/overview")
     @FullAccessOnly("查看待办总览")
     public Result<List<CaseTodoVO>> overview(@RequestParam(required = false) String status,
-                                             @RequestParam(required = false) Long caseId) {
-        return Result.ok(todoService.overview(status, caseId));
+                                             @RequestParam(required = false) Long caseId,
+                                             @RequestParam(required = false) String caseType) {
+        return Result.ok(todoService.overview(status, caseId, caseType));
     }
 
     /** 总览汇总数字 */
     @GetMapping("/overview/summary")
     @FullAccessOnly("查看待办总览")
-    public Result<Map<String, Object>> summary() {
-        return Result.ok(todoService.overviewSummary());
+    public Result<Map<String, Object>> summary(@RequestParam(required = false) String caseType) {
+        return Result.ok(todoService.overviewSummary(caseType));
     }
 }
