@@ -29,6 +29,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import javax.annotation.Resource;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -169,11 +170,43 @@ public class WatchController {
         return Result.ok(opinionService.listOf(caseId));
     }
 
-    /** 提出意见（管理层，可多条） */
+    /** 提出意见（管理层，可多条）。可带截止时间与重要性（缺省 C） */
     @PostMapping("/cases/{caseId}/opinions")
     public Result<CaseLeaderOpinion> addOpinion(@PathVariable Long caseId,
                                                 @RequestBody Map<String, Object> body) {
-        return Result.ok(opinionService.add(caseId, str(body.get("content"))));
+        return Result.ok(opinionService.add(caseId, str(body.get("content")),
+                str(body.get("deadline")), str(body.get("importance"))));
+    }
+
+    /**
+     * 拖拽排序（管理层）：按新顺序重排位次。
+     *
+     * <p>body.opinionIds = 拖拽后的 opinionId 数组（完整、有序）。
+     * 列表显示的序号由前端按下标实时算，所以这里只落库顺序。
+     */
+    @PostMapping("/cases/{caseId}/opinions/reorder")
+    public Result<Void> reorderOpinions(@PathVariable Long caseId,
+                                         @RequestBody Map<String, Object> body) {
+        @SuppressWarnings("unchecked")
+        List<Object> raw = (List<Object>) body.get("opinionIds");
+        List<Long> ids = new ArrayList<>();
+        if (raw != null) {
+            for (Object o : raw) {
+                if (o != null) {
+                    ids.add(Long.valueOf(String.valueOf(o)));
+                }
+            }
+        }
+        opinionService.reorder(caseId, ids);
+        return Result.ok();
+    }
+
+    /** 修改意见的截止时间与重要性（管理层）；传空串即清空截止时间 */
+    @PostMapping("/opinions/{id}/meta")
+    public Result<CaseLeaderOpinion> updateOpinionMeta(@PathVariable Long id,
+                                                       @RequestBody Map<String, Object> body) {
+        return Result.ok(opinionService.updateMeta(id,
+                str(body.get("deadline")), str(body.get("importance"))));
     }
 
     /** 办案人对某条意见反馈落实情况；note 含结构化上传声明句（替代佐证材料上传） */

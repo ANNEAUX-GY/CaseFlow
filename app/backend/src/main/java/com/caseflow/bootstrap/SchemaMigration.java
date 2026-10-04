@@ -65,7 +65,16 @@ public class SchemaMigration implements ApplicationRunner {
             {"case_file", "todo_id", "BIGINT NULL"},
             // 账号必须关联员工：档案来源标记。注册时由本人自建的档案记为 SELF_REGISTER，
             // 审核界面据此提示管理员核对，避免别人冒名建档。
-            {"org_employee", "origin", "VARCHAR(16) NULL"}
+            {"org_employee", "origin", "VARCHAR(16) NULL"},
+            // 领导意见（2026-10）：拖拽排序位次 / 落实截止时间 / 重要性分级。
+            // 三列一律可空，兼容旧数据：
+            //   sort_order NULL → 读取时按 id 升序回退，OpinionService 首次访问惰性初始化 1..N；
+            //   importance NULL → 展示按 C（一般）；
+            //   deadline  NULL → 无截止时间，紧急性判定为「正常」。
+            // 紧急性不落库（由 deadline 与当前时间实时算），故无需新增列。
+            {"case_leader_opinion", "sort_order", "INT NULL"},
+            {"case_leader_opinion", "deadline", "DATETIME NULL"},
+            {"case_leader_opinion", "importance", "VARCHAR(4) NULL"}
     };
 
     /** 旧数据回填：把历史「案件类型」自由文本里的大类词归位到 case_type（小类位清空）。

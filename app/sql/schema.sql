@@ -205,8 +205,21 @@ CREATE TABLE IF NOT EXISTS case_leader_opinion (
     feedback_note    VARCHAR(1024) DEFAULT NULL COMMENT '反馈说明（含结构化上传声明句）',
     feedback_by      BIGINT        DEFAULT NULL COMMENT '反馈人（办案人）',
     feedback_by_name VARCHAR(64)   DEFAULT NULL COMMENT '反馈人姓名（冗余展示）',
-    feedback_at      DATETIME      DEFAULT NULL COMMENT '反馈时间'
+    feedback_at      DATETIME      DEFAULT NULL COMMENT '反馈时间',
+    sort_order       INT           DEFAULT NULL COMMENT '拖拽排序位次（1起连续）。NULL=旧数据，读取时按 id 升序回退并惰性初始化',
+    deadline         DATETIME      DEFAULT NULL COMMENT '意见落实截止时间（可空，如"在某时间前完成"）',
+    importance       VARCHAR(4)    DEFAULT NULL COMMENT '重要性 A=最重要/B=重要/C=一般；NULL 视为 C（一般）',
+    CONSTRAINT ck_leader_opinion_importance CHECK (importance IS NULL OR importance IN ('A','B','C'))
 );
+
+-- 领导意见（2026-10 改造）：新增 sort_order / deadline / importance 三列。
+-- 均允许 NULL 以兼容旧数据：
+--   sort_order=NULL → 读取时按 id 升序回退，首次访问惰性初始化为 1..N；
+--   importance=NULL → 展示按 C（一般）；
+--   deadline =NULL → 无截止时间，紧急性判定为「正常」。
+-- 列表显示序号由前端按当前数组下标实时计算（永远连续、不可能断号），
+-- sort_order 只负责持久化顺序，不负责显示编号。
+-- 紧急性（正常/临期/已逾期）由 deadline 与当前时间实时算出，不落库。
 
 -- 说明：已有库升级到本版本需要补上面 5 个新列。
 -- MySQL 的 ALTER TABLE ADD COLUMN 不支持 IF NOT EXISTS，无法写进本文件，

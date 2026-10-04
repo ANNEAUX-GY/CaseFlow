@@ -51,6 +51,56 @@ export const FEEDBACK_STATUS_META = {
   NOT_DONE: { label: '未完成', type: 'danger' }
 }
 
+// ============ 领导意见（2026-10 改造）============
+
+/** 重要性分级。A=最重要 / B=重要 / C=一般（默认档） */
+export const IMPORTANCE_META = {
+  A: { label: 'A 最重要', short: 'A', type: 'danger' },
+  B: { label: 'B 重要', short: 'B', type: 'warning' },
+  C: { label: 'C 一般', short: 'C', type: 'info' }
+}
+
+/** 旧数据 importance 为 null 时一律按 C（一般）处理，这里做归一 */
+export function importanceOf(row) {
+  const v = (row?.importance || '').toUpperCase()
+  return IMPORTANCE_META[v] ? v : 'C'
+}
+
+/**
+ * 紧急性由「截止时间 + 当前时刻」实时算出，**不落库**。
+ * 无截止时间 → 正常。
+ * 阈值 URGENT_HOURS：距截止不足该小时数视为临期。
+ */
+export const URGENT_HOURS = 48
+
+export const URGENCY_META = {
+  OVERDUE: { label: '已逾期', type: 'danger' },
+  URGENT: { label: '临期', type: 'warning' },
+  NORMAL: { label: '正常', type: 'info' }
+}
+
+/**
+ * 判定单条意见的紧急性。
+ * @param {string} deadline 后端返回的 'YYYY-MM-DDTHH:mm:ss' 或 'YYYY-MM-DD HH:mm:ss'
+ * @returns 'OVERDUE' | 'URGENT' | 'NORMAL'
+ */
+export function urgencyOf(deadline) {
+  if (!deadline) return 'NORMAL'
+  // 兼容 T 分隔与空格分隔；Safari 不认 'YYYY-MM-DD HH:mm:ss'，统一换成 T
+  const d = new Date(String(deadline).replace(' ', 'T'))
+  if (Number.isNaN(d.getTime())) return 'NORMAL'
+  const diffH = (d.getTime() - Date.now()) / 3600000
+  if (diffH < 0) return 'OVERDUE'
+  if (diffH <= URGENT_HOURS) return 'URGENT'
+  return 'NORMAL'
+}
+
+/** 截止时间展示文案；无值返回空串（调用方自行决定是否显示） */
+export function deadlineTextOf(deadline) {
+  if (!deadline) return ''
+  return String(deadline).replace('T', ' ').slice(0, 16)
+}
+
 /** 强制措施（案件盯办） */
 export const MEASURE_META = {
   DETENTION: { label: '刑拘', type: 'danger' },

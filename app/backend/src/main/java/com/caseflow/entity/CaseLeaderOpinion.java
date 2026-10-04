@@ -28,6 +28,13 @@ public class CaseLeaderOpinion implements Serializable {
     /** 反馈状态：未完成 */
     public static final String FB_NOT_DONE = "NOT_DONE";
 
+    /** 重要性：A = 最重要 */
+    public static final String IMP_A = "A";
+    /** 重要性：B = 重要 */
+    public static final String IMP_B = "B";
+    /** 重要性：C = 一般（默认档，旧数据 NULL 视为此档） */
+    public static final String IMP_C = "C";
+
     @TableId(type = IdType.AUTO)
     private Long id;
     /** 案件 ID */
@@ -50,4 +57,30 @@ public class CaseLeaderOpinion implements Serializable {
     private String feedbackByName;
     /** 反馈时间 */
     private LocalDateTime feedbackAt;
+
+    /**
+     * 拖拽排序位次（1 起连续）。
+     *
+     * <p>只负责<strong>持久化顺序</strong>，不负责显示编号——列表上的序号由前端按当前
+     * 数组下标实时计算（永远 1..N 连续），所以插入、删除、拖拽之后编号自动重算，
+     * 结构上不可能出现断号或重复号。
+     *
+     * <p>旧数据为 NULL，读取时按 id 升序回退，并由 {@code OpinionService} 惰性初始化为 1..N。
+     */
+    private Integer sortOrder;
+
+    /**
+     * 意见落实的截止时间（可空）。
+     *
+     * <p>用于「在某时间之前完成某事」这类表述。为空时紧急性判定为「正常」。
+     * 紧急性（正常/临期/已逾期）由本字段与当前时间<strong>实时计算</strong>，不落库，
+     * 因此不存在定时任务刷新导致的状态过期问题。
+     */
+    private LocalDateTime deadline;
+
+    /**
+     * 重要性分级：A=最重要 / B=重要 / C=一般。
+     * 旧数据为 NULL，展示时按 {@link #IMP_C}（C 一般）处理。
+     */
+    private String importance;
 }

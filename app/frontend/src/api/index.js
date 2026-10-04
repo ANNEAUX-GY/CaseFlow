@@ -118,7 +118,14 @@ export const watchApi = {
   removeComment: (id) => http.delete(`/watch/comments/${id}`),
   // ---- 领导意见与落实反馈（提=管理层，反馈=本案办案人） ----
   opinions: (caseId) => http.get(`/watch/cases/${caseId}/opinions`),
-  addOpinion: (caseId, content) => http.post(`/watch/cases/${caseId}/opinions`, { content }),
+  /** 新增意见。deadline 可空（'' 或 null），importance 缺省由后端落C */
+  addOpinion: (caseId, data) => http.post(`/watch/cases/${caseId}/opinions`,
+    typeof data === 'string' ? { content: data } : data),
+  /** 拖拽排序：传拖拽后的 opinionId 完整有序数组（仅管理层） */
+  reorderOpinions: (caseId, opinionIds) =>
+    http.post(`/watch/cases/${caseId}/opinions/reorder`, { opinionIds }),
+  /** 修改截止时间与重要性（仅管理层）；deadline 传 '' 即清空 */
+  updateOpinionMeta: (id, data) => http.post(`/watch/opinions/${id}/meta`, data),
   feedbackOpinion: (id, data) => http.post(`/watch/opinions/${id}/feedback`, data)
 }
 

@@ -5,16 +5,68 @@
       <span>领导意见</span>
       <span class="cf-muted">共 {{ opinions.length }} 条</span>
       <span class="cf-spacer"></span>
+      <!-- 流程图：可折叠面板，默认收起，避免意见多时把列表挤出视野 -->
+      <el-button link type="primary" size="small" class="cf-opinion__flow-toggle"
+        @click="flowOpen = !flowOpen">
+        {{ flowOpen ? '收起流程图' : '工作流程图' }}
+      </el-button>
     </div>
 
-    <!-- 已提交意见：接龙式编号列表，每条独占一行 -->
-    <div v-if="opinions.length" class="cf-opinion__list">
-      <div v-for="(o, i) in opinions" :key="o.id" class="cf-opinion__item">
+    <!-- 统计条：A/B/C 与三种紧急性各有多少条，一眼看清重点 -->
+    <div v-if="opinions.length" class="cf-opinion__stat">
+      <span v-for="s in statBars" :key="s.key" class="cf-opinion__stat-item">
+        <i class="cf-opinion__dot" :style="{ background: s.color }"></i>{{ s.label }} {{ s.n }}
+      </span>
+    </div>
+
+    <!-- 工作流程图：基于意见列表生成的纵向流转链。
+         领导与员工看的是同一份数据（都来自 opinions），只是可编辑性不同：
+         员工可在节点上更新落实状态，领导只读用于看整体进度。 -->
+    <div v-if="flowOpen" class="cf-opinion__flow">
+      <div v-if="opinions.length" class="cf-opinion__flow-box" :style="{ height: flowHeight + 'px' }">
+        <EChart :option="flowOption" height="100%" @click="onFlowClick" />
+      </div>
+      <div v-else class="cf-muted" style="padding: 8px 0">暂无意见，提交后自动生成流程图</div>
+    </div>
+
+    <!-- 已提交意见：接龙式编号列表，每条独占一行。
+         序号用数组下标实时计算（i + 1），插入/删除/拖拽后由 Vue 重渲染自动重算，
+         结构上不可能断号或重复号。sort_order 只在后端持久化顺序，不参与显示编号。 -->
+    <div v-if="opinions.length" ref="listRef" class="cf-opinion__list">
+      <div v-for="(o, i) in opinions" :key="o.id" class="cf-opinion__item"
+        :class="[`is-${urgencyOf(o.deadline)}`, { 'is-dragging': dragId === o.id }]">
         <span class="cf-opinion__no">{{ i + 1 }}</span>
         <div class="cf-opinion__item-body">
-          <div class="cf-opinion__content">{{ o.content }}</div>
+          <!-- 标题行：内容 + 重要性 + 紧急性角标 -->
+          <div class="cf-opinion__title">
+            <div class="cf-opinion__content">{{ o.content }}</div>
+            <span class="cf-opinion__badges">
+              <el-tag size="small" :type="IMPORTANCE_META[importanceOf(o)].type" effect="dark">
+                {{ IMPORTANCE_META[importanceOf(o)].short }}
+              </el-tag>
+              <el-tag v-if="o.deadline" size="small" :type="URGENCY_META[urgencyOf(o.deadline)].type" effect="plain">
+                {{ URGENCY_META[urgencyOf(o.deadline)].label }}
+              </el-tag>
+            </span>
+          </div>
           <div class="cf-opinion__meta">
             {{ o.creatorName || '管理层' }} · {{ (o.createdAt || '').slice(0, 16) }} 提出
+            <span v-if="o.deadline" class="cf-opinion__deadline">
+              · 截止 {{ deadlineTextOf(o.deadline) }}
+            </span>
+          </div>
+
+          <!-- 管理层可就地改截止时间与重要性；员工只读（顺序和定级是领导定的） -->
+          <div v-if="isFullAccess" class="cf-opinion__meta-edit">
+            <el-date-picker :model-value="o.deadline || ''" type="datetime" size="small"
+              format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DDTHH:mm:ss" placeholder="设截止时间"
+              :clearable="true" style="width: 190px" @change="(v) => saveMeta(o, { deadline: v || '' })" />
+            <el-radio-group :model-value="importanceOf(o)" size="small"
+              @change="(v) => saveMeta(o, { importance: v })">
+              <el-radio-button value="A">A</el-radio-button>
+              <el-radio-button value="B">B</el-radio-button>
+              <el-radio-button value="C">C</el-radio-button>
+            </el-radio-group>
           </div>
 
           <!-- 反馈区：未反馈 / 已反馈两种态 -->
@@ -39,23 +91,34 @@
           </div>
           <div v-if="o.feedbackNote" class="cf-opinion__note">{{ o.feedbackNote }}</div>
         </div>
+        <!-- 拖拽把手：仅管理层、且非手机端（sortablejs 触摸支持有限，手机改用流程图与序号操作） -->
+        <span v-if="isFullAccess && !isMobile" class="cf-opinion__handle" title="拖拽调整顺序">⋮⋮</span>
       </div>
     </div>
     <div v-else class="cf-muted" style="padding: 4px 0 8px">
       {{ isFullAccess ? '暂无意见，点下方 ＋ 逐条输入' : '暂无意见' }}
     </div>
 
-    <!-- 接龙式录入（管理端）：点 ＋ 生成一行「序号 + 输入框」，每条意见独占一行 -->
+    <!-- 接龙式录入（管理端）：点 ＋ 生成一行「序号 + 输入框 + 截止时间 + 重要性」，每条意见独占一行 -->
     <div v-if="isFullAccess" class="cf-opinion__drafts">
       <div v-for="(d, i) in drafts" :key="'d' + i" class="cf-opinion__draft">
         <span class="cf-opinion__no">{{ opinions.length + i + 1 }}</span>
         <el-input
-          v-model="drafts[i]"
+          v-model="drafts[i].content"
           size="small"
           maxlength="500"
           placeholder="输入意见内容…"
           @keyup.enter="submitDrafts"
         />
+        <el-date-picker v-model="drafts[i].deadline" type="datetime" size="small"
+          format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DDTHH:mm:ss"
+          placeholder="截止时间（选填）" :clearable="true" style="width: 180px"
+          :class="{ 'is-mobile-full': isMobile }" />
+        <el-radio-group v-model="drafts[i].importance" size="small">
+          <el-radio-button value="A">A</el-radio-button>
+          <el-radio-button value="B">B</el-radio-button>
+          <el-radio-button value="C">C</el-radio-button>
+        </el-radio-group>
         <el-button link type="danger" size="small" class="cf-opinion__draft-del"
           @click="drafts.splice(i, 1)">移除</el-button>
       </div>
@@ -127,10 +190,20 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import Sortable from 'sortablejs'
 import { watchApi } from '../api'
-import { FEEDBACK_STATUS_META as FB_META } from '../utils/format'
+import EChart from './EChart.vue'
+import {
+  FEEDBACK_STATUS_META as FB_META,
+  IMPORTANCE_META,
+  URGENCY_META,
+  importanceOf,
+  urgencyOf as urgencyOfFn,
+  deadlineTextOf as deadlineTextOfFn
+} from '../utils/format'
+import { CHART } from '../utils/chart'
 import { useUserStore } from '../store/user'
 import { useDevice } from '../utils/device'
 
@@ -160,16 +233,208 @@ const opinions = ref([])
 const reload = async () => {
   if (!props.caseId) { opinions.value = []; return }
   opinions.value = await watchApi.opinions(props.caseId)
+  // 数据回来后再挂拖拽：DOM 此时才稳定，Sortable 才能正确量高度
+  nextTick(setupSortable)
 }
 watch(() => props.caseId, reload, { immediate: true })
 
-// ---- 接龙式录入（管理端）：点 ＋ 生成一行序号+输入框，一次可写多条，批量提交 ----
+// ============ 紧急性 / 重要性（展示层纯函数，判定逻辑集中在 utils/format） ============
+const urgencyOf = urgencyOfFn
+const deadlineTextOf = deadlineTextOfFn
+
+/** 管理层标记：模板里 props 自动解包，脚本里必须走 props，故统一成一个计算属性 */
+const isManager = computed(() => props.isFullAccess)
+
+/** 顶部统计条：三种紧急性各几条 */
+const statBars = computed(() => {
+  const n = { OVERDUE: 0, URGENT: 0, NORMAL: 0 }
+  for (const o of opinions.value) n[urgencyOf(o.deadline)]++
+  return [
+    { key: 'OVERDUE', label: '已逾期', n: n.OVERDUE, color: '#c62a2a' },
+    { key: 'URGENT', label: '临期', n: n.URGENT, color: '#d98a0b' },
+    { key: 'NORMAL', label: '正常', n: n.NORMAL, color: '#8a929e' }
+  ]
+})
+
+// ============ 拖拽排序（仅管理层、仅桌面） ============
+const listRef = ref(null)
+const dragId = ref(null)
+let sortable = null
+
+const setupSortable = () => {
+  sortable?.destroy()
+  sortable = null
+  if (!isManager.value || isMobile.value || !listRef.value) return
+  const el = listRef.value
+  if (!el.children.length) return
+  sortable = Sortable.create(el, {
+    handle: '.cf-opinion__handle',
+    animation: 150,
+    // 拖动中的行淡出，其余行让位，序号实时跟着位置重排
+    onStart: (e) => { dragId.value = opinions.value[e.oldIndex]?.id ?? null },
+    onEnd: async (e) => {
+      dragId.value = null
+      if (e.oldIndex === e.newIndex) return
+      // 按新下标重排本地数组 → 序号立刻重算（不等后端，交互无延迟）
+      const next = opinions.value.slice()
+      const [moved] = next.splice(e.oldIndex, 1)
+      next.splice(e.newIndex, 0, moved)
+      opinions.value = next
+      try {
+        await watchApi.reorderOpinions(props.caseId, next.map((o) => o.id))
+        ElMessage.success('顺序已保存')
+        emit('changed')
+      } catch (e) {
+        // 保存失败回滚到服务端顺序，避免界面与库里不一致
+        await reload()
+        ElMessage.error('顺序保存失败，已恢复原顺序')
+      }
+    }
+  })
+}
+onBeforeUnmount(() => sortable?.destroy())
+watch([isManager, isMobile], () => nextTick(setupSortable))
+
+// ============ 截止时间 / 重要性 就地修改（仅管理层） ============
+const saveMeta = async (row, patch) => {
+  const payload = {
+    deadline: patch.deadline !== undefined ? patch.deadline : (row.deadline || ''),
+    importance: patch.importance !== undefined ? patch.importance : importanceOf(row)
+  }
+  try {
+    await watchApi.updateOpinionMeta(row.id, payload)
+    await reload()
+    emit('changed')
+  } catch (e) {
+    ElMessage.error('保存失败')
+  }
+}
+
+// ============ 工作流程图（领导与员工同一份数据） ============
+const flowOpen = ref(false)
+
+/** 节点配色：紧急性为主色，完成态压暗以示已办结 */
+const flowNodeColor = (o) => {
+  if (o.feedbackStatus === 'DONE') return CHART.ok
+  const u = urgencyOf(o.deadline)
+  if (u === 'OVERDUE') return CHART.danger
+  if (u === 'URGENT') return CHART.warn
+  return CHART.primary
+}
+
+const flowOption = computed(() => {
+  const rows = opinions.value
+  if (!rows.length) return {}
+  const nodes = rows.map((o, i) => {
+    const u = urgencyOf(o.deadline)
+    const fb = o.feedbackStatus
+    const fbLabel = fb ? (FB_META[fb] || {}).label : '待反馈'
+    const imp = IMPORTANCE_META[importanceOf(o)]
+    return {
+      id: String(o.id),
+      name: `${i + 1}. ${String(o.content).slice(0, 14)}${String(o.content).length > 14 ? '…' : ''}`,
+      // layout:'none' 的 graph 要求 x/y 为数值像素，这里按容器宽度取中；
+      // 容器宽度取不到时回退 160（节点 150 宽，居中即 75+80）
+      x: Math.round(flowCenterX.value),
+      // 节点高度 62，间距 92 → 逐级下移形成纵向流转链
+      y: i * 92 + 40,
+      symbolSize: [150, 62],
+      symbol: 'roundRect',
+      itemStyle: {
+        color: flowNodeColor(o),
+        borderColor: imp.short === 'A' ? CHART.gold : 'transparent',
+        borderWidth: imp.short === 'A' ? 2 : 0,
+        borderRadius: 4
+      },
+      label: {
+        show: true,
+        position: 'inside',
+        color: '#fff',
+        fontSize: 11,
+        lineHeight: 16,
+        formatter: () => {
+          // 三行：序号+等级 / 内容摘要 / 截止与状态
+          const head = `${i + 1}· ${imp.short}级`
+          const body = String(o.content).slice(0, 12) + (String(o.content).length > 12 ? '…' : '')
+          const foot = o.deadline
+            ? `${deadlineTextOf(o.deadline).slice(5)} · ${URGENCY_META[u].label} · ${fbLabel}`
+            : `未设截止 · ${fbLabel}`
+          return `${head}\n${body}\n${foot}`
+        }
+      },
+      // 供点击回查用（ECharts 会原样挂在 data 上）
+      _row: o
+    }
+  })
+  const links = rows.slice(1).map((o, i) => ({
+    source: String(rows[i].id),
+    target: String(o.id),
+    lineStyle: { color: CHART.border, width: 1.5, curveness: 0 }
+  }))
+  return {
+    tooltip: {
+      trigger: 'item',
+      formatter: (p) => {
+        const o = p.data?._row
+        if (!o) return p.data?.name || ''
+        const imp = IMPORTANCE_META[importanceOf(o)]
+        const fb = o.feedbackStatus ? (FB_META[o.feedbackStatus] || {}).label : '待反馈'
+        const dl = o.deadline ? `截止 ${deadlineTextOf(o.deadline)}` : '未设截止时间'
+        return `<b>${imp.label}</b> · ${fb}<br/>${o.content}<br/><span style="color:#888">${dl}</span>`
+      }
+    },
+    series: [{
+      type: 'graph',
+      layout: 'none',
+      coordinateSystem: null,
+      roam: false,
+      data: nodes,
+      links,
+      edgeSymbol: ['none', 'arrow'],
+      edgeSymbolSize: 7,
+      lineStyle: { color: CHART.border },
+      label: { show: true },
+      emphasis: { focus: 'adjacency' }
+    }]
+  }
+})
+
+/** 流程图容器高度：节点数 *92 + 上下留白，写死数值避免 flex 循环依赖把面板顶爆 */
+const flowHeight = computed(() => Math.max(260, opinions.value.length * 92 + 60))
+
+/**
+ * 流程图横向中心（像素）。
+ * layout:'none' 的 graph 只认数值坐标，百分比会静默失效导致整图不渲染。
+ * 容器刚展开时可能还量不到宽度（v-if 刚挂载），故监听宽度变化后重算。
+ */
+const flowCenterX = ref(160)
+const updateFlowCenter = () => {
+  const w = document.querySelector('.cf-opinion__flow-box')?.clientWidth || 0
+  if (w > 0) flowCenterX.value = Math.round(w / 2)
+}
+watch(flowOpen, (open) => { if (open) nextTick(updateFlowCenter) })
+watch(flowHeight, () => nextTick(updateFlowCenter))
+
+/** 点击流程图节点：员工（本案承办人）可直接更新落实状态；领导仅提示由谁处理 */
+const onFlowClick = (p) => {
+  const o = p?.data?._row
+  if (!o) return
+  if (!isAssignee.value) {
+    const fb = o.feedbackStatus ? (FB_META[o.feedbackStatus] || {}).label : '待反馈'
+    ElMessage.info(`该意见当前「${fb}」，由本案承办人更新`)
+    return
+  }
+  openFeedback(o)
+}
+
+// ---- 接龙式录入（管理端）：点 ＋ 生成一行序号+输入框+截止时间+重要性，批量提交 ----
+const emptyDraft = () => ({ content: '', deadline: '', importance: 'C' })
 const drafts = ref([])
 const saving = ref(false)
-const filledCount = computed(() => drafts.value.filter((d) => d.trim()).length)
+const filledCount = computed(() => drafts.value.filter((d) => d.content.trim()).length)
 
 const addDraft = () => {
-  drafts.value.push('')
+  drafts.value.push(emptyDraft())
   // 自动聚焦最新一行，输入不断手
   requestAnimationFrame(() => {
     const inputs = document.querySelectorAll('.cf-opinion__draft .el-input__inner')
@@ -178,17 +443,21 @@ const addDraft = () => {
 }
 
 const submitDrafts = async () => {
-  const contents = drafts.value.map((d) => d.trim()).filter(Boolean)
-  if (!contents.length) {
+  const valid = drafts.value.filter((d) => d.content.trim())
+  if (!valid.length) {
     ElMessage.warning('请先输入意见内容')
     return
   }
   saving.value = true
   try {
-    for (const c of contents) {
-      await watchApi.addOpinion(props.caseId, c)
+    for (const d of valid) {
+      await watchApi.addOpinion(props.caseId, {
+    content: d.content.trim(),
+        deadline: d.deadline || '',
+        importance: d.importance || 'C'
+      })
     }
-    ElMessage.success(`已提交 ${contents.length} 条意见`)
+    ElMessage.success(`已提交 ${valid.length} 条意见`)
     drafts.value = []
     await reload()
     emit('changed')
@@ -309,4 +578,42 @@ defineExpose({ reload })
   background: #eef3fa; border-radius: 3px; padding: 6px 8px; word-break: break-all;
 }
 .cf-muted { color: #8a929e }
+
+/* ============ 紧急性颜色（2026-10） ============
+   取色原则：左侧色条用饱和色做大范围区分，文字一律沿用原有深色（#1b2430），
+   不把整块背景染成深色再配白字——那样在 45-50 岁使用者的小屏上易糊。
+   色盲可读性：颜色之外一律另带文字角标（已逾期/临期），不靠颜色单独承载信息。 */
+.cf-opinion__item { border-left: 3px solid transparent; padding-left: 8px; border-radius: 2px }
+.cf-opinion__item.is-OVERDUE { border-left-color: #c62a2a; background: #fdf6f6 }
+.cf-opinion__item.is-URGENT { border-left-color: #d98a0b; background: #fffaf1 }
+.cf-opinion__item.is-dragging { opacity: .5 }
+/* 标题行：内容与角标同一行，省一条竖向空间 */
+.cf-opinion__title { display: flex; align-items: flex-start; gap: 8px }
+.cf-opinion__title .cf-opinion__content { flex: 1; min-width: 0 }
+.cf-opinion__badges { flex: none; display: flex; gap: 4px; margin-top: 1px }
+.cf-opinion__deadline { color: #5a6472 }
+/* 管理层就地编辑行 */
+.cf-opinion__meta-edit { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap }
+.cf-opinion__meta-edit .is-mobile-full { width: 100% !important }
+/* 拖拽把手：仅管理层桌面端出现（模板已按isFullAccess && !isMobile 控制） */
+.cf-opinion__handle {
+  flex: none; align-self: flex-start; margin-top: 2px;
+  cursor: grab; color: #b9c6d8; font-size: 13px; letter-spacing: -1px;
+  padding: 0 2px; user-select: none;
+}
+.cf-opinion__handle:hover { color: #1b4a8c }
+.cf-opinion__handle:active { cursor: grabbing }
+/* 顶部统计条 */
+.cf-opinion__stat {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  padding: 0 16px 8px; font-size: 12px; color: #5a6472;
+}
+.cf-opinion__stat-item { display: inline-flex; align-items: center; gap: 5px }
+.cf-opinion__dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block }
+/* 流程图：默认收起，点击面板头按钮才展开。
+   容器高度写死 + EChart height="100%"，与项目里「列表类容器必须写死高度」的约定一致，
+   避免 flex:1 与内容高度互相依赖把面板顶爆。 */
+.cf-opinion__flow { padding: 0 16px 10px }
+.cf-opinion__flow-box { height: 260px; border: 1px solid #dfe4ea; border-radius: 4px; background: #fbfcfe }
+.cf-opinion__flow-toggle { font-size: 12px }
 </style>
