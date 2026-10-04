@@ -474,10 +474,12 @@ public class TodoService {
         }
         // 规则 1：主任务必须有反馈说明（本次填的 remark，或历史已积累的反馈记录）。
         // 子任务不设此限制——它的说明由主任务承载（见类注释），本次填了 remark 也会照常留痕
+        //
+        // 口径与前端 canDone / detail 保持一致：**含子任务的提交记录**。
+        // 否则会出现「子任务都提交过反馈了，前端按钮可点、后端却拒绝」的不一致。
         boolean hasNote = StringUtils.hasText(remark) && !remark.trim().isEmpty();
-        if (t.getParentId() == null && !hasNote && feedbackMapper.selectCount(new LambdaQueryWrapper<CaseTodoFeedback>()
-                .eq(CaseTodoFeedback::getTodoId, todoId)) <= 0) {
-            throw new BizException("请先填写反馈说明，再勾选完成");
+        if (t.getParentId() == null && !hasNote && countFeedbacksWithSub(todoId) <= 0) {
+            throw new BizException("请先提交一条工作反馈，再标记完成");
         }
 
         String before = snapshotService.capture(t.getCaseId());
@@ -490,11 +492,11 @@ public class TodoService {
         }
         t.setUpdatedAt(now);
         todoMapper.updateById(t);
-        // 反馈说明留痕：本次填的写进累积表，历史 remark 作为首条
-        if (hasNote) {
-            addFeedback(t, remark.trim(), CaseLeaderOpinion.FB_DONE);
-        }
-        // 意见派生待办：完成状态回写到对应意见的落实状态（单一事实源在待办，意见只读展示）
+        // **刻意不写反馈记录**（2026-10-04 用户要求「纯手动提交」）：
+        // 提交工作反馈必须是用户在界面上主动点「提交反馈」触发的动作，
+        // 不能因为勾了完成就替他自动记一条——那会让反馈记录里混进
+        // 用户没主动提交过的内容，事后无从分辨哪条是他真写的。
+        // remark 只作为完成说明存在，不进累积反馈表。
         syncOpinion(t);
         touchCase(c);
 
@@ -636,10 +638,47 @@ public class TodoService {
         vo.setSubtaskTotal(subs.size());
         vo.setSubtaskDone(done);
         vo.setFeedbacks(feedbacksOf(todoId));
+        // 主任务要看得到「这一整件事下面」的**全部**提交记录，不能只看自己的。
+        // 需求（2026-10-04）：主任务详情中应可见提交记录（提交人/时间/内容）——
+        // 干活的人可能提交在子任务上，那些记录同样属于这件事的进展。
+        // 子任务本身不递归（只有两级），所以拼一次即可。
+        if (vo.getSubtasks() != null && !vo.getSubtasks().isEmpty()) {
+            List<CaseTodoFeedback> all = new ArrayList<>(vo.getFeedbacks());
+            for (CaseTodoVO sv : vo.getSubtasks()) {
+                all.addAll(feedbacksOf(sv.getId()));
+            }
+            // 合并后按时间正序；同一时刻用 id 兜底保证稳定顺序
+            all.sort((a, b) -> {
+                int c = String.valueOf(a.getCreatedAt()).compareTo(String.valueOf(b.getCreatedAt()));
+                if (c != 0) return c;
+                return a.getId() == null || b.getId() == null ? 0 : a.getId().compareTo(b.getId());
+            });
+            vo.setFeedbacks(all);
+            // feedbackCount 必须跟着一起重算：toVO 里算的是**本任务自己**的条数，
+            // 合并了子任务的记录后不同步更新，前端 canDone 会拿旧值判断
+            // 「有没有反馈过」——子任务都提交过了却仍显示"不能完成"。
+            vo.setFeedbackCount(all.size());
+        }
         return vo;
     }
 
     /** 某任务的全部反馈记录，按时间正序（累积展示） */
+    /**
+     * 统计某任务的反馈条数，**含其子任务**。
+     *
+     * <p>规则判定（能不能标记完成）与前端 canDone 必须用同一口径，
+     * 否则会出现「子任务都提交过反馈，前端按钮可点、后端却拒绝」的不一致。
+     */
+    private int countFeedbacksWithSub(Long todoId) {
+        int n = feedbackMapper.selectCount(new LambdaQueryWrapper<CaseTodoFeedback>()
+                .eq(CaseTodoFeedback::getTodoId, todoId)).intValue();
+        for (CaseTodo s : subtasksOf(todoId)) {
+            n += feedbackMapper.selectCount(new LambdaQueryWrapper<CaseTodoFeedback>()
+                    .eq(CaseTodoFeedback::getTodoId, s.getId())).intValue();
+        }
+        return n;
+    }
+
     public List<CaseTodoFeedback> feedbacksOf(Long todoId) {
         return feedbackMapper.selectList(new LambdaQueryWrapper<CaseTodoFeedback>()
                 .eq(CaseTodoFeedback::getTodoId, todoId)

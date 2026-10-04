@@ -200,8 +200,18 @@
             <!-- 操作区：常用两步（看详情/反馈、加子任务）做成大按钮，管理动作收进菜单 -->
             <div class="cf-todo__card-actions" @click.stop>
               <el-button size="small" type="primary" plain class="cf-todo__act" @click="openDetail(t)">
-                <el-icon><View /></el-icon>详情·反馈
+                <el-icon><View /></el-icon>详情·子任务
               </el-button>
+              <!-- 提交反馈：独立入口，不必先开浮窗。
+                   主任务与子任务一视同仁——只要是承办人的活就能提交，
+                   与「有没有子任务」无关。已完成的任务不再显示（没什么可提交的了）。 -->
+              <el-tooltip v-if="canSubmit && t.status !== 'DONE'"
+                content="提交本条工作反馈（提交人、时间、内容都会记录）" placement="top">
+                <el-button size="small" type="warning" plain class="cf-todo__act"
+                  :loading="submittingId === t.id" @click="openSubmit(t)">
+                  <el-icon><ChatLineSquare /></el-icon>提交反馈
+                </el-button>
+              </el-tooltip>
               <el-tooltip content="把这件事再拆细几步，干起来更清楚" placement="top" :disabled="t.status === 'DONE'">
                 <el-button size="small" class="cf-todo__act" :disabled="t.status === 'DONE'" @click="openSubsAndFocus(t)">
                   <el-icon><Plus /></el-icon>子任务
@@ -227,6 +237,18 @@
         </li>
       </ul>
     </template>
+
+    <!-- 提交反馈弹窗：列表页直接提交用。
+         **纯手动**——openSubmit 只开弹窗不写库，真正落库要等用户
+         在弹窗里点「提交反馈」（emit submit）才发生。 -->
+    <FeedbackDialog
+      v-model="fbDlg.visible"
+      :title="fbDlg.title"
+      :quote="fbDlg.quote"
+      :default-status="fbDlg.status"
+      :loading="fbDlg.loading"
+      @submit="submitFeedback"
+    />
 
     <!-- 任务详情浮窗：反馈记录 + 落实反馈弹窗（图二口径） -->
     <TodoDetailDialog ref="detailRef" @changed="onDetailChanged" />
@@ -287,7 +309,7 @@
  */
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Bell, View, Plus, ArrowDown, ArrowUp, User, Clock, AlarmClock, InfoFilled } from '@element-plus/icons-vue'
+import { Bell, View, Plus, ArrowDown, ArrowUp, User, Clock, AlarmClock, InfoFilled, ChatLineSquare } from '@element-plus/icons-vue'
 import Sortable from 'sortablejs'
 import { todoApi, watchApi } from '../api'
 import { useUserStore } from '../store/user'
@@ -302,6 +324,7 @@ import {
   deadlineTextOf as deadlineTextOfFn
 } from '../utils/format'
 import TodoDetailDialog from './TodoDetailDialog.vue'
+import FeedbackDialog from './FeedbackDialog.vue'
 
 const props = defineProps({
   caseId: { type: [Number, String], required: true }
@@ -434,6 +457,56 @@ const setupSortable = () => {
 }
 onBeforeUnmount(() => sortable?.destroy())
 watch([isAdmin, isMobile], () => nextTick(setupSortable))
+
+/* ============ 提交工作反馈（纯手动，2026-10-04） ============ */
+/**
+ * 谁能提交。
+ *
+ * <p>本组件拿不到案件的 assignHistory（没接 detail prop），所以**不在前端判定
+ * 「是否本案承办人」**，而是交给后端 addFeedback 里的 checkOperate：
+ * 非承办人会被拦下并返回「只有案件承办人或管理层可以…」的中文原因。
+ * 按钮对所有能看到该案件的人显示——非承办人点了会得到明确提示，
+ * 比按钮凭空消失更好（后者会让人以为系统坏了）。
+ */
+const canSubmit = computed(() => true)
+
+const fbDlg = reactive({ visible: false, title: '', quote: '', status: '', loading: false })
+const submittingId = ref(null)
+
+/**
+ * 打开提交反馈弹窗。
+ *
+ * <p><b>这里只开弹窗，不写任何数据。</b>真正落库要等用户在弹窗里主动点
+ * 「提交反馈」按钮（FeedbackDialog emit submit）才会发生——
+ * 这就是「纯手动」的全部含义：系统没有任何自动提交/自动流转路径。
+ */
+const openSubmit = (t) => {
+  submittingId.value = t.id
+  fbDlg.title = '提交工作反馈'
+  fbDlg.quote = t.content || ''
+  fbDlg.status = 'IN_PROGRESS'
+  fbDlg.visible = true
+}
+
+/** 用户在弹窗里主动点了「提交反馈」才走到这里——这是唯一的提交入口 */
+const submitFeedback = async ({ status, note }) => {
+  if (!submittingId.value) return
+  const t = todos.value.find((x) => x.id === submittingId.value)
+  if (!t) return
+  fbDlg.loading = true
+  try {
+    await todoApi.addFeedback(t.id, { status, note })
+    ElMessage.success('反馈已提交')
+    fbDlg.visible = false
+    await load()
+    emit('changed')
+  } catch (e) {
+    // 失败时保留弹窗，让用户改内容重试，不用重新填一遍
+  } finally {
+    fbDlg.loading = false
+    submittingId.value = null
+  }
+}
 
 /** 打开详情浮窗（反馈记录 + 落实反馈弹窗） */
 const openDetail = (t) => detailRef.value?.open(t.id)

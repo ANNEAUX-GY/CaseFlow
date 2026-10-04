@@ -128,7 +128,7 @@ def run_all(cid, tid):
 
     r = call("/todos/%d/done" % tid, {"remark": ""})
     ck("子任务全完成但无反馈说明 → 仍被拒", r.get("code") != 0, True)
-    ck("提示需填反馈说明", "反馈说明" in (r.get("msg") or ""), True)
+    ck("提示需先提交工作反馈", "工作反馈" in (r.get("msg") or ""), True)
 
     print("")
     print("=== 5. 提交反馈后可以完成 ===")

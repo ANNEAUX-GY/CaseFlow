@@ -37,6 +37,11 @@
                 :type="(STATUS_META[f.statusAt] || {}).type">
                 {{ (STATUS_META[f.statusAt] || {}).label }}
               </el-tag>
+              <!-- 来源标注：主任务的详情里会合并展示子任务的提交记录，
+                   不标来源就分不清是哪一步交的。 -->
+              <el-tag v-if="subTitleOf(f)" size="small" type="info" effect="plain" class="cf-td__fb-from">
+                {{ subTitleOf(f) }}
+              </el-tag>
             </div>
             <div class="cf-td__fb-text">{{ f.content }}</div>
           </li>
@@ -189,6 +194,12 @@ const feedbacks = computed(() => detail.value.feedbacks || [])
 const subtasks = computed(() => detail.value.subtasks || [])
 const subtaskDone = computed(() => subtasks.value.filter((s) => s.status === 'DONE').length)
 const done = computed(() => detail.value?.status === 'DONE')
+/** 反馈来源：若该条来自某个子任务，返回「子任务：xxx」；来自主任务本身则返回空 */
+const subTitleOf = (f) => {
+  const hit = subtasks.value.find((s) => String(s.id) === String(f.todoId))
+  return hit ? '子任务：' + (hit.content || '') : ''
+}
+
 const isParent = computed(() => !detail.value?.parentId)
 
 const title = computed(() => detail.value?.content || '任务详情')
@@ -410,6 +421,8 @@ watch(visible, (v) => { if (!v) onClosed() })
 .cf-td__fb { padding: 6px 0; border-bottom: 1px dotted #eef1f5 }
 .cf-td__fb:last-child { border-bottom: none }
 .cf-td__fb-meta { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #8a929e; flex-wrap: wrap }
+/* 来源标注（子任务名可能较长，限宽省略而不是撑破时间行） */
+.cf-td__fb-from { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
 .cf-td__fb-time { font-variant-numeric: tabular-nums }
 .cf-td__fb-text { font-size: 13px; color: #1b2430; margin-top: 3px; line-height: 1.6; white-space: pre-wrap }
 .cf-td__sub { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 13px }
