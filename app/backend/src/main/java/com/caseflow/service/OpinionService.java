@@ -4,20 +4,27 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.caseflow.entity.CaseAssignee;
 import com.caseflow.entity.CaseInfo;
 import com.caseflow.entity.CaseLeaderOpinion;
+import com.caseflow.entity.CaseOpinionRead;
 import com.caseflow.exception.BizException;
 import com.caseflow.mapper.CaseAssigneeMapper;
 import com.caseflow.mapper.CaseInfoMapper;
 import com.caseflow.mapper.CaseLeaderOpinionMapper;
+import com.caseflow.mapper.CaseOpinionReadMapper;
 import com.caseflow.security.AuthContext;
 import com.caseflow.support.LogService;
+import com.caseflow.vo.OpinionInboxVO;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import javax.annotation.Resource;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * 领导意见与落实反馈。
@@ -44,6 +51,12 @@ public class OpinionService {
     private CaseInfoMapper caseMapper;
     @Resource
     private CaseAssigneeMapper assigneeMapper;
+    /** 意见已读记录（邮件式「新增领导意见」的按人标记） */
+    @Resource
+    private CaseOpinionReadMapper opinionReadMapper;
+    /** 案件可见范围（myVisibleCaseIds：意见收件箱与 welcomeSummary 共用同一收敛口径） */
+    @Resource
+    private CaseService caseService;
     @Resource
     private LogService logService;
     /**
@@ -434,11 +447,159 @@ public class OpinionService {
         o.setFeedbackByName(AuthContext.userName());
         o.setFeedbackAt(LocalDateTime.now());
         opinionMapper.updateById(o);
+        // 能写反馈说明必然读过：顺带落已读，收件箱里这条就不会再出现
+        markReadInternal(o.getId());
 
         logService.log("CASE", "OPINION_FEEDBACK", "CASE", o.getCaseId(),
                 "反馈意见落实情况[" + statusName(status) + "]：" + abbrev(o.getContent())
                         + (StringUtils.hasText(note) ? "（" + abbrev(note) + "）" : ""));
         return o;
+    }
+
+    // ------------------------------------------------------------------
+    // 意见收件箱（2026-10-04）：邮件式「新增领导意见」
+    // ------------------------------------------------------------------
+
+    /**
+     * 我的未读意见（收件箱列表，新→旧）。
+     *
+     * <p>未读口径 = 本人承办案件里 {@code feedback_status} 为空【且】本登录人
+     * 没有已读记录。欢迎弹窗的 newOpinionCount 与本列表是<b>同一口径</b>——
+     * 数字和点进去看到的条数必须一致，否则"显示 13 条点进去却是 0 条"必然被当成 bug。
+     *
+     * <p>范围沿用 {@code CaseService.myVisibleCaseIds()}（现职 ACTIVE 指派），
+     * 历史协办人（已转手）不收。
+     */
+    public List<OpinionInboxVO> unreadForMe() {
+        Set<Long> mine = caseService.myVisibleCaseIds();
+        if (mine == null || mine.isEmpty()) {
+            return new ArrayList<>();
+        }
+        List<CaseLeaderOpinion> list = opinionMapper.selectList(new LambdaQueryWrapper<CaseLeaderOpinion>()
+                .in(CaseLeaderOpinion::getCaseId, mine)
+                .isNull(CaseLeaderOpinion::getFeedbackStatus)
+                .orderByDesc(CaseLeaderOpinion::getCreatedAt)
+                .orderByDesc(CaseLeaderOpinion::getId));
+        list = filterUnread(list);
+        if (list.isEmpty()) {
+            return new ArrayList<>();
+        }
+        // 案号/案件名批量取：收件箱里用户先靠案号认出"这是哪个案子的意见"
+        Set<Long> caseIds = new HashSet<>();
+        for (CaseLeaderOpinion o : list) {
+            caseIds.add(o.getCaseId());
+        }
+        java.util.Map<Long, CaseInfo> cases = new java.util.HashMap<>();
+        for (CaseInfo c : caseMapper.selectBatchIds(caseIds)) {
+            cases.put(c.getId(), c);
+        }
+        List<OpinionInboxVO> vos = new ArrayList<>();
+        for (CaseLeaderOpinion o : list) {
+            OpinionInboxVO vo = new OpinionInboxVO();
+            vo.setId(o.getId());
+            vo.setCaseId(o.getCaseId());
+            vo.setContent(o.getContent());
+            vo.setImportance(o.getImportance());
+            vo.setDeadline(o.getDeadline());
+            vo.setCreatorName(o.getCreatorName());
+            vo.setCreatedAt(o.getCreatedAt());
+            CaseInfo c = cases.get(o.getCaseId());
+            if (c != null) {
+                vo.setCaseNo(c.getCaseNo());
+                vo.setCaseName(c.getName());
+            }
+            vos.add(vo);
+        }
+        return vos;
+    }
+
+    /** 我已读过的意见 id 集合（给 welcomeSummary 复用，避免两处各写一遍过滤） */
+    public Set<Long> readOpinionIdsOfMine() {
+        Long uid = AuthContext.userId();
+        if (uid == null) {
+            return Collections.emptySet();
+        }
+        List<CaseOpinionRead> reads = opinionReadMapper.selectList(new LambdaQueryWrapper<CaseOpinionRead>()
+                .eq(CaseOpinionRead::getUserId, uid)
+                .select(CaseOpinionRead::getOpinionId));
+        Set<Long> ids = new HashSet<>();
+        for (CaseOpinionRead r : reads) {
+            ids.add(r.getOpinionId());
+        }
+        return ids;
+    }
+
+    /**
+     * 标记单条已读（幂等）：重复调用不报错不重复落库。
+     * 收件箱里"点开一条 = 已读并从列表移除"的落点。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void markRead(Long opinionId) {
+        requireOpinion(opinionId);
+        markReadInternal(opinionId);
+    }
+
+    /** 全部标为已读：把当前未读的一次清空（收件箱的「全部已读」按钮） */
+    @Transactional(rollbackFor = Exception.class)
+    public int markAllRead() {
+        Set<Long> mine = caseService.myVisibleCaseIds();
+        if (mine == null || mine.isEmpty()) {
+            return 0;
+        }
+        List<CaseLeaderOpinion> list = filterUnread(opinionMapper.selectList(new LambdaQueryWrapper<CaseLeaderOpinion>()
+                .in(CaseLeaderOpinion::getCaseId, mine)
+                .isNull(CaseLeaderOpinion::getFeedbackStatus)));
+        int n = 0;
+        for (CaseLeaderOpinion o : list) {
+            if (markReadInternal(o.getId())) {
+                n++;
+            }
+        }
+        return n;
+    }
+
+    /** 过滤掉当前登录人已读过的意见（无登录人视为全未读） */
+    private List<CaseLeaderOpinion> filterUnread(List<CaseLeaderOpinion> list) {
+        Set<Long> readIds = readOpinionIdsOfMine();
+        if (readIds.isEmpty()) {
+            return list;
+        }
+        List<CaseLeaderOpinion> out = new ArrayList<>();
+        for (CaseLeaderOpinion o : list) {
+            if (!readIds.contains(o.getId())) {
+                out.add(o);
+            }
+        }
+        return out;
+    }
+
+    /**
+     * 落一条已读记录。返回是否真正新插入（幂等：已读过返回 false）。
+     * 先查后插而非靠唯一键吃异常：并发下偶尔撞唯一键可以接受，
+     * 但日常路径不该靠异常做流程控制。
+     */
+    private boolean markReadInternal(Long opinionId) {
+        Long uid = AuthContext.userId();
+        if (uid == null || opinionId == null) {
+            return false;
+        }
+        Long cnt = opinionReadMapper.selectCount(new LambdaQueryWrapper<CaseOpinionRead>()
+                .eq(CaseOpinionRead::getOpinionId, opinionId)
+                .eq(CaseOpinionRead::getUserId, uid));
+        if (cnt != null && cnt > 0) {
+            return false;
+        }
+        CaseOpinionRead r = new CaseOpinionRead();
+        r.setOpinionId(opinionId);
+        r.setUserId(uid);
+        r.setReadAt(LocalDateTime.now());
+        try {
+            opinionReadMapper.insert(r);
+            return true;
+        } catch (org.springframework.dao.DuplicateKeyException e) {
+            // 并发下另一请求已插入：视为已读成功，幂等
+            return false;
+        }
     }
 
     // ------------------------------------------------------------------

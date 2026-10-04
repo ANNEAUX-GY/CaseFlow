@@ -267,6 +267,27 @@ public class WatchController {
         return Result.ok();
     }
 
+    // ---------------- 意见收件箱（2026-10-04，邮件式「新增领导意见」） ----------------
+
+    /** 我的未读意见（收件箱列表，新→旧；与欢迎弹窗 newOpinionCount 同口径） */
+    @GetMapping("/opinions/unread")
+    public Result<java.util.List<com.caseflow.vo.OpinionInboxVO>> unreadOpinions() {
+        return Result.ok(opinionService.unreadForMe());
+    }
+
+    /** 标记单条已读（幂等）：收件箱里点开一条即调 */
+    @PostMapping("/opinions/{id}/read")
+    public Result<Void> markOpinionRead(@PathVariable Long id) {
+        opinionService.markRead(id);
+        return Result.ok();
+    }
+
+    /** 全部标为已读：返回本次清掉的条数 */
+    @PostMapping("/opinions/read-all")
+    public Result<Integer> markAllOpinionsRead() {
+        return Result.ok(opinionService.markAllRead());
+    }
+
     /** 办案人对某条意见反馈落实情况；note 含结构化上传声明句（替代佐证材料上传） */
     @PostMapping("/opinions/{id}/feedback")
     public Result<CaseLeaderOpinion> feedbackOpinion(@PathVariable Long id,

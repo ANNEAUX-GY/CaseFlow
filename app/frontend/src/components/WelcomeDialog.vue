@@ -66,7 +66,7 @@ import { useDevice } from '../utils/device'
 const props = defineProps({
   modelValue: { type: Boolean, default: false }
 })
-const emit = defineEmits(['update:modelValue', 'closed'])
+const emit = defineEmits(['update:modelValue', 'closed', 'open-inbox'])
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -156,6 +156,13 @@ const go = (c) => {
   if (c.value === 0) {
     // 0 条时不给跳转——点了没反应会让人以为界面卡住
     visible.value = false
+    return
+  }
+  // 意见卡片走「邮件式收件箱」：在当前页直接弹出未读意见列表，
+  // 不跳案件列表——跳过去用户还得自己翻出是哪条意见，等于没解决。
+  if (c.key === 'opinion') {
+    visible.value = false
+    emit('open-inbox')
     return
   }
   visible.value = false

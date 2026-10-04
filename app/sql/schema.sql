@@ -297,6 +297,19 @@ CREATE TABLE IF NOT EXISTS case_leader_opinion (
     CONSTRAINT ck_leader_opinion_importance CHECK (importance IS NULL OR importance IN ('A','B','C'))
 );
 
+-- 6.2.1 意见已读记录（2026-10-04）：邮件式「新增领导意见」的按人已读标记。
+--   未读口径 = 本人承办案件里 feedback_status 为空【且】本表无 (opinion_id, user_id) 记录。
+--   为什么单独建表而不是在意见上加 read 标志：同一条意见会被主办/协办多人查看，
+--   「我读过了」是按人维度的状态，塞在意见行上只能存一个人的一次性状态。
+--   不设外键：意见软删后已读记录留档无害；user_id 用 sys_user.id（登录人维度）。
+CREATE TABLE IF NOT EXISTS case_opinion_read (
+    id         BIGINT      AUTO_INCREMENT PRIMARY KEY COMMENT '主键',
+    opinion_id BIGINT      NOT NULL COMMENT '领导意见 ID',
+    user_id    BIGINT      NOT NULL COMMENT '阅读人（sys_user.id）',
+    read_at    DATETIME    DEFAULT CURRENT_TIMESTAMP COMMENT '阅读时间',
+    CONSTRAINT uq_opinion_read UNIQUE (opinion_id, user_id)
+);
+
 -- 领导意见（2026-10 改造）：新增 sort_order / deadline / importance 三列。
 -- 均允许 NULL 以兼容旧数据：
 --   sort_order=NULL → 读取时按 id 升序回退，首次访问惰性初始化为 1..N；

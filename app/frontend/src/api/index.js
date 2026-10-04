@@ -122,7 +122,15 @@ export const watchApi = {
   /** 修改截止时间与重要性（仅管理层）；deadline 传 '' 即清空 */
   updateOpinionMeta: (id, data) => http.post(`/watch/opinions/${id}/meta`, data),
   /** 移除意见（仅管理层）；后端软删并连带清理派生待办 */
-  removeOpinion: (id) => http.post(`/watch/opinions/${id}/remove`)
+  removeOpinion: (id) => http.post(`/watch/opinions/${id}/remove`),
+
+  // ---- 意见收件箱（2026-10-04，邮件式新增领导意见） ----
+  /** 我的未读意见（与欢迎弹窗数字同口径） */
+  unreadOpinions: () => http.get('/watch/opinions/unread'),
+  /** 点开一条即标已读（幂等） */
+  markOpinionRead: (id) => http.post(`/watch/opinions/${id}/read`),
+  /** 全部标为已读 */
+  markAllOpinionsRead: () => http.post('/watch/opinions/read-all')
 }
 
 export const logApi = {

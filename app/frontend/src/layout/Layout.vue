@@ -89,7 +89,9 @@
            由 Login.vue 写入 sessionStorage 标记、这里消费——
            因为登录后 Login 组件立刻被销毁，弹窗不能挂在它上面。
            append-to-body 会把弹窗挂到 body，不受抽屉/侧栏容器影响。 -->
-      <WelcomeDialog v-if="!userStore.isFullAccess" ref="welcomeRef" />
+      <WelcomeDialog v-if="!userStore.isFullAccess" ref="welcomeRef" @open-inbox="onOpenInbox" />
+      <!-- 意见收件箱：欢迎弹窗点「新增领导意见」在当前页直接打开（邮件式查看，已读即移除） -->
+      <OpinionInboxDialog ref="inboxRef" />
     </el-container>
   </el-container>
 </template>
@@ -106,6 +108,7 @@ import { useMyTodoStore } from '../store/myTodo'
 import { useDevice } from '../utils/device'
 import NavPanel from './NavPanel.vue'
 import WelcomeDialog from '../components/WelcomeDialog.vue'
+import OpinionInboxDialog from '../components/OpinionInboxDialog.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -153,6 +156,9 @@ onMounted(() => {
  * Layout 挂载时消费——Layout 是整个会话只挂载一次的外壳，弹窗挂在它上面才稳。
  */
 const welcomeRef = ref(null)
+const inboxRef = ref(null)
+/** 欢迎弹窗点「新增领导意见」→ 当前页直接打开收件箱（邮件式，不跳页） */
+const onOpenInbox = () => inboxRef.value?.open()
 const checkWelcome = () => {
   if (userStore.isFullAccess) return
   let pending = false

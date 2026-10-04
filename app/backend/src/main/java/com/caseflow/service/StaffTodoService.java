@@ -8,6 +8,7 @@ import com.caseflow.entity.OrgEmployee;
 import com.caseflow.exception.BizException;
 import com.caseflow.mapper.CaseInfoMapper;
 import com.caseflow.mapper.CaseLeaderOpinionMapper;
+import com.caseflow.mapper.CaseOpinionReadMapper;
 import com.caseflow.mapper.CaseTodoMapper;
 import com.caseflow.mapper.OrgEmployeeMapper;
 import com.caseflow.security.AuthContext;
@@ -59,6 +60,9 @@ public class StaffTodoService {
     private CaseInfoMapper caseMapper;
     @Resource
     private CaseLeaderOpinionMapper opinionMapper;
+    /** 意见已读记录：welcomeSummary 的「新增」口径要与收件箱列表一致（排除本人已读） */
+    @Resource
+    private CaseOpinionReadMapper opinionReadMapper;
     @Resource
     private com.caseflow.mapper.SysUserMapper userMapper;
     @Resource
@@ -353,10 +357,31 @@ public class StaffTodoService {
                 dueSoon++;
             }
         }
-        // 领导意见：本人承办案件里尚未反馈的条数
-        Long newOpinion = opinionMapper.selectCount(new LambdaQueryWrapper<CaseLeaderOpinion>()
-                .in(CaseLeaderOpinion::getCaseId, mine)
-                .isNull(CaseLeaderOpinion::getFeedbackStatus));
+        // 领导意见：本人承办案件里尚未反馈【且本人未读过】的条数。
+        // 口径必须与意见收件箱（OpinionService.unreadForMe）完全一致——
+        // 否则欢迎弹窗显示 13、点进去列表是 0，必然被当成 bug。
+        // 注意这里直接查已读表而不是调 OpinionService：本类被 OpinionService 注入，
+        // 反向注入会成环。
+        Long newOpinion;
+        {
+            LambdaQueryWrapper<CaseLeaderOpinion> qw = new LambdaQueryWrapper<CaseLeaderOpinion>()
+                    .in(CaseLeaderOpinion::getCaseId, mine)
+                    .isNull(CaseLeaderOpinion::getFeedbackStatus);
+            Long uid = AuthContext.userId();
+            if (uid != null) {
+                java.util.Set<Long> readIds = new java.util.HashSet<>();
+                for (com.caseflow.entity.CaseOpinionRead r : opinionReadMapper.selectList(
+                        new LambdaQueryWrapper<com.caseflow.entity.CaseOpinionRead>()
+                                .eq(com.caseflow.entity.CaseOpinionRead::getUserId, uid)
+                                .select(com.caseflow.entity.CaseOpinionRead::getOpinionId))) {
+                    readIds.add(r.getOpinionId());
+                }
+                if (!readIds.isEmpty()) {
+                    qw.notIn(CaseLeaderOpinion::getId, readIds);
+                }
+            }
+            newOpinion = opinionMapper.selectCount(qw);
+        }
 
         m.put("todayTodoCount", today);
         m.put("dueSoonCount", dueSoon);
