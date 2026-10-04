@@ -163,8 +163,10 @@ public class StaffWorkloadService {
             if (o1 != o2) {
                 return o1 ? -1 : 1;
             }
-            Long d1 = (Long) a.get("daysLeft");
-            Long d2 = (Long) b.get("daysLeft");
+            // daysLeft 是 Integer（VO 字段），这里必须按 Integer 比较，
+            // 强转 Long 会抛 ClassCastException（踩过一次）
+            Integer d1 = (Integer) a.get("daysLeft");
+            Integer d2 = (Integer) b.get("daysLeft");
             if (d1 == null && d2 == null) {
                 return 0;
             }
@@ -174,7 +176,7 @@ public class StaffWorkloadService {
             if (d2 == null) {
                 return -1;
             }
-            return Long.compare(d1, d2);
+            return Integer.compare(d1, d2);
         });
         m.put("cases", rows);
         m.put("dueSoonCount", dueSoon);

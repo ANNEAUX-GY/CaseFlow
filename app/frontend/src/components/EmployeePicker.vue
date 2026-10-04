@@ -102,6 +102,7 @@
 import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { Search } from '@element-plus/icons-vue'
 import { employeeApi } from '../api'
+import { POLICE_GROUP_META, policeGroupLabel } from '../utils/format'
 import { useDevice } from '../utils/device'
 
 // 手机端：精简列 + 降高，保证「主办 / 协办」按钮始终在屏内
@@ -109,7 +110,9 @@ const { isMobile } = useDevice()
 
 const props = defineProps({
   ownerId: { type: [Number, null], default: null },
-  memberIds: { type: Array, default: () => [] }
+  memberIds: { type: Array, default: () => [] },
+  /** 本案要求的办案组别（INITIAL/CLEAR/NONE）。给了就把不匹配的人置灰不可选 */
+  requiredGroup: { type: String, default: '' }
 })
 const emit = defineEmits(['change'])
 
@@ -131,7 +134,28 @@ const notify = () => {
   })
 }
 
+/**
+ * 该员工是否可承接本案件。
+ *
+ * <p>不匹配的人**置灰而非隐藏** —— 隐藏会让人以为系统里没有别人，
+ * 以为流程走不通；置灰+ 说明原因才能让人知道"该找谁"。
+ * 与后端 PoliceGroup.canTake 同一套口径。
+ */
+const groupOf = (row) => {
+  const g = row && row.policeGroup
+  return POLICE_GROUP_META[g] ? g : 'NONE'
+}
+
+const disabledReason = (row) => {
+  if (!props.requiredGroup || props.requiredGroup === 'NONE') return ''
+  if (groupOf(row) === props.requiredGroup) return ''
+  return `只能由${policeGroupLabel(props.requiredGroup)}人员承办`
+}
+
+const isDisabled = (row) => !!disabledReason(row)
+
 const setOwner = (row) => {
+  if (isDisabled(row)) return
   owner.value = { id: row.id, name: row.name }
   members.value = members.value.filter((m) => m.id !== row.id)
   notify()

@@ -50,7 +50,12 @@
         </div>
       </el-form-item>
       <el-form-item label="承办人">
-        <EmployeePicker :owner-id="ownerId" :member-ids="memberIds" @change="onChange" />
+        <!-- 传requiredGroup：不匹配组别的员工置灰不可选，并说明原因 -->
+        <EmployeePicker :owner-id="ownerId" :member-ids="memberIds"
+          :required-group="requiredGroup" @change="onChange" />
+        <div v-if="requiredGroup !== 'NONE'" class="cf-muted" style="font-size: 12px; margin-top: 4px">
+          本案为刑拘在办，只能指派给<b>{{ policeGroupLabel(requiredGroup) }}</b>人员
+        </div>
       </el-form-item>
     </el-form>
     <template #footer>
@@ -78,6 +83,18 @@ const props = defineProps({
   currentDeadline: { type: String, default: null }
 })
 const emit = defineEmits(['update:modelValue', 'done'])
+
+/**
+ * 本案要求的办案组别：
+ * - 刑拘在办（DETENTION）→ 清案组；
+ * - 其余（无措施 / 取保监居 / 行政）→ 不限。
+ * 与后端 CaseService.moduleOf + PoliceGroup.requiredOf 完全一致，
+ * 不一致会出现「前端不置灰、后端却拒收」的错位。
+ */
+const requiredGroup = computed(() => {
+  if (props.caseMeasure === 'DETENTION') return 'CLEAR'
+  return 'NONE'
+})
 
 const visible = ref(false)
 const note = ref('')

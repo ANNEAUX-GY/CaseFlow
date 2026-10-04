@@ -136,6 +136,7 @@
       :current-member-ids="currentMemberIds"
       :current-deadline="currentDeadline"
       @done="load"
+      :case-measure="currentMeasure"
     />
     <CaseDetailDrawer v-model="detailVisible" :case-id="currentId" @done="load" />
 
@@ -225,6 +226,8 @@ const detailVisible = ref(false)
 const editId = ref(null)
 const currentId = ref(null)
 const currentName = ref('')
+// 本案强制措施：指派弹窗据此推导要求的办案组别（刑拘在办→清案组）
+const currentMeasure = ref('')
 const currentOwnerId = ref(null)
 const currentMemberIds = ref([])
 const currentDeadline = ref(null)
@@ -351,6 +354,7 @@ const openAssign = async (row) => {
   currentOwnerId.value = row.owner ? row.owner.employeeId : null
   currentMemberIds.value = (row.members || []).map((m) => m.employeeId)
   currentDeadline.value = row.deadline || null
+  currentMeasure.value = row.caseMeasure || ''
   assignVisible.value = true
 }
 
