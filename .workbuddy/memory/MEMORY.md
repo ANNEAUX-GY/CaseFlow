@@ -347,3 +347,18 @@ put 进去是 Integer 就必须按 Integer 取。**这类错编译期发现不�
 前半段已写入、后半段没写 → 出现「import 了但模板没挂载」的半成品，
 表现为**点击按钮完全无反应但控制台无报错**。
 **改完必须 grep 确认关键锚点真的存在**（我那次是 `<FeedbackDialog` 只 match 到 import 一行）。
+
+## 【交互约定】全项目禁用悬浮提示（2026-10-04，commit c08a801）
+用户明确：**鼠标悬浮弹出的提示会遮挡相邻操作按钮，影响操作，全都不要。**
+
+- 已清除：8 处 `el-tooltip` + 4 处原生 `title`。`el-tooltip` 全项目归零。
+- **替代方案：说明信息改成常驻可见的内联文字**，不靠悬停：
+  - 「为什么勾不动」→ 卡片内橙色小标签 `.cf-todo__block`（常驻）
+  - PageFooter 标语提示 → `.cf-foot__slogan-tip` 浅色小字
+  - el-alert 的长说明 → 拆成 `title` + **`description`**（description 才是正文）
+  - 按钮本身已有明确文字的（「提交反馈」「撤回上一步」）→ 直接删 tooltip，不补说明
+- 新增组件**不要再用 el-tooltip / title悬浮提示**。要说明就放在界面上。
+
+**关键区分：34 处 `title` 里大部分是 `:title`（el-dialog/el-drawer/ChartPanel 的组件属性），
+那是标题栏文字不是悬浮提示，删了会没标题。**
+筛选要用 `grep -E '(^|[^-:])title="' | grep -v ':title='` —— 直接 grep `title="` 会误伤。
