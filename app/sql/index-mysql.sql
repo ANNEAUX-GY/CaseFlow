@@ -17,3 +17,6 @@ CREATE INDEX idx_log_target    ON operation_log (target_type, target_id, created
 -- 待办反馈（2026-10-04）：主查询 todo_id + 时间正序；按案件清理用 case_id
 CREATE INDEX idx_todo_feedback_todo ON case_todo_feedback(todo_id, created_at);
 CREATE INDEX idx_todo_feedback_case ON case_todo_feedback(case_id);
+
+-- 疑问问答（2026-10-04）：按案件取问答列表
+CREATE INDEX idx_question_case ON case_question(case_id, created_at);

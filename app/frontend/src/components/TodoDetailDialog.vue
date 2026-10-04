@@ -123,6 +123,52 @@
         </template>
       </div>
 
+      <!-- 疑问问答：员工遇到不懂的在此提问，管理层回答。
+           独立于待办与任务——不派生待办、不影响完成规则，纯沟通记录。
+           列表限高滚动（项目约定：列表类容器写死高度），按任务上下文过滤。 -->
+      <div class="cf-td__sec">
+        <div class="cf-td__sec-head">
+          <span>疑问</span>
+          <span class="cf-muted">共 {{ questions.length }} 条</span>
+          <span class="cf-spacer"></span>
+          <span class="cf-muted cf-td__hint">不懂就问，管理层会在此回答</span>
+        </div>
+        <ul v-if="questions.length" class="cf-td__q-list">
+          <li v-for="q in questions" :key="q.id" class="cf-td__q">
+            <div class="cf-td__fb-meta">
+              <span class="cf-td__fb-time">{{ fmt(q.createdAt) }}</span>
+              <span class="cf-td__fb-by">{{ q.questionByName || '-' }}</span>
+              <el-tag v-if="!q.answer" size="small" type="warning" effect="plain">待回答</el-tag>
+              <el-tag v-else size="small" type="success" effect="plain">已回答</el-tag>
+            </div>
+            <div class="cf-td__fb-text">{{ q.content }}</div>
+            <!-- 回答块：管理层看到未回答的显示行内输入框 -->
+            <div v-if="q.answer" class="cf-td__q-answer">
+              <span class="cf-td__q-answer-by">{{ q.answerByName || '-' }} · {{ fmt(q.answeredAt) }} 回答</span>
+              <div class="cf-td__fb-text">{{ q.answer }}</div>
+            </div>
+            <div v-else-if="isAdmin" class="cf-td__q-answer cf-td__q-answer--input">
+              <el-input v-model="answerText[q.id]" size="small" maxlength="500"
+                placeholder="填写回答…" @keyup.enter="submitAnswer(q)" />
+              <el-button type="primary" size="small" :loading="answeringId === q.id"
+                :disabled="!(answerText[q.id] || '').trim()" @click="submitAnswer(q)">
+                回答
+              </el-button>
+            </div>
+          </li>
+        </ul>
+        <div v-else class="cf-muted cf-td__empty">暂无疑问。遇到不懂的，直接在下方提问</div>
+        <div class="cf-td__add-row">
+          <el-input v-model="newQuestion" size="small" maxlength="500"
+            placeholder="遇到不懂的？写下你的问题，管理层会回答"
+            @keyup.enter="submitQuestion" />
+          <el-button type="primary" size="small" :loading="asking"
+            :disabled="!newQuestion.trim()" @click="submitQuestion">
+            提交问题
+          </el-button>
+        </div>
+      </div>
+
       <!-- 提交反馈入口：走落实反馈弹窗（状态+说明+上传声明） -->
       <div class="cf-td__sec">
         <div class="cf-td__sec-head"><span>提交反馈</span></div>
@@ -174,7 +220,7 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { todoApi } from '../api'
+import { todoApi, questionApi } from '../api'
 import { useDevice } from '../utils/device'
 import { useUserStore } from '../store/user'
 import FeedbackDialog from './FeedbackDialog.vue'
@@ -242,6 +288,49 @@ const canDone = computed(() => {
   // 规则：至少一条反馈说明
   return feedbacks.value.length > 0
 })
+
+/** 疑问问答：只看本任务上下文的（todoId 过滤）；数据独立，不影响任务状态 */
+const questions = ref([])
+const newQuestion = ref('')
+const asking = ref(false)
+const answerText = reactive({})
+const answeringId = ref(null)
+
+const loadQuestions = async () => {
+  if (!todoId.value) { questions.value = []; return }
+  // 按当前任务过滤（接口返回全案，浮窗只看本任务上下文的疑问）
+  try {
+    const all = await questionApi.listOfCase(data.value.caseId) || []
+    questions.value = all.filter((q) => String(q.todoId) === String(todoId.value))
+  }
+  catch (e) { questions.value = [] }
+}
+
+const submitQuestion = async () => {
+  const content = (newQuestion.value || '').trim()
+  if (!content) return
+  asking.value = true
+  try {
+    await questionApi.ask(data.value.caseId, todoId.value, content)
+    newQuestion.value = ''
+    ElMessage.success('问题已提交，管理层会在此回答')
+    await loadQuestions()
+    emit('changed')
+  } finally { asking.value = false }
+}
+
+const submitAnswer = async (q) => {
+  const content = (answerText[q.id] || '').trim()
+  if (!content) return
+  answeringId.value = q.id
+  try {
+    await questionApi.answer(q.id, content)
+    answerText[q.id] = ''
+    ElMessage.success('已回答')
+    await loadQuestions()
+    emit('changed')
+  } finally { answeringId.value = null }
+}
 
 const load = async () => {
   if (!todoId.value) return
@@ -485,6 +574,15 @@ watch(visible, (v) => { if (!v) onClosed() })
 .cf-td__sec-head--click { cursor: pointer; user-select: none }
 .cf-td__fold-icon { transition: transform .15s; color: #8a929e }
 .cf-td__fold-icon.is-open { transform: rotate(90deg) }
+/* 疑问问答：列表限高滚动（项目约定：列表类容器写死高度），回答块缩进区分 */
+.cf-td__q-list { list-style: none; margin: 0; padding: 0; max-height: 240px; overflow-y: auto }
+.cf-td__q { padding: 6px 0; border-bottom: 1px dotted #eef1f5 }
+.cf-td__q-answer {
+  margin-top: 4px; padding: 6px 10px; background: #f4f8f2;
+  border-left: 3px solid var(--cf-ok, #1e8e58); border-radius: 3px;
+}
+.cf-td__q-answer--input { display: flex; gap: 8px; align-items: center; background: #fbfcfe; border-left-color: #dfe4ea }
+.cf-td__q-answer-by { font-size: 12px; color: #1e8e58 }
 .cf-td__block { flex: 0 1 auto; min-width: 0; font-size: 12px; line-height: 1.4;
   color: #a8620a; background: #fdf6ec; border: 1px solid #f0dcc0;
   padding: 1px 7px; border-radius: 3px; overflow-wrap: anywhere }

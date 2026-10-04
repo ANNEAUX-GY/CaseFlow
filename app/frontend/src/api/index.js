@@ -146,6 +146,13 @@ export const employeeApi = {
   templateUrl: () => `${import.meta.env.VITE_API_BASE || '/api'}/employees/template`
 }
 
+/** 疑问问答（独立于待办与任务）：员工提问、管理层回答 */
+export const questionApi = {
+  listOfCase: (caseId) => http.get(`/questions/case/${caseId}`),
+  ask: (caseId, todoId, content) => http.post('/questions', { caseId, todoId, content }),
+  answer: (id, content) => http.post(`/questions/${id}/answer`, { content })
+}
+
 export const todoApi = {
   listOfCase: (caseId) => http.get(`/todos/case/${caseId}`),
   add: (caseId, data) => http.post(`/todos/case/${caseId}`, data),

@@ -159,6 +159,26 @@ CREATE TABLE IF NOT EXISTS case_todo_feedback (
 -- 反馈表的两条二级索引（todo_id+created_at / case_id）放 index-mysql.sql：
 -- 「CREATE INDEX IF NOT EXISTS」是 H2 语法，MySQL 8 不支持，写在通用脚本里会让 init_db 在建表段直接失败
 
+-- 5.1.3 疑问问答（2026-10-04）
+--
+-- 普通员工办任务遇到不懂的，在此提问；管理层看到后回答。
+-- **独立于待办与任务**：不派生待办、不影响任何完成规则、不进反馈流——
+-- 它只是一问一答的沟通记录。todo_id 可空，仅记录提问时所在的任务上下文
+-- （展示「关于哪个任务的疑问」用），删除任务不级联删问答（沟通记录要留档）。
+CREATE TABLE IF NOT EXISTS case_question (
+    id              BIGINT        AUTO_INCREMENT PRIMARY KEY COMMENT '主键',
+    case_id         BIGINT        NOT NULL COMMENT '案件 ID',
+    todo_id         BIGINT        DEFAULT NULL COMMENT '提问时所在的任务 ID（仅上下文备注，无联动）',
+    content         VARCHAR(1000) NOT NULL COMMENT '问题内容',
+    answer          VARCHAR(2000) DEFAULT NULL COMMENT '管理层的回答；NULL=尚未回答',
+    answer_by       BIGINT        DEFAULT NULL COMMENT '回答人账号 ID',
+    answer_by_name  VARCHAR(64)   DEFAULT NULL COMMENT '回答人姓名（冗余展示）',
+    answered_at     DATETIME      DEFAULT NULL COMMENT '回答时间',
+    question_by     BIGINT        DEFAULT NULL COMMENT '提问人账号 ID',
+    question_by_name VARCHAR(64)  DEFAULT NULL COMMENT '提问人姓名（冗余展示）',
+    created_at      DATETIME      DEFAULT CURRENT_TIMESTAMP COMMENT '提问时间'
+);
+
 -- 5.1 嫌疑人（案件关联的身份信息；随案件快照一并存档，支持撤回还原）
 CREATE TABLE IF NOT EXISTS case_suspect (
     id            BIGINT       AUTO_INCREMENT PRIMARY KEY COMMENT '主键',
