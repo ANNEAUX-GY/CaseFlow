@@ -428,3 +428,20 @@ addFeedback（先记反馈再 done，顺序也满足规则1校验）。两条不
 **教训：脚本改完必须 grep 确认插入点真的存在**（`grep -n "await loadQuestions()"` 应出现在 load 内）。
 同类前科：<FeedbackDialog> 只 import 没挂载、setFeedbackCount 只剩注释——
 全是"批量改写后没验证锚点"的同一类错误。**改完 grep，改完 grep，改完 grep。**
+
+## 意见收件箱（2026-10-04，commit dd2b8a4）
+欢迎弹窗「新增领导意见」卡片 → 当前页弹 OpinionInboxDialog（邮件式），已读即移除。
+- 新表 `case_opinion_read(opinion_id, user_id UNIQUE)`：已读是**登录人维度**，
+  不能塞意见行（一条意见多人看）。双副本 schema.sql 都加了。
+- **未读口径 = feedback_status 为空 且 本人无已读记录**；welcomeSummary 的
+  newOpinionCount 改成同一口径（数字与列表条数必须一致，否则必被当 bug 报）。
+  welcomeSummary 从 13 变成"未读"语义，正好贴合卡片提示「待阅读」。
+- **StaffTodoService 不可注入 OpinionService**（它被后者注入，反向成环）——
+  直接注入 CaseOpinionReadMapper 自查已读 id 再 notIn。
+- 交互：点条目=展开+立即标已读（幂等）；「知道了/去处理」才从列表移除
+  （"看"和"看完"是两个时刻，读一半就消失会打断阅读）；「全部标为已读」一键清空。
+- CaseInfo 的案件名字段是 **name 不是 caseName**（CaseInboxVO 自己的字段才叫 caseName）。
+- syncOpinion 既有设计：任务未完成时 DONE 反馈会被视为无效清空意见状态
+  ——测「反馈后离开未读」要用 IN_PROGRESS（进行中）反馈。
+- `backend/src/main/resources/sql/` 在 .git/info/exclude 本机排除里，
+  **根 sql/schema.sql 才进远程**——别人 clone 后缺运行时副本是既有现状，别当新问题。
