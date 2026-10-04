@@ -41,6 +41,12 @@
         </div>
       </div>
 
+      <!-- 阶段→环节→任务流程：按刑事/行政办理流程组织，阶段流转需领导确认 -->
+      <div class="cf-panel" style="margin-top: 12px">
+        <FlowPanel :case-id="detail.id" :case-type="detail.caseType"
+          :is-full-access="isFullAccess" :is-assignee="isAssignee" @changed="after" />
+      </div>
+
       <!-- 侦查计划 checklist：办案人自己给自己制定的计划；管理层只读 -->
       <div class="cf-panel" style="margin-top: 12px">
         <div class="cf-panel__head">
@@ -186,6 +192,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { caseApi, watchApi } from '../api'
 import OpinionPanel from './OpinionPanel.vue'
+import FlowPanel from './FlowPanel.vue'
 import { useUserStore } from '../store/user'
 import { INVEST_STATUS_META, MEASURE_META } from '../utils/format'
 

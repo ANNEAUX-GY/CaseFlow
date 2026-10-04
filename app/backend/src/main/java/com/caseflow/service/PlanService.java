@@ -133,6 +133,37 @@ public class PlanService {
         return p;
     }
 
+    /**
+     * 撤销完成：把已完成的阶段任务改回待完成。
+     *
+     * <p>阶段流程面板里的任务勾选框需要<strong>双向切换</strong>——
+     * 打错了能改回来。原{@link #done} 只��"完成"单向流转，
+     * 且强制要求填完成说明，不适合直接驱动勾选框，故单开一个方法。
+     *
+     * <p>标准任务（is_std=1）也允许撤销：民警可能有实质工作没做完，
+     * 不应因为是模板生成的就锁死。同样留痕、可撤回。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public CasePlan revert(Long planId) {
+        CasePlan p = requirePlan(planId);
+        CaseInfo c = requireCase(p.getCaseId());
+        checkOperate(c);
+        if (!"DONE".equals(p.getStatus())) {
+            throw new BizException("只有已完成的计划才能撤销完成");
+        }
+        String before = snapshotService.capture(p.getCaseId());
+        p.setStatus("PENDING");
+        p.setDoneAt(null);
+        p.setDoneNote(null);
+        p.setUpdatedAt(LocalDateTime.now());
+        planMapper.updateById(p);
+
+        touchCase(p.getCaseId());
+        logService.log("CASE", "PLAN_REVERT", "CASE", p.getCaseId(),
+                "撤销完成：" + abbrev(p.getContent()), before, snapshotService.capture(p.getCaseId()));
+        return p;
+    }
+
     // ------------------------------------------------------------------
 
     private CaseInfo requireCase(Long caseId) {

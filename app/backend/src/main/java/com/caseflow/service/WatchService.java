@@ -47,6 +47,12 @@ public class WatchService {
             vo.setPlanDone(st == null ? 0 : st.done);
             vo.setPlanTotal(st == null ? 0 : st.total);
             vo.setPlanOverdue(st == null ? 0 : (int) st.overdueOf(now));
+            // 流程阶段随列表一起给出，前端不必再逐行拉 flow/progress
+            String fs = vo.getFlowStage() == null || vo.getFlowStage().trim().isEmpty()
+                    ? com.caseflow.flow.CaseFlowTemplate.STAGE_INITIAL
+                    : vo.getFlowStage();
+            vo.setFlowStage(fs);
+            vo.setFlowStageName(com.caseflow.flow.CaseFlowTemplate.stageLabel(fs));
         }
         return r;
     }
@@ -108,24 +114,51 @@ public class WatchService {
         return cnt == null ? 0 : cnt;
     }
 
-    /** 批量计划统计：total 只计 待完成+已完成（取消的不进分母）；overdue = 待完成且已过计划时限 */
+    /**
+     * 批量计划统计：total 只计 待完成+已完成（取消的不进分母）；overdue = 待完成且已过计划时限。
+     *
+     * <p><b>按流程阶段过滤</b>（2026-10）：只统计案件<strong>当前阶段</strong>的任务。
+     * 阶段流转时旧阶段任务会置 CANCELLED 已天然排除，但存量计划（stage 为 NULL）
+     * 若不按阶段归位，会在案件流转到「刑拘在办」后仍被计入分母，
+     * 导致进度虚高、且与流程面板显示的数字对不上。
+     * 这里统一用「stage 为 NULL 视为 INITIAL」的同一套归位口径，与 FlowService 保持一致。
+     */
     private Map<Long, PlanStat> planStats(List<Long> caseIds) {
         Map<Long, PlanStat> map = new HashMap<>();
         if (caseIds == null || caseIds.isEmpty()) {
             return map;
         }
+        // 取每案的当前阶段，用于过滤
+        Map<Long, String> stageOfCase = new HashMap<>();
+        for (CaseInfo c : caseMapper.selectList(new LambdaQueryWrapper<CaseInfo>()
+                .select(CaseInfo::getId, CaseInfo::getFlowStage)
+                .in(CaseInfo::getId, caseIds))) {
+            stageOfCase.put(c.getId(),
+                    c.getFlowStage() == null || c.getFlowStage().trim().isEmpty()
+                            ? com.caseflow.flow.CaseFlowTemplate.STAGE_INITIAL
+                            : c.getFlowStage());
+        }
+
         List<CasePlan> plans = planMapper.selectList(new LambdaQueryWrapper<CasePlan>()
                 .in(CasePlan::getCaseId, caseIds));
         for (CasePlan p : plans) {
-            PlanStat st = map.computeIfAbsent(p.getCaseId(), k -> new PlanStat());
             if ("CANCELLED".equals(p.getStatus())) {
                 continue;
             }
-            st.total++;
+            // 只算当前阶段的任务：stage 为 NULL 的存量归初查
+            String st = p.getStage() == null || p.getStage().trim().isEmpty()
+                    ? com.caseflow.flow.CaseFlowTemplate.STAGE_INITIAL
+                    : p.getStage();
+            String cur = stageOfCase.get(p.getCaseId());
+            if (cur == null || !cur.equals(st)) {
+                continue;
+            }
+            PlanStat stat = map.computeIfAbsent(p.getCaseId(), k -> new PlanStat());
+            stat.total++;
             if ("DONE".equals(p.getStatus())) {
-                st.done++;
+                stat.done++;
             } else if (p.getPlannedAt() != null) {
-                st.pendingDeadlines.add(p.getPlannedAt());
+                stat.pendingDeadlines.add(p.getPlannedAt());
             }
         }
         return map;

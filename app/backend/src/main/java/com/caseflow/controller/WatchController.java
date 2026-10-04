@@ -117,6 +117,12 @@ public class WatchController {
         return Result.ok(planService.cancel(id));
     }
 
+    /** 撤销完成：阶段流程面板的任务勾选框需要双向切换，打错了能改回来 */
+    @PostMapping("/plans/{id}/revert")
+    public Result<CasePlan> revertPlan(@PathVariable Long id) {
+        return Result.ok(planService.revert(id));
+    }
+
     // ---------------- 侦查进度流转 / 强制措施 / 审批 ----------------
 
     /** 流转：START 开始侦查 / SUBMIT 提请审批 / APPROVE 同意侦查终结 / REJECT 退回补侦 */

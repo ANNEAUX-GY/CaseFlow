@@ -123,3 +123,48 @@ export function rowClassOf(row) {
   if (['DONE', 'CANCELLED'].includes(row.status)) return ''
   return meta.rowClass
 }
+
+// ============ 阶段→环节→任务 流程（2026-10）============
+
+/** 流程阶段。flow_stage=NULL 的存量案件按 INITIAL 处理，与后端 CaseFlowTemplate 一致 */
+export const STAGE_META = {
+  INITIAL: { label: '初查', type: 'primary', desc: '接收材料 → 立案 → 侦查 → 判断 → 刑拘/处罚' },
+  DETAIN: { label: '刑拘在办', type: 'warning', desc: '指派清案民警 → 逮捕；或取保、释放' },
+  BAIL: { label: '取保及监居', type: 'info', desc: '取保/监居执行与盯办（流程后续细化）' },
+  CLOSED: { label: '已终结', type: 'success', desc: '清案结束 / 释放 / 处罚决定作出' }
+}
+
+export function stageLabel(stage) {
+  return (STAGE_META[stage] || STAGE_META.INITIAL).label
+}
+
+/** 环节 key → 中文名（与后端 CaseFlowTemplate.stepLabel 保持一致） */
+export const STEP_LABEL = {
+  RECEIVE: '接收材料',
+  CASE_FILL: '立案',
+  INVESTIGATE: '侦查',
+  REVIEW: '是否符合刑拘条件',
+  DETAIN: '刑拘',
+  ASSIGN_CLEAR: '指派清案民警',
+  ARREST: '逮捕',
+  EXECUTE_BAIL: '执行取保/监居',
+  PRESENT: '呈批材料',
+  PUNISH: '批准行政处罚',
+  RELEASE: '释放',
+  CLOSE: '清案结束',
+  CUSTOM: '其他事项'
+}
+
+export function stepLabel(key) {
+  return STEP_LABEL[key] || '侦查'
+}
+
+/** 流转动作 → 中文名 */
+export const ACTION_LABEL = {
+  DETAIN: '刑拘',
+  BAIL: '取保候审',
+  RELEASE: '释放',
+  ARREST: '逮捕',
+  PUNISH: '批准行政处罚',
+  CLOSE: '解除收案'
+}

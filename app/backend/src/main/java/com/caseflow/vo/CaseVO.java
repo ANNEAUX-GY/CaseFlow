@@ -71,10 +71,16 @@ public class CaseVO implements Serializable {
     private String investigationStatus;
     private String investigationStatusName;
 
-    /** 侦查计划进度（盯办模块）：done/total/pending/overdue */
+    /** 侦查计划进度（盯办模块）：done/total/pending/overdue
+     *  注意 2026-10 起口径已收窄为「当前阶段」任务，与流程面板数字一致 */
     private Integer planDone;
     private Integer planTotal;
     private Integer planOverdue;
+
+    /** 流程阶段：INITIAL初查/DETAIN刑拘在办/BAIL取保及监居/CLOSED已终结（NULL=存量按初查） */
+    private String flowStage;
+    /** 阶段中文名，便于前端直接展示 */
+    private String flowStageName;
 
     /** 待办（to do）进度：已完成 / 总数（仅详情页填充） */
     private Integer todoDone;

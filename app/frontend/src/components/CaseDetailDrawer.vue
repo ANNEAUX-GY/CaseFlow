@@ -80,6 +80,12 @@
         </div>
       </div>
 
+      <!-- 阶段→环节→任务流程：详情页也能看到当前阶段与进度，流转需领导确认 -->
+      <div class="cf-panel" style="margin-top: 12px">
+        <FlowPanel :case-id="detail.id" :case-type="detail.caseType"
+          :is-full-access="canManage" :is-assignee="isAssignee" @changed="reload" />
+      </div>
+
       <!-- 领导意见与落实反馈：管理层提意见，办案人对每条意见反馈完成/进行中/未完成 -->
       <div class="cf-panel" style="margin-top: 12px">
         <OpinionPanel ref="opinionPanel" :case-id="detail.id" :detail="detail" :is-full-access="canManage" />
@@ -307,6 +313,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { caseApi, fileApi, suspectApi, logApi, watchApi } from '../api'
 import CaseTodoPanel from './CaseTodoPanel.vue'
 import OpinionPanel from './OpinionPanel.vue'
+import FlowPanel from './FlowPanel.vue'
 import { STATUS_META, PRIORITY_META, SOURCE_META, DUE_META, CASE_TYPE_META, INVEST_STATUS_META, dueText } from '../utils/format'
 import { useUserStore } from '../store/user'
 import { useEventStore } from '../store/events'

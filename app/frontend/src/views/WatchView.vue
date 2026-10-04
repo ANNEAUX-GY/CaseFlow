@@ -92,13 +92,19 @@
               <span v-else class="cf-muted">未开始</span>
             </template>
           </el-table-column>
-          <el-table-column label="侦查进度" width="150">
+          <el-table-column label="阶段进度" width="178">
             <template #default="{ row }">
-              <el-progress v-if="row.planTotal > 0"
-                :percentage="Math.round((row.planDone / row.planTotal) * 100)"
-                :status="planProgressStatus(row)"
-                :stroke-width="8" />
-              <span v-else class="cf-muted">暂无计划</span>
+              <div style="display: flex; align-items: center; gap: 6px">
+                <el-tag size="small" :type="(STAGE_META[row.flowStage] || {}).type" effect="plain">
+                  {{ row.flowStageName || stageLabel(row.flowStage) }}
+                </el-tag>
+                <el-progress v-if="row.planTotal > 0"
+                  :percentage="Math.round((row.planDone / row.planTotal) * 100)"
+                  :status="planProgressStatus(row)"
+                  :stroke-width="8"
+                  style="flex: 1; min-width: 60px" />
+                <span v-else class="cf-muted" style="font-size: 12px">暂无任务</span>
+              </div>
             </template>
           </el-table-column>
           <el-table-column label="措施期限" width="140">
@@ -148,7 +154,7 @@
 import { computed, reactive, ref, watch, onMounted } from 'vue'
 import { watchApi, employeeApi } from '../api'
 import { useCategoryStore } from '../store/category'
-import { CASE_TYPE_META, INVEST_STATUS_META, MEASURE_META } from '../utils/format'
+import { CASE_TYPE_META, INVEST_STATUS_META, MEASURE_META, STAGE_META, stageLabel } from '../utils/format'
 import WatchDrawer from '../components/WatchDrawer.vue'
 import PageFooter from '../components/PageFooter.vue'
 

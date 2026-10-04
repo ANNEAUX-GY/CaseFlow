@@ -108,6 +108,8 @@ export const watchApi = {
   updatePlan: (id, data) => http.put(`/watch/plans/${id}`, data),
   donePlan: (id, doneNote) => http.post(`/watch/plans/${id}/done`, { doneNote }),
   cancelPlan: (id) => http.post(`/watch/plans/${id}/cancel`),
+  /** 撤销完成（阶段流程面板的任务勾选框双向切换用） */
+  revertPlan: (id) => http.post(`/watch/plans/${id}/revert`),
   transition: (caseId, data) => http.post(`/watch/cases/${caseId}/transition`, data),
   measure: (caseId, data) => http.post(`/watch/cases/${caseId}/measure`, data),
   approvals: (caseId) => http.get(`/watch/cases/${caseId}/approvals`),
@@ -126,7 +128,16 @@ export const watchApi = {
     http.post(`/watch/cases/${caseId}/opinions/reorder`, { opinionIds }),
   /** 修改截止时间与重要性（仅管理层）；deadline 传 '' 即清空 */
   updateOpinionMeta: (id, data) => http.post(`/watch/opinions/${id}/meta`, data),
-  feedbackOpinion: (id, data) => http.post(`/watch/opinions/${id}/feedback`, data)
+  feedbackOpinion: (id, data) => http.post(`/watch/opinions/${id}/feedback`, data),
+  // ---- 阶段→环节→任务 流程流转 ----
+  /** 流程视图：环节顺序、每环节任务、进度、可选流转分支 */
+  flow: (caseId) => http.get(`/watch/cases/${caseId}/flow`),
+  /** 仅进度（列表页进度条用，避免每行拉全量流程） */
+  flowProgress: (caseId) => http.get(`/watch/cases/${caseId}/flow/progress`),
+  /** 阶段流转（管理层确认）：action = DETAIN/BAIL/RELEASE/ARREST/PUNISH/CLOSE */
+  flowTransfer: (caseId, action) => http.post(`/watch/cases/${caseId}/flow/transfer`, { action }),
+  /** 补全当前阶段标准任务（幂等，取保流程细化后用） */
+  flowSeed: (caseId) => http.post(`/watch/cases/${caseId}/flow/seed`)
 }
 
 export const logApi = {
