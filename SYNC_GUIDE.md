@@ -88,6 +88,11 @@ D:\案件指派demo\        ← Git 仓库根（开发环境包）
 
 ## 三、需要你手动完成的部分
 
+> **注意：本文档描述的是「本机（开发环境包）已就绪」的状态。**
+> 若要在**另一台全新电脑**从零起步，先看下面新增的「第六节 · 新电脑从零起步」——
+> 源码能从 GitHub clone，但工具链（tools\）和依赖（node_modules / .venv）不在仓库里，
+> 需要按那节补齐，否则 `dev.py` 会报「找不到 JDK / Maven / Node」。
+
 | 事项 | 说明 |
 |---|---|
 | **身份验证** | 已在本机配置好凭据，正常无需操作。若日后弹出 GitHub 登录窗口：浏览器登录 `ANNEAUX-GY` → 授权 Git Credential Manager；或用 PAT：**GitHub → Settings → Developer settings → Personal access tokens → 勾选 `repo`** |
@@ -139,3 +144,60 @@ git push          # 推送
 
 > **本机专属的 git 忽略规则写在 `.git/info/exclude`，不要改仓库里的 `.gitignore`** ——
 > 改了会导致与远程仓库漂移（别人 pull 会拿到你的本机配置）。
+
+---
+
+## 六、新电脑从零起步（从 GitHub clone 到能开发）
+
+仓库里**只有源码 + 工程配置 + 演示库**，不含工具链和依赖（它们体积大、且有机器绑定，被 `.gitignore` 排除）。新电脑按下面顺序补：
+
+### 1. clone 源码
+
+```bash
+git clone https://github.com/ANNEAUX-GY/CaseFlow.git
+cd CaseFlow
+```
+
+clone 后得到：`app\`（源码，PyCharm 打开它）、`README-开发包.txt`、`SYNC_GUIDE.md`（本文件）、`CONTRIBUTING.md`。
+
+### 2. 准备工具链（`tools\` 目录，本仓库不提供，需从原开发机拷贝）
+
+`dev.py` 依赖仓库根下的 `tools\`，缺了会报「找不到 JDK / Maven / Node」。目录结构：
+
+```
+tools\
+  jdk8\      JDK 1.8（后端必须用，高版本不兼容）
+  maven\     Maven 3.9.9
+  m2repo\    Maven 离线依赖仓库（离线编译靠它）
+  node\      Node 22 运行时（npm 内置）
+```
+
+**最省事的做法**：把原开发机的 `D:\案件指派demo\tools\` 整个目录拷贝到新电脑的仓库根下（约几百 MB，含离线 m2repo 后更大）。离线 m2repo 是为了能离线编译——若新电脑能联网，也可以只拷 `jdk8` + `maven` + `node`，首次编译让 Maven 联网下依赖。
+
+### 3. 补依赖 + 自检
+
+```bash
+cd app
+python scripts/dev.py --check        # 环境自检，会列出缺什么
+python scripts/dev.py --fix-deps     # 自动建 .venv、装 Python/前端依赖
+```
+
+> `dev.py` 刻意只依赖 Python 标准库，系统自带 Python 即可运行，无需先装任何东西。
+
+### 4. 打开项目
+
+- **PyCharm 打开 `app\` 目录**（不是仓库根），`app/.idea/vcs.xml` 已把 Git 映射到上一级，10 个运行配置会自动加载
+- 演示库 `app/backend/data/h2/caseflow.mv.db` 已随仓库入库，clone 后即有完整演示数据（账号 `boss` / `admin123`）
+
+### 5. 一键启动
+
+```bash
+cd app
+python scripts/dev.py --seed          # 后端 + 前端 + 灌演示数据
+```
+
+访问 `http://localhost:5173`（前端）或 `http://localhost:8080/api/`（后端）。
+
+> **换电脑唯一要做的「体力活」就是第 2 步拷贝 tools\。** 其余全部自动。
+> 如果只想要「跑起来看效果」而不是「改代码开发」，直接看 README 第六节打包成 jar，
+> 对方电脑只要有 JDK8 就能 `java -jar` 跑，不需要 tools\。
