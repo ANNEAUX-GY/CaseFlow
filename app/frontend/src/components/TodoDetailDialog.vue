@@ -26,9 +26,16 @@
         <div class="cf-td__sec-head">
           <span>反馈记录</span>
           <span class="cf-muted">共 {{ feedbacks.length }} 条</span>
+          <!-- 折叠：反馈多时默认只看最新 3 条（时间正序，最后 3 条即最新），
+               全量撑开弹窗会盖住子任务和操作区（用户反馈太占版面） -->
+          <span class="cf-spacer"></span>
+          <el-button v-if="feedbacks.length > FB_PREVIEW" link type="primary" size="small"
+            @click.stop="fbExpanded = !fbExpanded">
+            {{ fbExpanded ? '收起' : `展开全部 ${feedbacks.length} 条` }}
+          </el-button>
         </div>
         <ul v-if="feedbacks.length" class="cf-td__fb-list">
-          <li v-for="f in feedbacks" :key="f.id" class="cf-td__fb">
+          <li v-for="f in visibleFeedbacks" :key="f.id" class="cf-td__fb">
             <div class="cf-td__fb-meta">
               <span class="cf-td__fb-time">{{ fmt(f.createdAt) }}</span>
               <span class="cf-td__fb-by">{{ f.creatorName || '-' }}</span>
@@ -51,12 +58,20 @@
         </div>
       </div>
 
-      <!-- 子任务列表：两级结构，此处为第二级 -->
+      <!-- 子任务列表：两级结构，此处为第二级。
+           默认收成一行摘要（反馈13条+子任务8个全铺开会撑爆弹窗、没法滚动看），
+           点标题行展开；有未完成子任务时摘要带橙色提醒，不会漏看。 -->
       <div v-if="isParent" class="cf-td__sec">
-        <div class="cf-td__sec-head">
+        <div class="cf-td__sec-head cf-td__sec-head--click" @click="subExpanded = !subExpanded">
+          <el-icon class="cf-td__fold-icon" :class="{ 'is-open': subExpanded }"><ArrowRight /></el-icon>
           <span>子任务</span>
-          <span class="cf-muted">共 {{ subtasks.length }} 个{{ subtaskDone === subtasks.length && subtasks.length ? '，已全部完成' : '' }}</span>
+          <span class="cf-muted">共 {{ subtasks.length }} 个，已完成 {{ subtaskDone }} 个</span>
+          <span v-if="!subExpanded && subtaskDone < subtasks.length" class="cf-td__block">
+            还有 {{ subtasks.length - subtaskDone }} 个未完成
+          </span>
+          <span class="cf-spacer"></span>
         </div>
+        <template v-if="subExpanded">
         <ul v-if="subtasks.length" class="cf-td__sub-list">
           <li v-for="s in subtasks" :key="s.id" class="cf-td__sub"
             :class="{ 'is-done': s.status === 'DONE' }">
@@ -105,6 +120,7 @@
             添加子任务
           </el-button>
         </div>
+        </template>
       </div>
 
       <!-- 提交反馈入口：走落实反馈弹窗（状态+说明+上传声明） -->
@@ -200,6 +216,13 @@ const subTitleOf = (f) => {
   return hit ? '子任务：' + (hit.content || '') : ''
 }
 
+/* ---- 折叠（反馈/子任务多时默认收起，避免撑爆弹窗没法滚动看） ---- */
+const FB_PREVIEW = 3   // 反馈默认预览条数（时间正序，最后 3 条即最新）
+const fbExpanded = ref(false)
+const subExpanded = ref(false)
+const visibleFeedbacks = computed(() =>
+  fbExpanded.value ? feedbacks.value : feedbacks.value.slice(-FB_PREVIEW))
+
 const isParent = computed(() => !detail.value?.parentId)
 
 const title = computed(() => detail.value?.content || '任务详情')
@@ -235,6 +258,8 @@ const load = async () => {
 const open = async (id) => {
   todoId.value = id
   newSub.value = ''
+  fbExpanded.value = false
+  subExpanded.value = false
   visible.value = true
   await load()
 }
@@ -456,6 +481,13 @@ watch(visible, (v) => { if (!v) onClosed() })
 .cf-td__fb-meta { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #8a929e; flex-wrap: wrap }
 /* 来源标注（子任务名可能较长，限宽省略而不是撑破时间行） */
 .cf-td__fb-from { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+/* 可点击折叠的区头 + 箭头转向 */
+.cf-td__sec-head--click { cursor: pointer; user-select: none }
+.cf-td__fold-icon { transition: transform .15s; color: #8a929e }
+.cf-td__fold-icon.is-open { transform: rotate(90deg) }
+.cf-td__block { flex: 0 1 auto; min-width: 0; font-size: 12px; line-height: 1.4;
+  color: #a8620a; background: #fdf6ec; border: 1px solid #f0dcc0;
+  padding: 1px 7px; border-radius: 3px; overflow-wrap: anywhere }
 .cf-td__fb-time { font-variant-numeric: tabular-nums }
 .cf-td__fb-text { font-size: 13px; color: #1b2430; margin-top: 3px; line-height: 1.6; white-space: pre-wrap }
 .cf-td__sub { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 13px }
