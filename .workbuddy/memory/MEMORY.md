@@ -292,3 +292,35 @@ put 进去是 Integer 就必须按 Integer 取。**这类错编译期发现不�
 `audit_consistency.py` 的「已完成待办必须有佐证」在规则废止后必然报 10 处不一致
 （改规则→体检全红→容易误判成自己改坏了）。已改为核对当前真正的完成依据：
 高=有未完成子任务；低=无反馈说明（历史数据，正常）。**每次改业务规则都要回头看体检脚本。**
+
+## 【重大架构变更】待办成为意见的唯一载体（2026-10-04 用户手改，commit e5ee616）
+**用户自己重构了意见模块，方向比我的双写更正确，勿回退**：
+- 删`OpinionPanel.vue` / `FlowPanel.vue`，合并为 `TodoDetailDialog.vue` + `FeedbackDialog.vue`
+- `case_todo.opinion_id` 派生待办，**待办是单一事实源、意见只读回写**
+  （`TodoService.fillOpinionInfo` + 完成/反馈时回写 `opinion.feedback_status`）。
+  消灭了「意见一套状态 + 待办一套状态」的双写漂移。
+- `removeAllOfTodo` 级联删子任务与反馈 —— 否则 `countsOf` 按 caseId 统计会把
+  孤儿算进分母，**案件进度虚高**。
+- 分级收紧为仅管理层可改（民警只读）；反馈带 status（落实状态快照）。
+- `done()` 规则1 只对主任务生效（`t.getParentId()==null`）——子任务说明由主任务承载。
+
+## 坑：CREATE INDEX IF NOT EXISTS 是 H2 专属，MySQL 8 会让建表段失败
+用户修掉了我写在 `schema.sql` 的这个（`init_db` 直接崩）。
+**二级索引必须放 `sql/index-mysql.sql`**（`init_db.py` 与 `mysql_local.py` 都会执行它），
+`schema.sql` 只留 `CREATE TABLE`。已在 MySQL 8.0.28 实测两条索引都建上。
+
+## 坑：@FullAccessOnly 会把子任务操作挡在门外
+`PermissionInterceptor` 在**方法执行前**拦截，所以「主任务仅管理层、子任务承办人即可」
+这种分层**做在 Service 里没用**——注解必须一起去掉，权限判断下沉到 Service。
+
+## Element Plus 坑两个（都实测踩过）
+1. **el-radio-button 悬停会把选中态文字染成主题色** → 「红底红字」看不清。
+   必须写 `:hover:not(.is-active)`，并显式声明 `.is-active .el-radio-button__inner { color:#fff }`。
+2. **puppeteer 点el-radio-button**：`scrollIntoView` 后立刻取
+   `getBoundingClientRect()` 拿到的是**滚动前的旧坐标**，点击会落到相邻按钮
+   （表现为「点 C 无效」）。要么等 500ms 后重取，要么直接 `element.click()` 派发，
+   后者最稳、不依赖坐标。**误判过一次产品有 bug。**
+
+## 权限分层惯例（本项目已确立）
+主任务（=领导定的清单结构）→ 仅管理层；子任务（=干活的人自己拆的）→ 承办人即可。
+增删改都按这个口径，别再一刀切 `@FullAccessOnly`。
