@@ -481,6 +481,14 @@ body {
 
 .cf-foot__slogan:hover { color: var(--cf-gold); }
 
+/* 标语旁的「点击切换」提示：原title 悬浮提示会弹出遮挡，改为常驻浅色小字 */
+.cf-foot__slogan-tip {
+  font-size: 12px;
+  opacity: 0.55;
+  white-space: nowrap;
+  margin-left: 8px;
+}
+
 .cf-foot__divider {
   width: 1px;
   align-self: stretch;

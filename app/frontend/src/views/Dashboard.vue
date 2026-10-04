@@ -214,7 +214,6 @@
               v-if="userStore.isFullAccess"
               size="small"
               :disabled="!undoableLatest"
-              title="撤回最近一步操作（Ctrl+Z）"
               @click="onUndoLatest"
             >
               撤回上一步

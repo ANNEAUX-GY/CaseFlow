@@ -12,11 +12,13 @@
       <span class="cf-foot__line" />
     </div>
 
-    <!-- 标语条 -->
+    <!-- 标语条。原 title 悬浮提示已去掉（会弹出遮挡），
+         改为一直可见的浅色小字，不打断操作。 -->
     <div class="cf-foot__band">
-      <span class="cf-foot__slogan" :title="'点击切换标语（共 ' + SLOGANS.length + ' 条）'" @click="next">
+      <span class="cf-foot__slogan" @click="next">
         {{ slogan.text }}
       </span>
+      <span class="cf-foot__slogan-tip">点击切换（共 {{ SLOGANS.length }} 条）</span>
 
       <span class="cf-foot__divider" />
 

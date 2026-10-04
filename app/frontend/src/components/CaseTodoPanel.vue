@@ -70,16 +70,19 @@
           ]">
           <div class="cf-todo__card-main">
             <!-- 拖拽把手：仅管理层、桌面端；手机端用「管理 ▾」里的上移/下移 -->
-            <span v-if="isAdmin && !isMobile" class="cf-todo__drag" title="按住拖拽调整顺序">⋮⋮</span>
-            <!-- 勾选框：完成的主开关。灰住时悬停会说明原因 -->
-            <el-tooltip :disabled="!tooltipFor(t)" :content="tooltipFor(t)" placement="top">
-              <el-checkbox
-                class="cf-todo__check"
-                :model-value="t.status === 'DONE'"
-                :disabled="!canToggle(t)"
-                @change="(v) => toggle(t, v)"
-              />
-            </el-tooltip>
+            <span v-if="isAdmin && !isMobile" class="cf-todo__drag">⋮⋮</span>
+            <!-- 勾选框：完成的主开关。
+                 「为什么勾不动」不用悬浮提示（会挡住旁边的操作按钮，用户明确要求去掉），
+                 改成紧跟在卡片里的内联文字——一直可见，不挡任何东西。 -->
+            <el-checkbox
+              class="cf-todo__check"
+              :model-value="t.status === 'DONE'"
+              :disabled="!canToggle(t)"
+              @change="(v) => toggle(t, v)"
+            />
+            <span v-if="!canToggle(t) && t.status !== 'DONE'" class="cf-todo__block">
+              {{ blockReason(t) }}
+            </span>
 
             <!-- 卡片主体：点击打开详情 -->
             <div class="cf-todo__card-body" @click="openDetail(t)">
@@ -150,13 +153,10 @@
                 <template v-else>
                   <div v-for="s in (subData[t.id]?.list || [])" :key="s.id" class="cf-todo__sub"
                     :class="{ 'is-done': s.status === 'DONE' }">
-                    <el-tooltip :disabled="isAdmin || s.status !== 'DONE'"
-                      content="完成后如需撤销，请联系管理员" placement="top">
-                      <el-checkbox size="small"
-                        :model-value="s.status === 'DONE'"
-                        :disabled="savingSubId === s.id"
-                        @change="(v) => toggleSub(t, s, v)" />
-                    </el-tooltip>
+                    <el-checkbox size="small"
+                      :model-value="s.status === 'DONE'"
+                      :disabled="savingSubId === s.id"
+                      @change="(v) => toggleSub(t, s, v)" />
                     <span class="cf-todo__sub-name">{{ s.content }}</span>
                     <span v-if="s.status === 'DONE' && s.doneAt" class="cf-todo__sub-done">
                       {{ fmtTime(s.doneAt) }}
@@ -204,19 +204,17 @@
               </el-button>
               <!-- 提交反馈：独立入口，不必先开浮窗。
                    主任务与子任务一视同仁——只要是承办人的活就能提交，
-                   与「有没有子任务」无关。已完成的任务不再显示（没什么可提交的了）。 -->
-              <el-tooltip v-if="canSubmit && t.status !== 'DONE'"
-                content="提交本条工作反馈（提交人、时间、内容都会记录）" placement="top">
-                <el-button size="small" type="warning" plain class="cf-todo__act"
-                  :loading="submittingId === t.id" @click="openSubmit(t)">
-                  <el-icon><ChatLineSquare /></el-icon>提交反馈
-                </el-button>
-              </el-tooltip>
-              <el-tooltip content="把这件事再拆细几步，干起来更清楚" placement="top" :disabled="t.status === 'DONE'">
-                <el-button size="small" class="cf-todo__act" :disabled="t.status === 'DONE'" @click="openSubsAndFocus(t)">
-                  <el-icon><Plus /></el-icon>子任务
-                </el-button>
-              </el-tooltip>
+                   与「有没有子任务」无关。已完成的任务不再显示（没什么可提交的了）。
+                   原先挂在按钮上的悬浮提示已去掉：会盖住旁边的操作按钮，
+                   改用按钮文字本身表意（「提交反馈」已说明用途）。 -->
+              <el-button v-if="canSubmit && t.status !== 'DONE'"
+                size="small" type="warning" plain class="cf-todo__act"
+                :loading="submittingId === t.id" @click="openSubmit(t)">
+                <el-icon><ChatLineSquare /></el-icon>提交反馈
+              </el-button>
+              <el-button size="small" class="cf-todo__act" :disabled="t.status === 'DONE'" @click="openSubsAndFocus(t)">
+                <el-icon><Plus /></el-icon>子任务
+              </el-button>
               <el-dropdown v-if="isAdmin" trigger="click" @command="(cmd) => onAdminCmd(t, i, cmd)">
                 <el-button size="small" class="cf-todo__act">
                   管理<el-icon class="cf-todo__act-more"><ArrowDown /></el-icon>
@@ -392,14 +390,6 @@ const blockReason = (t) => {
     return '需先提交一条反馈说明，才能勾选完成'
   }
   return ''
-}
-
-/** 勾选框悬停提示：灰住时说清原因，能勾时说清后果 */
-const tooltipFor = (t) => {
-  if (t.status === 'DONE') {
-    return isAdmin.value ? '取消勾选将退回待办' : '已完成；如需撤销请联系管理员'
-  }
-  return blockReason(t) || '勾选即标记完成'
 }
 
 const canToggle = (t) => {
@@ -869,6 +859,12 @@ onBeforeUnmount(() => {
 .cf-todo__meta-edit {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px;
   padding: 6px 8px; background: #fbfcfe; border: 1px dashed #dfe4ea; border-radius: 6px;
+}
+/* 「为什么勾不动」的内联说明：常驻可见，不悬浮、不遮挡任何按钮 */
+.cf-todo__block {
+  flex: none; align-self: center; font-size: 12px; line-height: 1.4;
+  color: #a8620a; background: #fdf6ec; border: 1px solid #f0dcc0;
+  padding: 1px 7px; border-radius: 3px; max-width: 190px;
 }
 .cf-todo__meta-edit-label { font-size: 12px; color: #8a929e; flex: none }
 

@@ -51,7 +51,6 @@
             v-if="showDeviceChip"
             type="button"
             class="cf-device-chip"
-            :title="`已识别为${deviceKindLabel}网页，点击切换版式`"
             @click="toggleLayout"
           >
             <el-icon><component :is="isMobile ? Cellphone : Monitor" /></el-icon>

@@ -176,7 +176,8 @@
               :closable="false"
               show-icon
               class="cf-bind__alert"
-              title="该员工档案由申请人注册时自行建立，请核对姓名与部门无误后再通过"
+              title="核对后再通过"
+              description="该员工档案由申请人注册时自行建立，请核对姓名与部门无误后再通过"
             />
             <el-select
               v-model="dlg.form.employeeId"
