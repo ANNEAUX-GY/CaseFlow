@@ -54,6 +54,9 @@ public class CaseTodoVO implements Serializable {
     // ---- 子任务与反馈（2026-10-04） ----
     /** 父任务 ID：NULL=顶层主任务；非空=子任务 */
     private Long parentId;
+    /** 反馈记录条数（列表页用于判断能否勾选，不必为判断而拉全量详情） */
+    private Integer feedbackCount;
+
     /** 本任务的子任务总数（仅主任务有值） */
     private Integer subtaskTotal;
     /** 已完成的子任务数（仅主任务有值） */

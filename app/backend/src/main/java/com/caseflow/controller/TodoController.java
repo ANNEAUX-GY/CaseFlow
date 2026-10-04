@@ -128,7 +128,7 @@ public class TodoController {
         return Result.ok(todoService.reorder(caseId, req.getIds()));
     }
 
-    /** 勾选完成：无佐证材料会被拒绝 */
+    /** 勾选完成：主任务需已有反馈说明；子任务需全部完成（2026-10-04 新规则，不再校验佐证） */
     @PostMapping("/{todoId}/done")
     public Result<CaseTodoVO> done(@PathVariable Long todoId, @RequestBody(required = false) TodoSaveRequest req) {
         return Result.ok(todoService.done(todoId, req == null ? null : req.getRemark()));
@@ -139,6 +139,37 @@ public class TodoController {
     @FullAccessOnly("撤销待办完成")
     public Result<CaseTodoVO> reopen(@PathVariable Long todoId) {
         return Result.ok(todoService.reopen(todoId));
+    }
+
+    // ------------------------------------------------------------------
+    // 任务详情 / 子任务 / 反馈记录（2026-10-04）
+    // ------------------------------------------------------------------
+
+    /** 任务详情：一次返回主任务 + 子任务 + 全部反馈记录（浮窗用，避免三次往返） */
+    @GetMapping("/{todoId}/detail")
+    public Result<CaseTodoVO> detail(@PathVariable Long todoId) {
+        return Result.ok(todoService.detail(todoId));
+    }
+
+    /** 添加子任务（细节工作）：普通用户与管理员均可 */
+    @PostMapping("/{todoId}/subtasks")
+    public Result<CaseTodoVO> addSubtask(@PathVariable Long todoId,
+                                         @RequestBody TodoSaveRequest req) {
+        return Result.ok(todoService.addSubtask(todoId, req == null ? null : req.getContent()));
+    }
+
+    /** 提交反馈（累积一条记录，不改状态） */
+    @PostMapping("/{todoId}/feedbacks")
+    public Result<CaseTodoVO> addFeedback(@PathVariable Long todoId,
+                                          @RequestBody TodoSaveRequest req) {
+        return Result.ok(todoService.addFeedback(todoId, req == null ? null : req.getContent()));
+    }
+
+    /** 勾选 / 撤销子任务完成（done=false 即撤销） */
+    @PostMapping("/{todoId}/subtasks/toggle")
+    public Result<CaseTodoVO> toggleSubtask(@PathVariable Long todoId,
+                                            @RequestParam boolean done) {
+        return Result.ok(todoService.toggleSubtask(todoId, done));
     }
 
     // ------------------------------------------------------------------

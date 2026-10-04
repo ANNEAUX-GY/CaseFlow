@@ -84,12 +84,13 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { caseApi } from '../api'
 import CaseTable from '../components/CaseTable.vue'
 import CaseDetailDrawer from '../components/CaseDetailDrawer.vue'
 import PageFooter from '../components/PageFooter.vue'
 import { useDevice } from '../utils/device'
+import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '../store/user'
 
 const { isMobile } = useDevice()
@@ -165,5 +166,32 @@ const openDetail = (row) => {
   detailVisible.value = true
 }
 
-onMounted(refreshAll)
+const route = useRoute()
+const router = useRouter()
+
+/**
+ * 从「我的待办」点进来时自动打开该案件详情（需求：点待办直接跳详情并自动打开）。
+ *
+ * <p>两个细节：
+ * 1. 刷新后仍要生效——所以不只在 onMounted 判一次，还 watch query，
+ *    这样用户在本页再点另一条待办（或浏览器前进后退）也能正确响应。
+ * 2. 打开后把 caseId 从地址栏抹掉——否则刷新会重复打开，
+ *    而且用户手动点别的案件时地址栏还残留着旧 id 会引发误判。
+ */
+const consumeOpenCase = () => {
+  const cid = route.query.caseId
+  if (!cid) return
+  currentId.value = Number(cid)
+  detailVisible.value = true
+  const q = { ...route.query }
+  delete q.caseId
+  router.replace({ path: '/my-cases', query: q })
+}
+
+onMounted(() => {
+  refreshAll()
+  consumeOpenCase()
+})
+watch(() => route.query.caseId, consumeOpenCase)
+
 </script>

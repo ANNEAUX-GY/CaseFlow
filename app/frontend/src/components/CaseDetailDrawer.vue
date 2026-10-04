@@ -46,46 +46,6 @@
       <!-- 案件待办：承办人在这里逐项完成并上传佐证，管理员在这里维护清单 -->
       <CaseTodoPanel :case-id="detail.id" style="margin-top: 12px" @changed="reload" />
 
-      <!-- 侦查进度：开始侦查由办案人本人点击（表示"我开始干了"），管理层不代点 -->
-      <div class="cf-panel" style="margin-top: 12px">
-        <div class="cf-panel__head">
-          <span>侦查进度</span>
-          <el-tag v-if="detail.investigationStatus" size="small"
-            :type="(INVEST_STATUS_META[detail.investigationStatus] || {}).type">
-            {{ (INVEST_STATUS_META[detail.investigationStatus] || {}).label }}
-          </el-tag>
-          <el-tag v-else size="small" type="info">待初查</el-tag>
-          <span class="cf-spacer"></span>
-          <el-button
-            v-if="isAssignee && (!detail.investigationStatus || detail.investigationStatus === 'PENDING_INITIAL')"
-            size="small" type="primary" @click="doInvestigate('START')">
-            开始侦查
-          </el-button>
-          <el-button
-            v-if="isAssignee && detail.investigationStatus === 'INVESTIGATING'"
-            size="small" type="warning" @click="doInvestigate('SUBMIT')">
-            提请审批
-          </el-button>
-        </div>
-        <div style="padding: 10px 16px; font-size: 13px">
-          <template v-if="isAssignee">
-            <span class="cf-muted">由你承办：开始侦查与提请审批由你自行操作；侦查计划请在盯办模块由你自行制定。</span>
-          </template>
-          <template v-else-if="canManage">
-            <span class="cf-muted">开始侦查由办案人本人点击（表示其开始工作），管理层负责最终审批与提出意见。</span>
-          </template>
-          <template v-else>
-            <span class="cf-muted">开始侦查 / 提请审批由本案办案人操作。</span>
-          </template>
-        </div>
-      </div>
-
-      <!-- 阶段→环节→任务流程：详情页也能看到当前阶段与进度，流转需领导确认 -->
-      <div class="cf-panel" style="margin-top: 12px">
-        <FlowPanel :case-id="detail.id" :case-type="detail.caseType"
-          :is-full-access="canManage" :is-assignee="isAssignee" @changed="reload" />
-      </div>
-
       <!-- 领导意见与落实反馈：管理层提意见，办案人对每条意见反馈完成/进行中/未完成 -->
       <div class="cf-panel" style="margin-top: 12px">
         <OpinionPanel ref="opinionPanel" :case-id="detail.id" :detail="detail" :is-full-access="canManage" />
@@ -210,34 +170,6 @@
           <span v-else class="cf-muted">暂无进度记录</span>
         </div>
       </div>
-
-      <div class="cf-panel" style="margin-top: 12px">
-        <div class="cf-panel__head">
-          <span>案件材料</span>
-          <span v-if="isMobile" class="cf-tscroll-hint">左右滑动查看</span>
-          <el-upload
-            :action="`/api/files/upload?caseId=${detail.id}`"
-            :headers="uploadHeaders"
-            :show-file-list="false"
-            :on-success="reload"
-          >
-            <el-button link type="primary">补充材料</el-button>
-          </el-upload>
-        </div>
-        <div class="cf-tscroll">
-          <el-table :data="detail.files || []" size="small">
-            <el-table-column prop="fileName" label="文件名" min-width="220" />
-            <el-table-column prop="sizeText" label="大小" width="80" />
-            <el-table-column label="操作" width="120" align="right">
-              <template #default="{ row }">
-                <el-button link type="primary" @click="download(row)">下载</el-button>
-                <el-button link type="danger" @click="removeFile(row)">删除</el-button>
-              </template>
-            </el-table-column>
-          </el-table>
-        </div>
-      </div>
-
       <div class="cf-toolbar" style="margin-top: 14px">
         <el-button v-if="detail.status === 'ASSIGNED'" type="primary" @click="changeStatus('IN_PROGRESS')">
           开始处理
@@ -313,8 +245,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { caseApi, fileApi, suspectApi, logApi, watchApi } from '../api'
 import CaseTodoPanel from './CaseTodoPanel.vue'
 import OpinionPanel from './OpinionPanel.vue'
-import FlowPanel from './FlowPanel.vue'
-import { STATUS_META, PRIORITY_META, SOURCE_META, DUE_META, CASE_TYPE_META, INVEST_STATUS_META, dueText } from '../utils/format'
+import { STATUS_META, PRIORITY_META, SOURCE_META, DUE_META, CASE_TYPE_META, dueText } from '../utils/format'
 import { useUserStore } from '../store/user'
 import { useEventStore } from '../store/events'
 import { useDevice } from '../utils/device'
@@ -333,7 +264,6 @@ const canManage = computed(() => userStore.isFullAccess)
 
 const visible = ref(false)
 const detail = ref({})
-const uploadHeaders = { 'X-Token': localStorage.getItem('cf_token') || '' }
 
 const statusMeta = computed(() => STATUS_META[detail.value.status] || { label: '-', type: 'info' })
 const priorityMeta = computed(() => PRIORITY_META[detail.value.priority] || { label: '-', color: '#646a73' })
@@ -445,45 +375,6 @@ const removeComment = async (cmt) => {
   await watchApi.removeComment(cmt.id)
   ElMessage.success('批注已删除')
   await reload()
-}
-
-// ---- 侦查进度（功能4）：开始侦查 / 提请审批由办案人本人操作 ----
-const isAssignee = computed(() => {
-  const myEmp = userStore.userInfo?.employeeId
-  if (!myEmp) return false
-  return (detail.value.assignHistory || []).some(
-    (a) => a.status === 'ACTIVE' && String(a.employeeId) === String(myEmp))
-})
-
-const doInvestigate = async (action) => {
-  if (action === 'START') {
-    try {
-      await ElMessageBox.confirm(
-        '开始侦查表示你正式开始本案办理，将记入办案进度。确认开始？', '开始侦查', { type: 'info' })
-    } catch { return }
-  }
-  await watchApi.transition(detail.value.id, { action })
-  ElMessage.success(action === 'START' ? '已开始侦查' : '已提请审批')
-  await reload()
-  emit('done')
-}
-
-const download = (row) => {
-  const token = localStorage.getItem('cf_token') || ''
-  window.open(`${fileApi.downloadUrl(row.id)}?token=${encodeURIComponent(token)}`, '_blank')
-}
-
-const removeFile = async (row) => {
-  await ElMessageBox.confirm(`确认删除附件「${row.fileName}」？`, '提示', { type: 'warning' })
-  await fileApi.remove(row.id)
-  await reload()
-}
-
-const changeStatus = async (status) => {
-  await caseApi.status(detail.value.id, { status })
-  ElMessage.success('状态已更新')
-  await reload()
-  emit('done')
 }
 
 // ---- 嫌疑人 ----

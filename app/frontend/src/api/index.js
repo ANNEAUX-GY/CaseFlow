@@ -181,6 +181,15 @@ export const todoApi = {
       headers: { 'Content-Type': 'multipart/form-data' }
     }),
   rules: () => http.get('/todos/rules'),
+  // ---- 任务详情 / 子任务 / 反馈（2026-10-04）----
+  /** 一次取主任务 + 子任务 + 全部反馈记录 */
+  detail: (todoId) => http.get(`/todos/${todoId}/detail`),
+  /** 添加子任务（普通用户与管理员均可） */
+  addSubtask: (todoId, content) => http.post(`/todos/${todoId}/subtasks`, { content }),
+  /** 提交反馈（累积一条，不改状态） */
+  addFeedback: (todoId, content) => http.post(`/todos/${todoId}/feedbacks`, { content }),
+  /** 勾选/撤销子任务完成 */
+  toggleSubtask: (todoId, done) => http.post(`/todos/${todoId}/subtasks/toggle?done=${done}`),
   overview: (params) => http.get('/todos/overview', { params }),
   summary: (params) => http.get('/todos/overview/summary', { params }),
   // ---- 民警端待办（2026-10-04）----

@@ -71,15 +71,29 @@ public class TodoService {
                 .orderByAsc(CaseTodo::getSort).orderByAsc(CaseTodo::getId));
         // 一次性把子任务统计好，避免每个主任务各查一次（N+1）
         java.util.Map<Long, int[]> subStat = subtaskStat(caseId);
+        // 反馈条数同样一次性聚合（逐条 selectCount 会打出几十个 SQL）
+        java.util.Map<Long, Integer> fbStat = feedbackCountStat(caseId);
         List<CaseTodoVO> vos = new ArrayList<>();
         for (CaseTodo t : list) {
-            CaseTodoVO vo = toVO(t, withEvidence);
+            CaseTodoVO vo = toVO(t, withEvidence, fbStat.get(t.getId()));
             int[] st = subStat.get(t.getId());
             vo.setSubtaskTotal(st == null ? 0 : st[0]);
             vo.setSubtaskDone(st == null ? 0 : st[1]);
             vos.add(vo);
         }
         return vos;
+    }
+
+    /** 某案件各任务的反馈条数：todoId → 条数（一次 group by 查完） */
+    private java.util.Map<Long, Integer> feedbackCountStat(Long caseId) {
+        java.util.Map<Long, Integer> map = new java.util.HashMap<>();
+        List<com.caseflow.entity.CaseTodoFeedback> all =
+                feedbackMapper.selectList(new LambdaQueryWrapper<CaseTodoFeedback>()
+                        .eq(CaseTodoFeedback::getCaseId, caseId));
+        for (com.caseflow.entity.CaseTodoFeedback f : all) {
+            map.merge(f.getTodoId(), 1, Integer::sum);
+        }
+        return map;
     }
 
     /**
@@ -717,6 +731,17 @@ public class TodoService {
     }
 
     private CaseTodoVO toVO(CaseTodo t, boolean withEvidence) {
+        // 单条查询场景（详情弹窗）；列表页走下面带计数的重载，避免 N+1
+        return toVO(t, withEvidence, null);
+    }
+
+    /**
+     * 带反馈条数的 VO（列表页用）。
+     *
+     * <p>反馈条数由调用方一次性聚合后传进来——
+     * 待办可能有几十条，逐条 selectCount 会打出几十个 SQL。
+     */
+    private CaseTodoVO toVO(CaseTodo t, boolean withEvidence, Integer feedbackCount) {
         CaseTodoVO vo = new CaseTodoVO();
         vo.setId(t.getId());
         vo.setCaseId(t.getCaseId());
@@ -729,6 +754,7 @@ public class TodoService {
         vo.setCreatedAt(t.getCreatedAt());
         vo.setUpdatedAt(t.getUpdatedAt());
         vo.setParentId(t.getParentId());
+        // 反馈条数：列表页判断「能否勾选完成」需要它，但不必拉全量 feedback 明细
         vo.setDoneByName(userName(t.getDoneBy()));
         vo.setCreatedByName(userName(t.getCreatedBy()));
         int cnt = fileService.countOfTodo(t.getId());

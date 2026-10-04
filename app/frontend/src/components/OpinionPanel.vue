@@ -5,11 +5,6 @@
       <span>领导意见</span>
       <span class="cf-muted">共 {{ opinions.length }} 条</span>
       <span class="cf-spacer"></span>
-      <!-- 流程图：可折叠面板，默认收起，避免意见多时把列表挤出视野 -->
-      <el-button link type="primary" size="small" class="cf-opinion__flow-toggle"
-        @click="flowOpen = !flowOpen">
-        {{ flowOpen ? '收起流程图' : '工作流程图' }}
-      </el-button>
     </div>
 
     <!-- 统计条：A/B/C 与三种紧急性各有多少条，一眼看清重点 -->
@@ -27,16 +22,6 @@
         <el-button link size="small" @click="liveNotice = ''">知道了</el-button>
       </div>
     </transition>
-
-    <!-- 工作流程图：基于意见列表生成的纵向流转链。
-         领导与员工看的是同一份数据（都来自 opinions），只是可编辑性不同：
-         员工可在节点上更新落实状态，领导只读用于看整体进度。 -->
-    <div v-if="flowOpen" class="cf-opinion__flow">
-      <div v-if="opinions.length" class="cf-opinion__flow-box" :style="{ height: flowHeight + 'px' }">
-        <EChart :option="flowOption" height="100%" @click="onFlowClick" />
-      </div>
-      <div v-else class="cf-muted" style="padding: 8px 0">暂无意见，提交后自动生成流程图</div>
-    </div>
 
     <!-- 已提交意见：接龙式编号列表，每条独占一行。
          序号用数组下标实时计算（i + 1），插入/删除/拖拽后由 Vue 重渲染自动重算，
@@ -228,7 +213,6 @@ import { ElMessage } from 'element-plus'
 import { Bell } from '@element-plus/icons-vue'
 import Sortable from 'sortablejs'
 import { watchApi } from '../api'
-import EChart from './EChart.vue'
 import {
   FEEDBACK_STATUS_META as FB_META,
   IMPORTANCE_META,
@@ -237,7 +221,6 @@ import {
   urgencyOf as urgencyOfFn,
   deadlineTextOf as deadlineTextOfFn
 } from '../utils/format'
-import { CHART } from '../utils/chart'
 import { useUserStore } from '../store/user'
 import { useEventStore } from '../store/events'
 import { useDevice } from '../utils/device'
@@ -504,123 +487,6 @@ const serial = (fn) => {
   return savingChain
 }
 
-// ============ 工作流程图（领导与员工同一份数据） ============
-const flowOpen = ref(false)
-
-/** 节点配色：紧急性为主色，完成态压暗以示已办结 */
-const flowNodeColor = (o) => {
-  if (o.feedbackStatus === 'DONE') return CHART.ok
-  const u = urgencyOf(o.deadline)
-  if (u === 'OVERDUE') return CHART.danger
-  if (u === 'URGENT') return CHART.warn
-  return CHART.primary
-}
-
-const flowOption = computed(() => {
-  const rows = opinions.value
-  if (!rows.length) return {}
-  const nodes = rows.map((o, i) => {
-    const u = urgencyOf(o.deadline)
-    const fb = o.feedbackStatus
-    const fbLabel = fb ? (FB_META[fb] || {}).label : '待反馈'
-    const imp = IMPORTANCE_META[importanceOf(o)]
-    return {
-      id: String(o.id),
-      name: `${i + 1}. ${String(o.content).slice(0, 14)}${String(o.content).length > 14 ? '…' : ''}`,
-      // layout:'none' 的 graph 要求 x/y 为数值像素，这里按容器宽度取中；
-      // 容器宽度取不到时回退 160（节点 150 宽，居中即 75+80）
-      x: Math.round(flowCenterX.value),
-      // 节点高度 62，间距 92 → 逐级下移形成纵向流转链
-      y: i * 92 + 40,
-      symbolSize: [150, 62],
-      symbol: 'roundRect',
-      itemStyle: {
-        color: flowNodeColor(o),
-        borderColor: imp.short === 'A' ? CHART.gold : 'transparent',
-        borderWidth: imp.short === 'A' ? 2 : 0,
-        borderRadius: 4
-      },
-      label: {
-        show: true,
-        position: 'inside',
-        color: '#fff',
-        fontSize: 11,
-        lineHeight: 16,
-        formatter: () => {
-          // 三行：序号+等级 / 内容摘要 / 截止与状态
-          const head = `${i + 1}· ${imp.short}级`
-          const body = String(o.content).slice(0, 12) + (String(o.content).length > 12 ? '…' : '')
-          const foot = o.deadline
-            ? `${deadlineTextOf(o.deadline).slice(5)} · ${URGENCY_META[u].label} · ${fbLabel}`
-            : `未设截止 · ${fbLabel}`
-          return `${head}\n${body}\n${foot}`
-        }
-      },
-      // 供点击回查用（ECharts 会原样挂在 data 上）
-      _row: o
-    }
-  })
-  const links = rows.slice(1).map((o, i) => ({
-    source: String(rows[i].id),
-    target: String(o.id),
-    lineStyle: { color: CHART.border, width: 1.5, curveness: 0 }
-  }))
-  return {
-    tooltip: {
-      trigger: 'item',
-      formatter: (p) => {
-        const o = p.data?._row
-        if (!o) return p.data?.name || ''
-        const imp = IMPORTANCE_META[importanceOf(o)]
-        const fb = o.feedbackStatus ? (FB_META[o.feedbackStatus] || {}).label : '待反馈'
-        const dl = o.deadline ? `截止 ${deadlineTextOf(o.deadline)}` : '未设截止时间'
-        return `<b>${imp.label}</b> · ${fb}<br/>${o.content}<br/><span style="color:#888">${dl}</span>`
-      }
-    },
-    series: [{
-      type: 'graph',
-      layout: 'none',
-      coordinateSystem: null,
-      roam: false,
-      data: nodes,
-      links,
-      edgeSymbol: ['none', 'arrow'],
-      edgeSymbolSize: 7,
-      lineStyle: { color: CHART.border },
-      label: { show: true },
-      emphasis: { focus: 'adjacency' }
-    }]
-  }
-})
-
-/** 流程图容器高度：节点数 *92 + 上下留白，写死数值避免 flex 循环依赖把面板顶爆 */
-const flowHeight = computed(() => Math.max(260, opinions.value.length * 92 + 60))
-
-/**
- * 流程图横向中心（像素）。
- * layout:'none' 的 graph 只认数值坐标，百分比会静默失效导致整图不渲染。
- * 容器刚展开时可能还量不到宽度（v-if 刚挂载），故监听宽度变化后重算。
- */
-const flowCenterX = ref(160)
-const updateFlowCenter = () => {
-  const w = document.querySelector('.cf-opinion__flow-box')?.clientWidth || 0
-  if (w > 0) flowCenterX.value = Math.round(w / 2)
-}
-watch(flowOpen, (open) => { if (open) nextTick(updateFlowCenter) })
-watch(flowHeight, () => nextTick(updateFlowCenter))
-
-/** 点击流程图节点：员工（本案承办人）可直接更新落实状态；领导仅提示由谁处理 */
-const onFlowClick = (p) => {
-  const o = p?.data?._row
-  if (!o) return
-  if (!isAssignee.value) {
-    const fb = o.feedbackStatus ? (FB_META[o.feedbackStatus] || {}).label : '待反馈'
-    ElMessage.info(`该意见当前「${fb}」，由本案承办人更新`)
-    return
-  }
-  openFeedback(o)
-}
-
 // ---- 接龙式录入（管理端）：点 ＋ 生成一行序号+输入框+截止时间+重要性，批量提交 ----
 const emptyDraft = () => ({ content: '', deadline: '', importance: 'C' })
 const drafts = ref([])
@@ -832,7 +698,4 @@ defineExpose({ reload })
 /* 流程图：默认收起，点击面板头按钮才展开。
    容器高度写死 + EChart height="100%"，与项目里「列表类容器必须写死高度」的约定一致，
    避免 flex:1 与内容高度互相依赖把面板顶爆。 */
-.cf-opinion__flow { padding: 0 16px 10px }
-.cf-opinion__flow-box { height: 260px; border: 1px solid #dfe4ea; border-radius: 4px; background: #fbfcfe }
-.cf-opinion__flow-toggle { font-size: 12px }
 </style>

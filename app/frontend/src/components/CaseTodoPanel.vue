@@ -42,35 +42,26 @@
                 <span class="cf-muted">{{ t.doneByName || '-' }} · {{ fmtTime(t.doneAt) }}</span>
                 <span v-if="t.remark" class="cf-muted">说明：{{ t.remark }}</span>
               </div>
-              <!-- 未上传佐证时的提示：明确告知「为什么勾不动」 -->
-              <div v-else-if="!t.hasEvidence" class="cf-todo__meta">
-                <el-tag type="warning" size="small" effect="plain">待上传佐证</el-tag>
-                <span class="cf-muted">标记完成前需先上传佐证材料</span>
+              <!-- 未完成时说明「为什么还勾不动」，省得用户反复试 -->
+              <div v-else class="cf-todo__meta">
+                <el-tag v-if="blockReason(t)" type="warning" size="small" effect="plain">待处理</el-tag>
+                <span class="cf-muted">{{ blockReason(t) || (t.subtaskTotal ? `子任务 ${t.subtaskDone}/${t.subtaskTotal} 已完成` : '可勾选完成') }}</span>
               </div>
 
-              <!-- 佐证材料 -->
-              <div v-if="t.evidence && t.evidence.length" class="cf-todo__evidence">
-                <div v-for="f in t.evidence" :key="f.id" class="cf-todo__file">
-                  <el-icon class="cf-todo__file-icon"><Document /></el-icon>
-                  <a class="cf-todo__file-name" @click="download(f)">{{ f.fileName }}</a>
-                  <span class="cf-muted">{{ f.sizeText }}</span>
-                  <span class="cf-muted">{{ f.uploadedByName || '-' }} · {{ fmtTime(f.uploadedAt) }}</span>
-                  <el-button v-if="canEditFile(f)" link type="danger" size="small" @click="removeEvidence(f, t)">
-                    删除
-                  </el-button>
-                </div>
+              <!-- 子任务进度条：一眼看出还差几个 -->
+              <div v-if="t.subtaskTotal" class="cf-todo__subbar">
+                <el-progress
+                  :percentage="Math.round((t.subtaskDone / t.subtaskTotal) * 100)"
+                  :stroke-width="4" :show-text="false" />
+                <span class="cf-muted">子任务 {{ t.subtaskDone }}/{{ t.subtaskTotal }}</span>
               </div>
             </div>
 
             <div class="cf-todo__actions">
-              <el-upload
-                :show-file-list="false"
-                :http-request="(opt) => doUpload(opt, t)"
-                :before-upload="(file) => beforeUpload(file, t)"
-                :accept="acceptAttr"
-              >
-                <el-button link type="primary" size="small">上传佐证</el-button>
-              </el-upload>
+              <!-- 详情：反馈记录 + 子任务，可在此设置完成状态 -->
+              <el-button link type="primary" size="small" @click="openDetail(t)">详情</el-button>
+              <!-- 添加子任务：普通用户与管理员均可（需求明确适用于所有待办任务） -->
+              <el-button link type="primary" size="small" @click="openAddSub(t)">＋</el-button>
               <template v-if="isAdmin">
                 <el-button link type="primary" size="small" @click="openEdit(t)">编辑</el-button>
                 <el-button link size="small" :disabled="i === 0" @click="move(i, -1)">上移</el-button>
@@ -85,16 +76,11 @@
       <el-empty v-else :image-size="60" description="暂无待办事项">
         <el-button v-if="isAdmin" type="primary" @click="openAdd">添加待办</el-button>
       </el-empty>
-
-      <!-- 规则说明：把允许的类型、大小、存储方式讲清楚，避免上传后才被拒 -->
-      <div v-if="rules" class="cf-todo__rules">
-        <span class="cf-todo__rules-title">佐证材料要求</span>
-        <span>格式：{{ rules.extHint }}</span>
-        <span>单个文件不超过 {{ rules.maxText }}</span>
-      </div>
     </div>
 
-    <!-- 新增 / 编辑待办 -->
+    <!-- 任务详情浮窗：反馈记录 + 子任务，可设置完成状态 -->
+    <TodoDetailDialog ref="detailRef" @changed="reload" />
+
     <el-dialog
       v-model="editVisible"
       :title="form.id ? '编辑待办' : '添加待办'"
@@ -125,10 +111,10 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Document } from '@element-plus/icons-vue'
-import { fileApi, todoApi } from '../api'
+import { todoApi } from '../api'
 import { useUserStore } from '../store/user'
 import { useDevice } from '../utils/device'
+import TodoDetailDialog from './TodoDetailDialog.vue'
 
 const props = defineProps({
   caseId: { type: [Number, String], required: true },
@@ -142,109 +128,75 @@ const userStore = useUserStore()
 const isAdmin = computed(() => userStore.isFullAccess)
 
 const todos = ref([])
-const rules = ref(null)
 const saving = ref(false)
 const editVisible = ref(false)
 const form = ref({ id: null, content: '' })
+const detailRef = ref(null)
 
 const doneCount = computed(() => todos.value.filter((t) => t.status === 'DONE').length)
 const percent = computed(() =>
   todos.value.length ? Math.round((doneCount.value / todos.value.length) * 100) : 0
 )
-const acceptAttr = computed(() =>
-  rules.value?.allowedExt ? rules.value.allowedExt.map((e) => '.' + e).join(',') : undefined
-)
 
 const fmtTime = (s) => (s ? String(s).replace('T', ' ').slice(0, 16) : '-')
 
-// 非管理员：只能勾选「本案 + 已上传佐证」的待办；勾选后不可自行取消
-const canToggle = (t) => {
-  if (t.status === 'DONE') return isAdmin.value
-  if (!t.hasEvidence) return false
-  return true
+/**
+ * 勾选前置条件（2026-10-04 新规则，与后端一致）：
+ * 1) 主任务至少要有一条反馈说明
+ * 2) 子任务全完成才能完成主任务
+ *
+ * <p>返回空串表示可勾。前端这里只负责「置灰 + 说清原因」，
+ * 真正的拦截在后端 done()——前端 disabled 不能当校验用。
+ */
+const blockReason = (t) => {
+  const total = t.subtaskTotal || 0
+  const dn = t.subtaskDone || 0
+  if (total > 0 && dn < total) {
+    return `还有 ${total - dn} 个子任务未完成，全部完成后才能勾选`
+  }
+  if (t.feedbackCount === 0 && !t.remark) {
+    return '需先在「详情」里提交一条反馈说明，才能勾选完成'
+  }
+  return ''
 }
 
-// 佐证删除：管理层，或本人上传的材料
-const canEditFile = (f) => isAdmin.value || f.uploadedByName === userStore.userInfo?.displayName
+const canToggle = (t) => {
+  if (t.status === 'DONE') return isAdmin.value   // 撤销完成仅管理层
+  return !blockReason(t)
+}
 
 const load = async () => {
   todos.value = await todoApi.listOfCase(props.caseId)
 }
 
-onMounted(async () => {
-  try {
-    rules.value = await todoApi.rules()
-  } catch (e) {
-    /* 规则拿不到不影响主流程 */
-  }
-  await load()
-})
+onMounted(load)
+
+/** 打开详情浮窗（反馈记录 + 子任务 + 完成设置） */
+const openDetail = (t) => detailRef.value?.open(t.id)
+
+/** "＋"：添加子任务。普通用户与管理员均可，点开浮窗后填内容更从容 */
+const openAddSub = (t) => detailRef.value?.open(t.id)
 
 const toggle = async (t, checked) => {
+  if (checked) {
+    const why = blockReason(t)
+    if (why) { ElMessage.warning(why); return }
+  } else if (!isAdmin.value) {
+    return
+  }
   try {
     if (checked) {
-      if (!t.hasEvidence) {
-        ElMessage.warning('请先上传佐证材料，再勾选完成')
-        return
-      }
-      await todoApi.done(t.id)
+      await todoApi.done(t.id, '')
       ElMessage.success('已标记完成')
     } else {
-      // 取消勾选 = 撤销完成，仅管理层
-      if (!isAdmin.value) return
       await todoApi.reopen(t.id)
       ElMessage.success('已撤销完成')
     }
     await load()
     emit('changed')
   } catch (e) {
-    await load()
+    await load()   // 失败时以服务端为准回滚本地状态
   }
-}
-
-// 上传前本地先按后端同一套规则挡一次，省去白跑一趟
-const beforeUpload = (file, todo) => {
-  const ext = (file.name.split('.').pop() || '').toLowerCase()
-  if (rules.value?.allowedExt && !rules.value.allowedExt.includes(ext)) {
-    ElMessage.error(`不支持的格式（.${ext}）。允许：${rules.value.extHint}`)
-    return false
-  }
-  if (rules.value?.maxBytes && file.size > rules.value.maxBytes) {
-    ElMessage.error(`文件超过 ${rules.value.maxText}，当前 ${(file.size / 1024 / 1024).toFixed(1)}MB`)
-    return false
-  }
-  return true
-}
-
-const doUpload = async (opt, todo) => {
-  const fd = new FormData()
-  fd.append('file', opt.file)
-  try {
-    await todoApi.uploadEvidence(todo.id, fd)
-    ElMessage.success('佐证已上传')
-    // 提示下一步动作，上传后即可勾选
-    if (todo.status !== 'DONE') {
-      ElMessage.info('佐证已就绪，现在可以勾选完成')
-    }
-    await load()
-    emit('changed')
-    opt.onSuccess?.({})
-  } catch (e) {
-    opt.onError?.(e)
-  }
-}
-
-const removeEvidence = async (f, todo) => {
-  await ElMessageBox.confirm(`确认删除佐证「${f.fileName}」？`, '提示', { type: 'warning' })
-  await fileApi.remove(f.id)
-  ElMessage.success('已删除')
-  await load()
-  emit('changed')
-}
-
-const download = (f) => {
-  const token = localStorage.getItem('cf_token') || ''
-  window.open(`${fileApi.downloadUrl(f.id)}?token=${encodeURIComponent(token)}`, '_blank')
 }
 
 // ---- 管理层维护 ----
