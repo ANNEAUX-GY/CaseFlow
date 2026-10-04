@@ -1,5 +1,6 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import { isFullAccessRole } from '../store/user'
+import { GATED_PATHS, useCaseTypeStore } from '../store/caseType'
 
 /**
  * 普通民警（非全权限角色）只能进这两个页面：内容都只与本人民下案件相关。
@@ -43,7 +44,10 @@ const routes = [
       // 账号管理只对全权限角色开放；普通民警即使手敲地址，后端接口也会返回 403
       { path: 'users', name: 'Users', component: () => import('../views/UserManage.vue'), meta: { title: '账号管理', fullAccessOnly: true } },
       // 案件类别（小类）字典维护，管理权限专属
-      { path: 'categories', name: 'Categories', component: () => import('../views/CategoryManage.vue'), meta: { title: '类别管理', fullAccessOnly: true } }
+      { path: 'categories', name: 'Categories', component: () => import('../views/CategoryManage.vue'), meta: { title: '类别管理', fullAccessOnly: true } },
+      // 案件类型选择器（统一入口门控）：受门控的 4 个栏目在未选类型前先进这里。
+      // 不是 public 页——仍需登录，只是免除 fullAccessOnly 与类型门控。
+      { path: 'case-type', name: 'CaseType', component: () => import('../views/CaseTypePicker.vue'), meta: { title: '选择案件类型' } }
     ]
   }
 ]
@@ -70,6 +74,15 @@ router.beforeEach((to) => {
   // 整页级权限：普通民警手敲 /users 也不让进（后端接口另有 403 兜底）
   if (to.meta.fullAccessOnly && !isFullAccessRole(role)) {
     return { path: homePathOf(role) }
+  }
+
+  // ---- 案件类型门控（2026-10 统一入口）----
+  // 守卫阶段拿不到 Pinia 实例（应用尚未挂载），直接读 localStorage；
+  // store 初始化时读的是同一个键，两边口径一致。
+  const seg = firstSeg(to.path)
+  if (GATED_PATHS.includes(seg) && !localStorage.getItem('cf_case_type')) {
+    // 带上from 便于选完类型后跳回原栏目，而不是一律回案件管理
+    return { path: '/case-type', query: { from: to.fullPath } }
   }
   return true
 })

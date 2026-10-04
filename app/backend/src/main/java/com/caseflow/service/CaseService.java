@@ -186,7 +186,16 @@ public class CaseService {
             q.eq(CaseInfo::getCategory, query.getCategory());
         }
         if (StringUtils.hasText(query.getCaseType())) {
-            q.eq(CaseInfo::getCaseType, query.getCaseType());
+            String ct = query.getCaseType().trim();
+            if ("OTHER".equalsIgnoreCase(ct)) {
+                // 「其他案件」= 一切非刑事、非行政的案件（2026-10 统一类型选择器口径）。
+                // 包含：未立案(PRELIMINARY)、历史上未填类型的空值，以及将来新增的其他大类。
+                // 用 NOT IN + IS NULL 而不是等值匹配，否则「未分类」的存量案件会漏掉。
+                q.and(w -> w.notIn(CaseInfo::getCaseType, "CRIMINAL", "ADMINISTRATIVE")
+                        .or().isNull(CaseInfo::getCaseType));
+            } else {
+                q.eq(CaseInfo::getCaseType, ct);
+            }
         }
         if (StringUtils.hasText(query.getHasSuspect())) {
             String sql = "SELECT 1 FROM case_suspect s WHERE s.case_id = case_info.id";

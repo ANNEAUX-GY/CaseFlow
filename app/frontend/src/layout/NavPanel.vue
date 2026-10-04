@@ -97,10 +97,11 @@
 
 <script setup>
 import { computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { Odometer, Tickets, AlarmClock, Connection, View, UserFilled, Collection, Close, List, Folder } from '@element-plus/icons-vue'
 import { useUserStore } from '../store/user'
 import { usePendingStore } from '../store/pending'
+import { useCaseTypeStore } from '../store/caseType'
 import { useDevice } from '../utils/device'
 
 const props = defineProps({
@@ -110,15 +111,36 @@ const props = defineProps({
 const emit = defineEmits(['navigate', 'close', 'logout'])
 
 const route = useRoute()
+const router = useRouter()
 const userStore = useUserStore()
 const pendingStore = usePendingStore()
+const caseTypeStore = useCaseTypeStore()
 const { mode, setDeviceMode, layoutLabel, deviceKindLabel } = useDevice()
 
 const pendingCount = computed(() => pendingStore.count)
 const activePath = computed(() => '/' + (route.path.split('/')[1] || 'dashboard'))
 
-// 手机上点完导航要把抽屉收起来，否则挡住整屏
-const onSelect = () => {
+/**
+ * 手机上点完导航要把抽屉收起来，否则挡住整屏。
+ *
+ * <p>同时承担「案件类型门控」的拦截：el-menu 开了 router 属性会**自动跳转**，
+ * 这里在跳转发生前先判断路径是否受门控：
+ * <ul>
+ *   <li>已选过类型 → 正常进入（切栏目不重置选择，符合需求4）；</li>
+ *   <li>未选类型 → 先跳类型选择器，并把目标栏目带上，
+ *       选完直接回到用户本来想去的那个栏目。</li>
+ * </ul>
+ * 守卫里也有一道（防手敲地址刷新），这里是第一道，能避免"先闪一下再被弹回"。
+ */
+const onSelect = (indexPath) => {
+  if (caseTypeStore.isGated(indexPath)) {
+    caseTypeStore.rememberPath(indexPath)
+    if (!caseTypeStore.selected) {
+      router.push({ path: '/case-type', query: { from: indexPath } })
+      if (props.variant === 'drawer') emit('navigate')
+      return
+    }
+  }
   if (props.variant === 'drawer') emit('navigate')
 }
 

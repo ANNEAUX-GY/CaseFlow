@@ -42,6 +42,17 @@
 
         <div class="cf-header__right">
           <span class="cf-header__date">{{ today }}</span>
+          <!-- 当前案件类型（统一入口门控）：
+               显示出来是为了让用户随时知道"我现在在看哪一类案件"，
+               退出按钮紧挨着它，语义明确——退的是类型选择，不是登录。 -->
+          <template v-if="caseTypeStore.selected">
+            <span class="cf-header__ctype" :class="'is-' + (caseTypeStore.currentOption?.type || 'info')">
+              {{ caseTypeStore.currentOption?.label }}
+            </span>
+            <el-button link type="warning" class="cf-header__cexit" @click="onExitCaseType">
+              退出
+            </el-button>
+          </template>
           <span class="cf-header__user">
             {{ userStore.userInfo?.displayName || '' }}
             <span v-if="userStore.roleName" class="cf-header__role">{{ userStore.roleName }}</span>
@@ -79,6 +90,7 @@ import { Fold, Cellphone, Monitor } from '@element-plus/icons-vue'
 import { useUserStore } from '../store/user'
 import { usePendingStore } from '../store/pending'
 import { useEventStore } from '../store/events'
+import { useCaseTypeStore } from '../store/caseType'
 import { useDevice } from '../utils/device'
 import NavPanel from './NavPanel.vue'
 
@@ -100,6 +112,8 @@ const toggleLayout = () => setDeviceMode(isMobile.value ? 'desktop' : 'mobile')
 // 放在 store 里而不是局部 ref —— 审批动作发生在账号管理页，两处必须读同一份数据，
 // 否则审批通过后侧栏红点不会消失（Layout 整个会话只挂载一次，不会重新取数）。
 const pendingStore = usePendingStore()
+// 案件类型选择器（统一入口门控）：顶栏显示当前类型 + 退出按钮，也负责登出时清状态
+const caseTypeStore = useCaseTypeStore()
 
 const loadPending = () => {
   if (!userStore.isFullAccess) return
@@ -130,6 +144,19 @@ const onLogout = async () => {
   navOpen.value = false
   await userStore.logout()
   pendingStore.reset()
+  // 退出登录必须连案件类型一起清：否则下一个登录的人会继承上一个人的类型选择
+  caseTypeStore.reset()
   router.push('/login')
+}
+
+/**
+ * 退出「案件类型选择」（不是退出登录）。
+ * 清状态后回类型选择器；用 lastGatedPath 记住的栏目作为选完后的落点，
+ * 这样"退出 → 重选"的过程是连贯的，不会莫名其妙跳到工作台。
+ */
+const onExitCaseType = () => {
+  const back = caseTypeStore.lastGatedPath || '/cases'
+  caseTypeStore.exit()
+  router.push({ path: '/case-type', query: { from: back } })
 }
 </script>
