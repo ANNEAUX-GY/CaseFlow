@@ -163,15 +163,28 @@ def main():
         if len(ids) > 1:
             flag("高", "案件编号重复", str(no), f"对应多条案件 id={ids}")
 
-    # ---------- 六、待办佐证 ----------
-    print("[8] 检查：已完成待办是否都有佐证")
+    # ---------- 六、待办完成依据（2026-10-04 规则变更） ----------
+    # 原规则是「已完成待办必须有佐证材料」，用户已明确不再需要佐证材料。
+    # 现在的规则是「主任务至少要有一条反馈说明，且子任务全部完成」，
+    # 所以体检口径同步改为核对这两条，而不是继续查佐证数。
+    print("[8] 检查：已完成待办的完成依据（反馈说明 + 子任务全完成）")
     for t in todos:
-        if t.get("status") == "DONE":
-            n = t.get("evidenceCount")
-            if n is None or n == 0:
-                flag("高", "已完成待办缺佐证",
-                     f"待办 {t.get('id')}：{t.get('content') or t.get('title')}",
-                     f"状态为已完成，但佐证数为 {n}")
+        if t.get("status") != "DONE":
+            continue
+        # 子任务：父任务完成时不应还有未完成的子任务
+        st = t.get("subtaskTotal") or 0
+        sd = t.get("subtaskDone") or 0
+        if st > 0 and sd < st:
+            flag("高", "已完成主任务仍有未完成子任务",
+                 f"待办 {t.get('id')}：{t.get('content') or t.get('title')}",
+                 f"主任务已完成，但子任务 {sd}/{st} 未完成")
+        # 反馈说明：历史数据可能没有反馈记录，此时看 remark 兜底
+        fc = t.get("feedbackCount")
+        has_note = (fc is not None and fc > 0) or bool((t.get("remark") or "").strip())
+        if not has_note:
+            flag("低", "已完成主任务缺反馈说明",
+                 f"待办 {t.get('id')}：{t.get('content') or t.get('title')}",
+                 "状态为已完成，但没有反馈记录也没有完成说明（历史数据，属正常）")
 
     # ---------- 汇总 ----------
     print("\n" + "=" * 60)

@@ -754,7 +754,11 @@ public class TodoService {
         vo.setCreatedAt(t.getCreatedAt());
         vo.setUpdatedAt(t.getUpdatedAt());
         vo.setParentId(t.getParentId());
-        // 反馈条数：列表页判断「能否勾选完成」需要它，但不必拉全量 feedback 明细
+        // 反馈条数：列表页判断「能否勾选完成」需要它，但不必拉全量 feedback 明细。
+        // feedbackCount 为 null 表示由本方法自己查（单条场景）；列表页会传入预聚合的值。
+        vo.setFeedbackCount(feedbackCount != null ? feedbackCount
+                : feedbackMapper.selectCount(new LambdaQueryWrapper<CaseTodoFeedback>()
+                        .eq(CaseTodoFeedback::getTodoId, t.getId())).intValue());
         vo.setDoneByName(userName(t.getDoneBy()));
         vo.setCreatedByName(userName(t.getCreatedBy()));
         int cnt = fileService.countOfTodo(t.getId());

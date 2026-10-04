@@ -1,7 +1,7 @@
 <template>
   <el-dialog
     v-model="visible"
-    :title="detail.title"
+    :title="title"
     :width="isMobile ? '94%' : '640px'"
     append-to-body
     destroy-on-close
@@ -9,15 +9,15 @@
   >
     <div v-loading="loading" class="cf-td">
       <!-- 概览 -->
-      <div v-if="detail.todo" class="cf-td__head">
+      <div v-if="detail.id" class="cf-td__head">
         <el-tag :type="statusType" effect="dark" size="small">
-          {{ detail.todo.statusName || (detail.todo.status === 'DONE' ? '已完成' : '待办') }}
+          {{ detail.statusName || (detail.status === 'DONE' ? '已完成' : '待办') }}
         </el-tag>
-        <span v-if="detail.todo.subtaskTotal" class="cf-td__subinfo">
-          子任务 {{ detail.todo.subtaskDone }}/{{ detail.todo.subtaskTotal }}已完成
+        <span v-if="detail.subtaskTotal" class="cf-td__subinfo">
+          子任务 {{ detail.subtaskDone }}/{{ detail.subtaskTotal }}已完成
         </span>
-        <span v-if="detail.todo.doneAt" class="cf-muted">
-          完成于 {{ fmt(detail.todo.doneAt) }} · {{ detail.todo.doneByName || '-' }}
+        <span v-if="detail.doneAt" class="cf-muted">
+          完成于 {{ fmt(detail.doneAt) }} · {{ detail.doneByName || '-' }}
         </span>
       </div>
 
@@ -155,10 +155,10 @@ const detail = computed(() => data.value || {})
 const feedbacks = computed(() => detail.value.feedbacks || [])
 const subtasks = computed(() => detail.value.subtasks || [])
 const subtaskDone = computed(() => subtasks.value.filter((s) => s.status === 'DONE').length)
-const done = computed(() => detail.value.todo?.status === 'DONE')
-const isParent = computed(() => !detail.value.todo?.parentId)
+const done = computed(() => detail.value?.status === 'DONE')
+const isParent = computed(() => !detail.value?.parentId)
 
-const title = computed(() => detail.value.todo?.content || '任务详情')
+const title = computed(() => detail.value?.content || '任务详情')
 const statusType = computed(() => (done.value ? 'success' : 'warning'))
 
 /**
@@ -167,10 +167,10 @@ const statusType = computed(() => (done.value ? 'success' : 'warning'))
  */
 const canDone = computed(() => {
   const d = detail.value
-  if (!d.todo || done.value) return false
+  if (!d.id || done.value) return false
   // 规则：子任务全完成
-  const total = d.todo.subtaskTotal ?? subtasks.value.length
-  const dn = d.todo.subtaskDone ?? subtaskDone.value
+  const total = d.subtaskTotal ?? subtasks.value.length
+  const dn = d.subtaskDone ?? subtaskDone.value
   if (total > 0 && dn < total) return false
   // 规则：至少一条反馈说明
   return feedbacks.value.length > 0
