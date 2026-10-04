@@ -66,7 +66,8 @@ CREATE TABLE IF NOT EXISTS case_info (
     case_measure  VARCHAR(16)  DEFAULT NULL COMMENT '强制措施：NONE无/DETENTION刑拘/BAIL取保候审/RESIDENCE监视居住',
     measure_date  DATETIME     DEFAULT NULL COMMENT '采取强制措施日期',
     detain_deadline DATETIME   DEFAULT NULL COMMENT '强制措施期限届满日（刑拘+30天/取保+12月/监居+6月）',
-    investigation_status VARCHAR(20) DEFAULT NULL COMMENT '侦查进度：PENDING_INITIAL/INVESTIGATING/PENDING_APPROVAL/INVESTIGATION_DONE',
+    investigation_status VARCHAR(20) DEFAULT NULL COMMENT '侦查进度：PENDING_INITIAL/INVESTIGATING/PENDING_APPROVAL/INVESTIGATION_DONE（盯办审批状态机，与流程阶段并存）',
+    flow_stage           VARCHAR(24) DEFAULT NULL COMMENT '流程阶段：INITIAL初查/DETAIN刑拘在办/BAIL取保及监居/CLOSED已终结。NULL=存量案件，读时按 INITIAL 处理',
     description   TEXT         COMMENT '备注说明',
     priority      VARCHAR(16)  NOT NULL DEFAULT 'NORMAL' COMMENT 'URGENT/HIGH/NORMAL/LOW',
     deadline      DATETIME     DEFAULT NULL COMMENT '截止期限',
@@ -140,8 +141,16 @@ CREATE TABLE IF NOT EXISTS case_plan (
     sort        INT          NOT NULL DEFAULT 0 COMMENT '排序',
     created_by  BIGINT       DEFAULT NULL COMMENT '录入人',
     created_at  DATETIME     DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    updated_at  DATETIME     DEFAULT CURRENT_TIMESTAMP COMMENT '更新时间'
+    updated_at  DATETIME     DEFAULT CURRENT_TIMESTAMP COMMENT '更新时间',
+    stage       VARCHAR(24)  DEFAULT NULL COMMENT '所属阶段 INITIAL/DETAIN/BAIL/CLOSED。NULL=存量计划，读时归入侦查环节',
+    step_key    VARCHAR(32)  DEFAULT NULL COMMENT '所属环节 RECEIVE/CASE_FILL/INVESTIGATE/... NULL=存量，按侦查展示',
+    task_key    VARCHAR(32)  DEFAULT NULL COMMENT '标准任务标识（模板内唯一）。NULL=民警自建任务',
+    is_std      TINYINT      NOT NULL DEFAULT 0 COMMENT '1=按流程模板生成的标准任务，0=民警自建（自建任务删除不影响流程定义）'
 );
+
+-- 阶段→环节→任务三层流程（2026-10-04）见 com.caseflow.flow.CaseFlowTemplate。
+-- 进度不落库：阶段进度 = 该阶段 DONE 任务数 / 该阶段任务总数，实时算。
+-- 切换阶段时任务集合整体替换 → 进度天然归零，无需显式重置。
 
 -- 5.4 审批留痕（案件盯办模块：侦查终结审批 / 强制措施变更确认）
 CREATE TABLE IF NOT EXISTS case_approval (

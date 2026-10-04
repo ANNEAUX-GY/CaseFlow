@@ -74,7 +74,17 @@ public class SchemaMigration implements ApplicationRunner {
             // 紧急性不落库（由 deadline 与当前时间实时算），故无需新增列。
             {"case_leader_opinion", "sort_order", "INT NULL"},
             {"case_leader_opinion", "deadline", "DATETIME NULL"},
-            {"case_leader_opinion", "importance", "VARCHAR(4) NULL"}
+            {"case_leader_opinion", "importance", "VARCHAR(4) NULL"},
+            // 阶段→环节→任务三层流程（2026-10）：
+            // flow_stage 记案件走到哪个阶段（进度随之重置）；
+            // case_plan 加 stage/step_key/task_key/is_std 把原来的「侦查计划」升格为「阶段任务」，
+            // 存量行四列皆NULL，读时归入「初查/侦查」环节，不影响既有数据可见与统计。
+            // is_std 默认 0：存量与民警自建都是 0，只有模板生成的任务是 1。
+            {"case_info", "flow_stage", "VARCHAR(24) NULL"},
+            {"case_plan", "stage", "VARCHAR(24) NULL"},
+            {"case_plan", "step_key", "VARCHAR(32) NULL"},
+            {"case_plan", "task_key", "VARCHAR(32) NULL"},
+            {"case_plan", "is_std", "TINYINT NOT NULL DEFAULT 0"}
     };
 
     /** 旧数据回填：把历史「案件类型」自由文本里的大类词归位到 case_type（小类位清空）。

@@ -8,8 +8,10 @@ import com.caseflow.entity.CaseInfo;
 import com.caseflow.entity.CaseLeaderOpinion;
 import com.caseflow.entity.CasePlan;
 import com.caseflow.entity.CaseProgressComment;
+import com.caseflow.flow.CaseFlowTemplate;
 import com.caseflow.security.FullAccessOnly;
 import com.caseflow.service.ApprovalService;
+import com.caseflow.service.FlowService;
 import com.caseflow.service.OpinionService;
 import com.caseflow.service.PlanService;
 import com.caseflow.service.ProgressCommentService;
@@ -51,6 +53,10 @@ public class WatchController {
     private ProgressCommentService commentService;
     @Resource
     private OpinionService opinionService;
+    @Resource
+    private FlowService flowService;
+    @Resource
+    private com.caseflow.mapper.CaseInfoMapper caseMapper;
 
     /** 盯办列表：module=INITIAL/DETENTION/BAIL_RESIDENCE；支持嫌疑人姓名/身份证号检索 */
     @GetMapping("/cases")
@@ -159,6 +165,38 @@ public class WatchController {
     public Result<Void> removeComment(@PathVariable Long id) {
         commentService.remove(id);
         return Result.ok(null);
+    }
+
+    // ---------------- 阶段→环节→任务 流程流转 ----------------
+    // 定义见 com.caseflow.flow.CaseFlowTemplate；流转 = 管理层确认。
+
+    /** 某案件当前阶段的流程视图：环节顺序、每环节任务、进度、可选流转分支 */
+    @GetMapping("/cases/{caseId}/flow")
+    public Result<FlowService.FlowView> flow(@PathVariable Long caseId) {
+        return Result.ok(flowService.viewOf(caseId));
+    }
+
+    /** 仅取进度（列表页进度条用，避免每行都拉全量流程） */
+    @GetMapping("/cases/{caseId}/flow/progress")
+    public Result<FlowService.Progress> flowProgress(@PathVariable Long caseId) {
+        return Result.ok(flowService.progressOf(caseId));
+    }
+
+    /** 阶段流转（管理层确认）：body.action = DETAIN/BAIL/RELEASE/ARREST/PUNISH/CLOSE */
+    @PostMapping("/cases/{caseId}/flow/transfer")
+    public Result<Void> flowTransfer(@PathVariable Long caseId,
+                                      @RequestBody Map<String, Object> body) {
+        flowService.transfer(caseId, str(body.get("action")));
+        return Result.ok();
+    }
+
+    /** 补全当前阶段的标准任务（取保流程细化后用；幂等，不重复生成） */
+    @PostMapping("/cases/{caseId}/flow/seed")
+    public Result<Integer> flowSeed(@PathVariable Long caseId) {
+        CaseInfo c = caseMapper.selectById(caseId);
+        String stage = c == null ? CaseFlowTemplate.STAGE_INITIAL
+                : flowService.stageOf(c);
+        return Result.ok(flowService.generateStageTasks(caseId, stage));
     }
 
     // ---------------- 领导意见与落实反馈 ----------------
