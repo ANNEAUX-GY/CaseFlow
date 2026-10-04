@@ -33,6 +33,14 @@
           <el-icon><Odometer /></el-icon>
           <span>工作台</span>
         </el-menu-item>
+        <el-menu-item index="/watch">
+          <el-icon><View /></el-icon>
+          <span>案件盯办</span>
+        </el-menu-item>
+        <el-menu-item index="/todos">
+          <el-icon><List /></el-icon>
+          <span>待办总览</span>
+        </el-menu-item>
         <el-menu-item index="/cases">
           <el-icon><Tickets /></el-icon>
           <span>案件管理</span>
@@ -45,22 +53,14 @@
           <el-icon><Connection /></el-icon>
           <span>员工图谱</span>
         </el-menu-item>
-        <el-menu-item index="/watch">
-          <el-icon><View /></el-icon>
-          <span>案件盯办</span>
-        </el-menu-item>
-        <el-menu-item index="/todos">
-          <el-icon><List /></el-icon>
-          <span>待办总览</span>
+        <el-menu-item index="/categories">
+          <el-icon><Collection /></el-icon>
+          <span>类别管理</span>
         </el-menu-item>
         <el-menu-item index="/users">
           <el-icon><UserFilled /></el-icon>
           <span>账号管理</span>
           <span v-if="pendingCount > 0" class="cf-nav-badge">{{ pendingCount }}</span>
-        </el-menu-item>
-        <el-menu-item index="/categories">
-          <el-icon><Collection /></el-icon>
-          <span>类别管理</span>
         </el-menu-item>
       </template>
     </el-menu>
