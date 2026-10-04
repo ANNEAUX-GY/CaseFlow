@@ -6,7 +6,11 @@ import { GATED_PATHS, useCaseTypeStore } from '../store/caseType'
  * 普通民警（非全权限角色）只能进这两个页面：内容都只与本人民下案件相关。
  * 用白名单而不是逐个页面加标记 —— 以后新增的页面默认就是管理层专属，不会漏配。
  */
-const STAFF_PAGES = ['/my-cases', '/reminders', '/my-todos']
+const STAFF_PAGES = ['/my-cases', '/reminders', '/my-todos', '/case-type']
+// /case-type 必须对所有登录用户开放：普通民警没选过案件类型时，
+// 点「我的案件/到期提醒」等门控页会被引导到类型选择页；
+// 若此页不在白名单，会被上面那条规则弹回 /my-cases，形成
+// 「点菜单 → 跳选择页 → 被弹回」的循环，表现为菜单点不动（实测踩过）。
 
 /** 登录后的落地页：管理层进工作台，普通民警进我的案件 */
 export const homePathOf = (role) => (isFullAccessRole(role) ? '/dashboard' : '/my-cases')
