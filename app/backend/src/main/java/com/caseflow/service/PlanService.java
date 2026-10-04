@@ -98,6 +98,7 @@ public class PlanService {
         CasePlan p = requirePlan(planId);
         CaseInfo c = requireCase(p.getCaseId());
         checkOperate(c);
+        checkStdOrAssignee(c, p);
         if (!"PENDING".equals(p.getStatus())) {
             throw new BizException("该计划已" + ("DONE".equals(p.getStatus()) ? "完成" : "取消") + "，不能再操作");
         }
@@ -148,6 +149,7 @@ public class PlanService {
         CasePlan p = requirePlan(planId);
         CaseInfo c = requireCase(p.getCaseId());
         checkOperate(c);
+        checkStdOrAssignee(c, p);
         if (!"DONE".equals(p.getStatus())) {
             throw new BizException("只有已完成的计划才能撤销完成");
         }
@@ -189,21 +191,51 @@ public class PlanService {
     }
 
     /**
-     * 写操作权限：仅本案现职承办人（账号需关联员工图谱）。
-     * 侦查计划由办案人自行制定、自行勾销；管理层（管理员/领导）只读——
-     * 他们的职责是最终审批和提出意见，不能替办案人"安排工作"或"勾掉工作"。
+     * 写操作权限：<b>自建任务</b>仅本案现职承办人（账号需关联员工图谱）；
+     * <b>标准任务</b>（is_std=1，流程模板生成）承办人与管理层都可勾选。
+     *
+     * <p>区分的理由（2026-10 流程改造）：
+     * <ul>
+     *   <li>自建任务是<b>民警自己的工作安排</b>，领导不该替办案人"安排工作"或"勾掉工作"
+     *       —— 这条边界是盯办模块有意设计的，继续保留；</li>
+     *   <li>标准任务是<b>流程必经环节</b>（接收材料/立案/刑拘…），代表全所统一的办理规范。
+     *       领导看到某个环节未完成时，需要能直接确认完成，否则进度会永远卡在 99%，
+     *       阶段流转的触发条件也就永远不满足。</li>
+     * </ul>
      */
     private void checkOperate(CaseInfo c) {
+        if (AuthContext.isFullAccess()) {
+            // 管理层：放行标准任务，放行民警自建任务在调用方判断
+        }
         Long empId = AuthContext.get() == null ? null : AuthContext.get().getEmployeeId();
         if (empId == null) {
-            throw new BizException(403, "侦查计划由办案人自行制定，管理层仅可查看");
+            if (AuthContext.isFullAccess()) {
+                return;   // 管理层放行，交由调用方按 isStd 细判
+            }
+            throw new BizException(403, "任务由办案人自行勾选，管理层仅可查看");
         }
         Long cnt = assigneeMapper.selectCount(new LambdaQueryWrapper<CaseAssignee>()
                 .eq(CaseAssignee::getCaseId, c.getId())
                 .eq(CaseAssignee::getEmployeeId, empId)
                 .eq(CaseAssignee::getStatus, "ACTIVE"));
         if (cnt == null || cnt == 0) {
-            throw new BizException(403, "侦查计划由办案人自行制定，管理层仅可查看");
+            if (AuthContext.isFullAccess()) {
+                return;
+            }
+            throw new BizException(403, "任务由办案人自行勾选，管理层仅可查看");
+        }
+    }
+
+    /**
+     * 标准任务（流程模板生成）允许管理层勾选；民警自建任务仍限承办人。
+     * 由 {@code checkOperate} 之后调用，拦住「管理层改民警自建任务」这一种情况。
+     */
+    private void checkStdOrAssignee(CaseInfo c, CasePlan p) {
+        if (p.getIsStd() != null && p.getIsStd() == 1) {
+            return;   // 标准任务：checkOperate 已放行
+        }
+        if (AuthContext.isFullAccess()) {
+            throw new BizException(403, "该任务由办案人自行制定，管理层仅可查看");
         }
     }
 

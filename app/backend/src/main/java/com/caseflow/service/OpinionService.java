@@ -49,11 +49,12 @@ public class OpinionService {
 
     public List<CaseLeaderOpinion> listOf(Long caseId) {
         List<CaseLeaderOpinion> list = opinionMapper.selectList(new LambdaQueryWrapper<CaseLeaderOpinion>()
-                .eq(CaseLeaderOpinion::getCaseId, caseId)
-                // 升序：序号自上而下递增（1 起连续）。
-                // 排序键用 sort_order，NULL（旧数据）回退按 id 升序 —— H2/MySQL 都支持
-                // COALESCE，且它作用在已有列上，不需要额外迁移，索引照旧命中 case_id。
-                .apply("CASE WHEN sort_order IS NULL THEN id ELSE sort_order END ASC, id ASC"));
+.eq(CaseLeaderOpinion::getCaseId, caseId)
+       // 升序：序号自上而下递增（1 起连续）。
+            // 排序键用 sort_order，NULL（旧数据）回退按 id 升序。
+   // 必须用 last() 追加 ORDER BY 子句：apply() 是拼进 WHERE 条件的，
+      // 若把 ASC 写进 apply 里会变成 "WHERE (case_id=? AND ... ) ASC" 直接语法错（踩过）。
+      .last("ORDER BY (CASE WHEN sort_order IS NULL THEN id ELSE sort_order END) ASC, id ASC"));
         initSortOrderIfAbsent(list);
         return list;
     }
