@@ -150,7 +150,9 @@ export const employeeApi = {
 export const questionApi = {
   listOfCase: (caseId) => http.get(`/questions/case/${caseId}`),
   ask: (caseId, todoId, content) => http.post('/questions', { caseId, todoId, content }),
-  answer: (id, content) => http.post(`/questions/${id}/answer`, { content })
+  answer: (id, content) => http.post(`/questions/${id}/answer`, { content }),
+  update: (id, content) => http.put(`/questions/${id}`, { content }),
+  remove: (id) => http.delete(`/questions/${id}`)
 }
 
 export const todoApi = {

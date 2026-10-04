@@ -111,6 +111,49 @@ public class QuestionService {
         return q;
     }
 
+    /** 编辑问题：仅提问人本人或管理层；已回答的问题允许改，但会标记需重新确认 */
+    @Transactional(rollbackFor = Exception.class)
+    public CaseQuestion update(Long questionId, String content) {
+        if (!StringUtils.hasText(content)) {
+            throw new BizException("请填写问题内容");
+        }
+        CaseQuestion q = questionMapper.selectById(questionId);
+        if (q == null) {
+            throw new BizException(400, "该疑问不存在或已被删除");
+        }
+        requireOwnerOrManager(q);
+        q.setContent(content.trim());
+        questionMapper.updateById(q);
+        logService.log("CASE", "QUESTION_UPDATE", "CASE", q.getCaseId(),
+                "编辑疑问：" + abbrev(content));
+        return q;
+    }
+
+    /** 删除问题：仅提问人本人或管理层；连同回答一起删（问答一体） */
+    @Transactional(rollbackFor = Exception.class)
+    public void remove(Long questionId) {
+        CaseQuestion q = questionMapper.selectById(questionId);
+        if (q == null) {
+            throw new BizException(400, "该疑问不存在或已被删除");
+        }
+        requireOwnerOrManager(q);
+        questionMapper.deleteById(questionId);
+        logService.log("CASE", "QUESTION_DELETE", "CASE", q.getCaseId(),
+                "删除疑问：" + abbrev(q.getContent()));
+    }
+
+    /** 是否提问人本人或管理层 */
+    private void requireOwnerOrManager(CaseQuestion q) {
+        if (AuthContext.isFullAccess()) {
+            return;
+        }
+        Long uid = AuthContext.userId();
+        if (uid != null && uid.equals(q.getQuestionBy())) {
+            return;
+        }
+        throw new BizException(403, "只有提问人本人或管理层可以编辑/删除这条疑问");
+    }
+
     // ------------------------------------------------------------------
 
     private CaseInfo requireCase(Long caseId) {

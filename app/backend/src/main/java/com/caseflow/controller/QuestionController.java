@@ -41,4 +41,18 @@ public class QuestionController {
         String content = body.get("content") == null ? null : String.valueOf(body.get("content"));
         return Result.ok(questionService.answer(id, content));
     }
+
+    /** 编辑问题（提问人本人或管理层） */
+    @PutMapping("/{id}")
+    public Result<CaseQuestion> update(@PathVariable Long id, @RequestBody Map<String, Object> body) {
+        String content = body.get("content") == null ? null : String.valueOf(body.get("content"));
+        return Result.ok(questionService.update(id, content));
+    }
+
+    /** 删除问题（提问人本人或管理层） */
+    @DeleteMapping("/{id}")
+    public Result<Void> remove(@PathVariable Long id) {
+        questionService.remove(id);
+        return Result.ok();
+    }
 }
