@@ -146,3 +146,30 @@ export function withCaseType(params) {
   else delete out.caseType
   return out
 }
+
+/**
+ * 安全跳转到受门控的栏目（跨栏目跳转专用）。
+ *
+ * <p><b>解决什么问题</b>：工作台、员工图谱里有 4 处 `router.push('/cases', {...})`
+ * （按状态跳、按经办人跳）。若此时用户还没选案件类型，裸跳会被路由守卫弹回
+ * 类型选择器，**而原 query 里的 status / employeeId 会一起丢掉**——
+ * 用户选完类型后落在一个"什么都没筛"的列表页，等于白点了一次。
+ *
+ * <p>做法：未选类型时把**完整目标路径（含 query）**编码进 from，选择器读完再还原。
+ *
+ * @param {import('vue-router').Router} router
+ * @param {string} path 目标路径，如 '/cases'
+ * @param {Object} [query] 目标查询参数
+ */
+export function gotoGated(router, path, query) {
+  const store = useCaseTypeStore()
+  store.rememberPath(path)
+  if (store.selected) {
+    router.push(query ? { path, query } : { path })
+    return
+  }
+  // 用 URLSearchParams 拼完整地址，from 里同时带路径与筛选条件
+  const qs = query ? new URLSearchParams(query).toString() : ''
+  const full = qs ? path + '?' + qs : path
+  router.push({ path: '/case-type', query: { from: full } })
+}

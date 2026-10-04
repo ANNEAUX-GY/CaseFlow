@@ -275,6 +275,7 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { caseApi, logApi } from '../api'
+import { gotoGated } from '../store/caseType'
 import { useUserStore } from '../store/user'
 import { useEventStore } from '../store/events'
 import CaseTable from '../components/CaseTable.vue'
@@ -509,11 +510,11 @@ const onStatusClick = (p) => {
 }
 const onOwnerClick = (p) => {
   const item = ownerData.value[p.dataIndex]
-  if (item) router.push({ path: '/cases', query: { employeeId: item.code, employeeName: item.name } })
+  if (item) gotoGated(router, '/cases', { employeeId: item.code, employeeName: item.name })
 }
 
-const go = (status) => router.push({ path: '/cases', query: { status } })
-const gotoReminder = (bucket) => router.push({ path: '/reminders', query: { bucket } })
+const go = (status) => gotoGated(router, '/cases', { status })
+const gotoReminder = (bucket) => gotoGated(router, '/reminders', { bucket })
 const openDetail = (row) => {
   currentId.value = row.id
   detailVisible.value = true

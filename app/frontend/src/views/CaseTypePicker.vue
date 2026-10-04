@@ -35,18 +35,19 @@
 
 <script setup>
 import { onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { CASE_TYPE_OPTIONS, useCaseTypeStore } from '../store/caseType'
+import { CASE_TYPE_OPTIONS, GATED_PATHS, useCaseTypeStore } from '../store/caseType'
 import { caseApi } from '../api'
 
 const props = defineProps({
-  /** 选完类型后跳到哪；默认回 store 里记住的上次栏目 */
+  /** 选完类型后跳到哪；默认取地址栏的 from，再退到 store 记住的栏目 */
   redirectTo: { type: String, default: '' }
 })
 const emit = defineEmits(['chosen'])
 
 const router = useRouter()
+const route = useRoute()
 const store = useCaseTypeStore()
 const options = CASE_TYPE_OPTIONS
 const current = ref('')
@@ -60,9 +61,26 @@ const choose = async (o) => {
   }
   current.value = o.key
   emit('chosen', o.key)
-  const target = props.redirectTo || store.lastGatedPath || '/cases'
-  store.rememberPath(target)
-  router.push(target)
+
+  // from 可能是纯路径（'/cases'），也可能是带 query 的完整地址
+  // （'/cases?status=IN_PROGRESS&employeeId=3'）——后者来自工作台/员工图谱的跨栏目跳转
+  const target = resolveFrom()
+  store.rememberPath(target.path)
+  router.push(target.query ? { path: target.path, query: target.query } : { path: target.path })
+}
+
+/** 解析 from 参数：还原成 { path, query }，非法值回退到 store 记住的栏目 */
+const resolveFrom = () => {
+  const raw = props.redirectTo || route.query.from || store.lastGatedPath || '/cases'
+  const s = String(raw)
+  if (!s.startsWith('/')) return { path: '/cases' }   // 防注入：只接受站内绝对路径
+  const [p, qs] = s.split('?')
+  // 只允许跳到受门控的栏目，防止 from 被构造成跳到任意路由
+  if (!GATED_PATHS.some(g => p === g)) return { path: '/cases' }
+  if (!qs) return { path: p }
+  const query = {}
+  for (const [k, v] of new URLSearchParams(qs).entries()) query[k] = v
+  return { path: p, query }
 }
 
 /** 各类型案件数：让用户选择前就看到规模，避免盲选 */

@@ -171,6 +171,7 @@ import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { employeeApi, caseApi } from '../api'
+import { gotoGated } from '../store/caseType'
 import ChartPanel from '../components/ChartPanel.vue'
 import EChart from '../components/EChart.vue'
 import { CHART, lineOption, barOption } from '../utils/chart'
@@ -390,7 +391,7 @@ const onDeptClick = (p) => {
 }
 const onOwnerClick = (p) => {
   const item = ownerData.value[p.dataIndex]
-  if (item) router.push({ path: '/cases', query: { employeeId: item.code } })
+  if (item) gotoGated(router, '/cases', { employeeId: item.code })
 }
 
 const filterNode = (value, data) => {
@@ -449,7 +450,7 @@ const dueClass = (c) => {
 }
 
 const gotoCases = () => {
-  if (selected.value) router.push({ path: '/cases', query: { employeeId: selected.value.id } })
+  if (selected.value) gotoGated(router, '/cases', { employeeId: selected.value.id })
 }
 
 const openCreate = () => {
