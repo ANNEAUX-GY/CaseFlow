@@ -421,3 +421,10 @@ addFeedback（先记反馈再 done，顺序也满足规则1校验）。两条不
 **教训：给角色加路由白名单时，门控引导页（/case-type）等中间页必须一并加，
 否则引导链路自己把自己拦死。** 用 puppeteer 以普通账号实测菜单点击链路才能发现
 （管理员账号永远选过类型，复现不了）。
+
+## 坑：node 脚本批量插入代码「替换未生效」不报错（踩过两次，commit b48f571）
+给 load() 插 `await loadQuestions()` 的 node 脚本静默失败（锚点字符串不完全匹配），
+**没有任何报错**，结果只有提交路径会加载问答 → 用户看到「打开永远 0 条，发一条才刷出历史」。
+**教训：脚本改完必须 grep 确认插入点真的存在**（`grep -n "await loadQuestions()"` 应出现在 load 内）。
+同类前科：<FeedbackDialog> 只 import 没挂载、setFeedbackCount 只剩注释——
+全是"批量改写后没验证锚点"的同一类错误。**改完 grep，改完 grep，改完 grep。**
