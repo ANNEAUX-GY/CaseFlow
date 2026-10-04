@@ -98,6 +98,17 @@
                   <el-option label="组员" value="组员" />
                 </el-select>
               </el-form-item>
+   <!-- 办案组别（2026-10-04）：决定他能接哪类案件，指派时按此校验 -->
+              <el-form-item label="办案组别">
+          <el-radio-group v-model="form.policeGroup" style="width: 100%">
+            <el-radio-button value="INITIAL">初查组</el-radio-button>
+   <el-radio-button value="CLEAR">清案组</el-radio-button>
+                  <el-radio-button value="NONE">不限</el-radio-button>
+           </el-radio-group>
+           <div class="cf-muted" style="font-size: 12px; margin-top: 4px">
+    {{ groupHint }}
+          </div>
+         </el-form-item>
               <el-form-item label="手机">
                 <el-input v-model="form.phone" />
               </el-form-item>
@@ -205,12 +216,21 @@ const emptyForm = () => ({
   parentId: null,
   dept: '',
   title: '',
+  // 办案组别：INITIAL初查组 / CLEAR清案组 / NONE不限（指派校验依据）
+  policeGroup: 'NONE',
   phone: '',
   email: '',
   sortNo: 0,
   status: 1
 })
 const form = reactive(emptyForm())
+
+/** 组别说明：随选择变化，让人知道这个组别能接什么 */
+const groupHint = computed(() => {
+  if (form.policeGroup === 'INITIAL') return '只能承接初查任务'
+  if (form.policeGroup === 'CLEAR') return '只能承接刑拘在办案件'
+  return '可承接各类案件（不受组别限制）'
+})
 const resetForm = () => Object.assign(form, emptyForm())
 
 const load = async () => {
@@ -415,6 +435,7 @@ const onSelect = async (node) => {
     parentId: d.parentId || null,
     dept: d.dept || '',
     title: d.title || '',
+    policeGroup: d.policeGroup || 'NONE',
     phone: d.phone || '',
     email: d.email || '',
     sortNo: d.sortNo || 0

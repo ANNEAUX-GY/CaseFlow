@@ -199,6 +199,8 @@ public class UserService {
         u.setEmployeeId(employeeId);
         u.setPhone(phone);
         u.setDept(req.getDept());
+              // 办案组别：普通民警必选（前端已拦），后端兜底归一为「不限」
+        u.setPoliceGroup(com.caseflow.flow.PoliceGroup.normalize(req.getPoliceGroup()));
         u.setAuditStatus(1);
         u.setStatus(1);
         u.setCreatedAt(LocalDateTime.now());
@@ -241,7 +243,9 @@ public class UserService {
                     EmployeeBindingService.ORIGIN_MANUAL, id));
         }
         upd.setPhone(checkPhone(req.getPhone(), id));
-        upd.setDept(req.getDept());
+   upd.setDept(req.getDept());
+   // 组别：审核/编辑时可改，帮申请人纠正填错的
+        upd.setPoliceGroup(com.caseflow.flow.PoliceGroup.normalize(req.getPoliceGroup()));
         upd.setUpdatedAt(LocalDateTime.now());
         userMapper.updateById(upd);
         logService.log("AUTH", "UPDATE_USER", "USER", id,
@@ -393,7 +397,10 @@ public class UserService {
             vo.setEmployeeOrigin(emp == null ? null : emp.getOrigin());
             vo.setPhone(u.getPhone());
             vo.setDept(u.getDept());
-            vo.setApplyRole(u.getApplyRole());
+    vo.setApplyRole(u.getApplyRole());
+     String ug = com.caseflow.flow.PoliceGroup.normalize(u.getPoliceGroup());
+            vo.setPoliceGroup(ug);
+            vo.setPoliceGroupName(com.caseflow.flow.PoliceGroup.label(ug));
             vo.setApplyRoleName(u.getApplyRole() == null ? null : Roles.name(u.getApplyRole()));
             vo.setAuditStatus(u.getAuditStatus() == null ? 1 : u.getAuditStatus());
             vo.setAuditRemark(u.getAuditRemark());

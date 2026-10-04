@@ -252,11 +252,23 @@
           <el-input v-model="dlg.form.phone" />
         </el-form-item>
         <el-form-item label="部门">
-          <el-input v-model="dlg.form.dept" />
+     <el-input v-model="dlg.form.dept" />
+    </el-form-item>
+  <!-- 办案组别（2026-10-04）：只对普通民警有意义，管理层/领导不参与一线分工。
+       管理员在这里可帮申请人纠正填错的组别。 -->
+        <el-form-item label="办案组别" v-if="dlg.form.role === 'STAFF'">
+          <el-radio-group v-model="dlg.form.policeGroup" style="width: 100%">
+       <el-radio-button value="INITIAL">初查组</el-radio-button>
+      <el-radio-button value="CLEAR">清案组</el-radio-button>
+            <el-radio-button value="NONE">不限</el-radio-button>
+</el-radio-group>
+   <div class="cf-muted" style="font-size: 12px; margin-top: 4px">
+            {{ groupHint }}
+          </div>
         </el-form-item>
         <el-form-item v-if="dlg.mode !== 'create'" label="备注">
-          <el-input v-model="dlg.form.remark" placeholder="审核意见（选填）" />
-        </el-form-item>
+     <el-input v-model="dlg.form.remark" placeholder="审核意见（选填）" />
+     </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="dlg.visible = false">取消</el-button>
@@ -478,7 +490,18 @@ const openCreate = () => {
   dlg.visible = true
 }
 
+const groupHint = computed(() => {
+  if (dlg.form.policeGroup === 'INITIAL') return '只能承接初查任务'
+  if (dlg.form.policeGroup === 'CLEAR') return '只能承接刑拘在办案件'
+  return '可承接各类案件（不受组别限制）'
+})
+
 const submit = async () => {
+  // 普通民警必须定组别：组别决定他能接哪类案件，指派时要按它校验
+  if (dlg.form.role === 'STAFF' && !dlg.form.policeGroup) {
+    ElMessage.warning('请选择办案组别')
+    return
+  }
   if (!dlg.form.role) {
     ElMessage.warning('请选择角色')
     return

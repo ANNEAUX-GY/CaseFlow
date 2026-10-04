@@ -27,6 +27,10 @@ public class UserVO implements Serializable {
     private String employeeOrigin;
     private String phone;
     private String dept;
+
+    /** 办案组别 INITIAL初查组/CLEAR清案组/NONE不限 */
+    private String policeGroup;
+    private String policeGroupName;
     private String applyRole;
     private String applyRoleName;
     /** 0 待审核 / 1 已通过 / 2 已驳回 */
