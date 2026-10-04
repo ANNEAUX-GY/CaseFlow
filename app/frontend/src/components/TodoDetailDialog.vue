@@ -337,6 +337,9 @@ const load = async () => {
   loading.value = true
   try {
     data.value = await todoApi.detail(todoId.value) || {}
+    // 疑问问答必须在这里加载——上一轮插入丢失，导致「打开浮窗永远 0 条，
+    // 发一条问题才刷出来」（只有提交路径调了 loadQuestions）。
+    await loadQuestions()
   } catch (e) {
     data.value = {}
   } finally {
