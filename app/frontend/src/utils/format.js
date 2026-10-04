@@ -216,3 +216,22 @@ export function todoDueTextOf(row) {
   if (d <= 3) return { text: dt + '（剩 ' + d + ' 天）', cls: 'is-soon', overdue: false }
   return { text: dt, cls: '', overdue: false }
 }
+
+// ============ 办案组别（2026-10-04） ============
+export const POLICE_GROUP_META = {
+  INITIAL: { label: '初查组', type: 'primary', color: '#1b4a8c' },
+  CLEAR: { label: '清案组', type: 'warning', color: '#d98a0b' },
+  NONE: { label: '不限', type: 'info', color: '#8a929e' }
+}
+
+export function policeGroupLabel(g) {
+  return (POLICE_GROUP_META[g] || POLICE_GROUP_META.NONE).label
+}
+
+/** 某案件要求什么组别：module 是盯办子模块。
+ *  与后端 PoliceGroup.requiredOf 保持一致 */
+export function requiredGroupOfModule(module) {
+  if (module === 'INITIAL') return 'INITIAL'
+  if (module === 'DETENTION') return 'CLEAR'
+  return 'NONE'
+}

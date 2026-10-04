@@ -388,6 +388,9 @@ public class CaseService {
             vo.setEmployeeName(e == null ? "（已离职/已删除）" : e.getName());
             vo.setDept(e == null ? null : e.getDept());
             vo.setTitle(e == null ? null : e.getTitle());
+          String pg = com.caseflow.flow.PoliceGroup.normalize(e == null ? null : e.getPoliceGroup());
+          vo.setPoliceGroup(pg);
+          vo.setPoliceGroupName(com.caseflow.flow.PoliceGroup.label(pg));
             vo.setPathName(pathMap.get(a.getEmployeeId()));
             vo.setAssignRole(a.getAssignRole());
             vo.setNote(a.getNote());

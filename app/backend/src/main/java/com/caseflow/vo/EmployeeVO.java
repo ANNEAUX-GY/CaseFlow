@@ -20,6 +20,11 @@ public class EmployeeVO implements Serializable {
     private Long parentId;
     private String dept;
     private String title;
+
+    /** 办案组别 INITIAL初查组/CLEAR清案组/NONE不限 */
+    private String policeGroup;
+    /** 组别中文名（前端直接展示，省得各端各写映射） */
+    private String policeGroupName;
     private String phone;
     private String email;
     private Integer levelNo;

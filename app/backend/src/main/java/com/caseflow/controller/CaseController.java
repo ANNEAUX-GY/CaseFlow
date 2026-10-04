@@ -43,6 +43,24 @@ public class CaseController {
     private SuspectService suspectService;
     @Resource
     private com.caseflow.service.StatsService statsService;
+    @Resource
+    private com.caseflow.service.StaffWorkloadService workloadService;
+
+    /**
+     * 某民警的承办负荷详情（2026-10-04）。
+     *
+     * <p>盯办详情页点「主办人/协办人」时调用，看该人正在主办/经办多少个案子、
+     * 哪些快逾期。caseId 传入当前案件会标记 isCurrent，便于前端高亮。
+     *
+     * <p>权限：登录即可（能进案件详情的人都能看该案承办人的负荷），
+     * 但返回只含案件概要，不含案情细节。
+     */
+    @GetMapping("/staff/{employeeId}/workload")
+    public Result<java.util.Map<String, Object>> staffWorkload(
+            @PathVariable Long employeeId,
+            @RequestParam(required = false) Long caseId) {
+        return Result.ok(workloadService.workloadOf(employeeId, caseId));
+    }
 
     @GetMapping
     public Result<PageResult<CaseVO>> page(@RequestParam(required = false) Integer page,

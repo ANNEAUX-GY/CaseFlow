@@ -49,6 +49,21 @@
           </el-select>
         </el-form-item>
 
+        <!-- 办案组别（2026-10-04）：普通民警必选。
+             组别决定了他能接哪类案件（初查任务只给初查组、刑拘在办只给清案组），
+             不在注册时选好，后续指派就分不了工。管理层/领导不参与分工，可不选。 -->
+        <el-form-item label="办案组别" :required="form.applyRole === 'STAFF'"
+          :error="groupError">
+          <el-radio-group v-model="form.policeGroup" style="width: 100%">
+            <el-radio-button value="INITIAL">初查组</el-radio-button>
+            <el-radio-button value="CLEAR">清案组</el-radio-button>
+            <el-radio-button value="NONE">不限</el-radio-button>
+          </el-radio-group>
+          <div class="cf-muted" style="font-size: 12px; margin-top: 4px">
+            {{ groupHint }}
+          </div>
+        </el-form-item>
+
         <!-- 账号必须落到一名员工身上：案件是按员工 ID 判定归属的，没有绑定就看不到自己的案件 -->
         <el-form-item label="关联员工" required>
           <div class="cf-bind">
@@ -198,6 +213,8 @@ const form = reactive({
   phone: '',
   dept: '',
   applyRole: 'STAFF',
+  // 办案组别：普通民警必填（INITIAL初查组 / CLEAR清案组 / NONE不限）
+  policeGroup: 'NONE',
   employeeId: null,
   newEmployee: null
 })
@@ -281,7 +298,28 @@ onMounted(async () => {
   await searchEmployee('')
 })
 
+/** 组别未选时的行内报错（配合 el-form-item 的 :error） */
+const groupError = ref('')
+
+/** 组别说明：随选择变化，让人知道这个组别能接什么 */
+const groupHint = computed(() => {
+  if (form.applyRole !== 'STAFF') return '管理层 / 领导不参与一线分工，可不选'
+  if (form.policeGroup === 'INITIAL') return '只能承接初查任务'
+  if (form.policeGroup === 'CLEAR') return '只能承接刑拘在办案件'
+  return '可承接各类案件'
+})
+
+// 切换角色后组别的必填要求变了（民警必选 → 领导可不选），清掉旧报错
+watch(() => form.applyRole, () => { groupError.value = '' })
+
 const onSubmit = async () => {
+  // 组别校验：普通民警必须选。后端也会兜底，但前端先拦提示更明确
+  if (form.applyRole === 'STAFF' && !form.policeGroup) {
+    groupError.value = '请选择办案组别'
+    ElMessage.warning('请选择办案组别：组别决定你能接哪类案件')
+    return
+  }
+  groupError.value = ''
   const phone = (form.phone || '').trim()
   if (!phone) {
     ElMessage.warning('请填写手机号，手机号可直接用于登录')

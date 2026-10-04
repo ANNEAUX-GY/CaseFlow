@@ -290,7 +290,10 @@ public class EmployeeService {
         vo.setEmployeeNo(e.getEmployeeNo());
         vo.setParentId(e.getParentId());
         vo.setDept(e.getDept());
-        vo.setTitle(e.getTitle());
+   vo.setTitle(e.getTitle());
+    String pg = com.caseflow.flow.PoliceGroup.normalize(e.getPoliceGroup());
+        vo.setPoliceGroup(pg);
+    vo.setPoliceGroupName(com.caseflow.flow.PoliceGroup.label(pg));
         vo.setPhone(e.getPhone());
         vo.setEmail(e.getEmail());
         vo.setLevelNo(e.getLevelNo());

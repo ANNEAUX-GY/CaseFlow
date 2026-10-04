@@ -25,6 +25,30 @@
         </span>
       </div>
 
+      <!-- 主办人 / 盯办人（2026-10-04）：可点名字看该人的承办负荷 -->
+      <div class="cf-panel" style="margin-bottom: 12px">
+        <div class="cf-panel__head">
+          <span>主办人与盯办人</span>
+          <span class="cf-muted">点名字可查看该人正在主办/经办多少案子</span>
+        </div>
+        <div style="padding: 12px 16px; font-size: 13px">
+          <div v-if="assignees.length" class="cf-watch__owners">
+            <div v-for="a in assignees" :key="a.id" class="cf-watch__owner">
+              <span class="cf-watch__owner-role"
+                :class="a.assignRole === 'OWNER' ? 'is-owner' : 'is-member'">
+                {{ a.assignRole === 'OWNER' ? '主办人' : '协办人' }}
+              </span>
+              <a class="cf-watch__owner-name" @click="openWorkload(a)">{{ a.employeeName }}</a>
+              <el-tag v-if="a.policeGroup" size="small"
+                :type="(POLICE_GROUP_META[a.policeGroup] || {}).type" effect="plain">
+                {{ a.policeGroupName || policeGroupLabel(a.policeGroup) }}
+              </el-tag>
+            </div>
+          </div>
+          <span v-else class="cf-muted">尚未指派承办人</span>
+        </div>
+      </div>
+
       <!-- 强制措施卡 -->
       <div class="cf-panel">
         <div class="cf-panel__head">
@@ -107,6 +131,9 @@
         <OpinionPanel :case-id="detail.id" :detail="detail" :is-full-access="isFullAccess" @changed="after" />
       </div>
     </div>
+
+    <!-- 民警承办负荷详情：点「主办人 / 协办人」名字打开 -->
+    <StaffWorkloadDialog ref="workloadRef" />
 
     <!-- 计划新增/编辑 -->
     <el-dialog v-model="planDlg.visible" :title="planDlg.id ? '编辑侦查计划' : '新增侦查计划'" width="440px" append-to-body>
@@ -192,9 +219,10 @@ import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { caseApi, watchApi } from '../api'
 import OpinionPanel from './OpinionPanel.vue'
+import StaffWorkloadDialog from './StaffWorkloadDialog.vue'
 import FlowPanel from './FlowPanel.vue'
 import { useUserStore } from '../store/user'
-import { INVEST_STATUS_META, MEASURE_META } from '../utils/format'
+import { INVEST_STATUS_META, MEASURE_META, POLICE_GROUP_META, policeGroupLabel } from '../utils/format'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -207,6 +235,14 @@ const isFullAccess = computed(() => userStore.isFullAccess)
 const visible = ref(false)
 const loading = ref(false)
 const detail = ref({})
+/** 现役承办人（主办/协办），供「主办人与盯办人」区块展示 */
+const assignees = computed(() =>
+  (detail.value.assignHistory || []).filter(a => a.status === 'ACTIVE')
+)
+const workloadRef = ref(null)
+const openWorkload = (a) => {
+  if (a.employeeId) workloadRef.value?.show(a.employeeId, detail.value.id)
+}
 const plans = ref([])
 const approvals = ref([])
 
@@ -340,4 +376,15 @@ const after = async () => { await reload(); emit('done') }
 .cf-plan-done { text-decoration: line-through; color: #8a929e }
 .cf-danger { color: #c62a2a }
 .cf-warn { color: #d98a0b }
+
+.cf-watch__owners { display: flex; flex-wrap: wrap; gap: 10px 18px }
+.cf-watch__owner { display: inline-flex; align-items: center; gap: 6px }
+.cf-watch__owner-role { font-size: 12px; padding: 1px 7px; border-radius: 3px }
+.cf-watch__owner-role.is-owner { background: #1b4a8c; color: #fff }
+.cf-watch__owner-role.is-member { background: #eef3fa; color: #5a6472 }
+/* 名字可点：下划线提示可交互 */
+.cf-watch__owner-name {
+  color: #1b4a8c; cursor: pointer; text-decoration: underline dotted;
+}
+.cf-watch__owner-name:hover { color: #c62a2a; text-decoration: underline solid }
 </style>

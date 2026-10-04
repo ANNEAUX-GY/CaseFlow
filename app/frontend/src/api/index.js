@@ -82,7 +82,9 @@ export const caseApi = {
   status: (id, data) => http.post(`/cases/${id}/status`, data),
   reminders: (params) => http.get('/cases/reminders', { params }),
   stats: (params) => http.get('/cases/stats', { params }),
-  dashboard: (params) => http.get('/cases/dashboard', { params })
+  dashboard: (params) => http.get('/cases/dashboard', { params }),
+  /** 民警承办负荷详情（点主办人/协办人时用）；caseId 传入会标记 isCurrent */
+  staffWorkload: (employeeId, caseId) => http.get(`/cases/staff/${employeeId}/workload`, { params: { caseId } })
 }
 
 export const suspectApi = {
