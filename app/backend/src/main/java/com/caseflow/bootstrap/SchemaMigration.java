@@ -94,7 +94,14 @@ public class SchemaMigration implements ApplicationRunner {
             {"case_todo", "urgency", "VARCHAR(8) NULL"},
             {"case_todo", "importance", "VARCHAR(8) NULL"},
             {"case_todo", "dept_source", "VARCHAR(128) NULL"},
-            {"case_todo", "deadline", "DATETIME NULL"}
+            {"case_todo", "deadline", "DATETIME NULL"},
+            // 办案组别（2026-10-04）：初查组/清案组/不限。
+            // org_employee 是指派校验的**权威来源**（账号可没绑员工档案）；
+            // sys_user.police_group 是注册时自报 + 审核时确认的组别，
+            // 员工档案补全后以 org_employee 为准。两列都可空，NULL 视为「不限」，
+            // 存量账号/员工不选组也能继续用，只是不会被组别限制指派。
+            {"org_employee", "police_group", "VARCHAR(16) NULL"},
+            {"sys_user", "police_group", "VARCHAR(16) NULL"}
     };
 
     /** 旧数据回填：把历史「案件类型」自由文本里的大类词归位到 case_type（小类位清空）。

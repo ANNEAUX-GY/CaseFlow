@@ -33,6 +33,8 @@ public class UserSaveRequest {
     private String phone;
 
     private String dept;
+    /** 办案组别：INITIAL初查组 / CLEAR清案组 / NONE不限 */
+    private String policeGroup;
 
     /** 审核意见 / 驳回原因 */
     private String remark;

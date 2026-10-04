@@ -30,6 +30,9 @@ public class SysUser implements Serializable {
     private String dept;
     /** 注册时申请的角色，审核时可调整 */
     private String applyRole;
+
+    /** 办案组别：注册时必选；NULL=未指定。员工档案补全后以 org_employee 为准 */
+    private String policeGroup;
     /** 0 待审核 / 1 已通过 / 2 已驳回 */
     private Integer auditStatus;
     private String auditRemark;

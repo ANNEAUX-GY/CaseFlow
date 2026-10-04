@@ -24,6 +24,8 @@ public class RegisterRequest {
 
     /** 申请角色：STAFF / LAW_OFFICER / DEPUTY_CHIEF / CHIEF */
     private String applyRole;
+    /** 办案组别：INITIAL初查组 / CLEAR清案组 / NONE不限（普通民警注册时必选） */
+    private String policeGroup;
 
     /**
      * 要绑定的员工档案 ID（二选一）。

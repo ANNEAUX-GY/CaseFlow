@@ -335,6 +335,8 @@ public class EmployeeService {
         entity.setEmployeeNo(req.getEmployeeNo());
         entity.setDept(req.getDept());
         entity.setTitle(req.getTitle());
+        // 办案组别：空/非法一律归一为「不限」，不因漏填卡住员工档案录入
+        entity.setPoliceGroup(com.caseflow.flow.PoliceGroup.normalize(req.getPoliceGroup()));
         entity.setPhone(req.getPhone());
         entity.setEmail(req.getEmail());
         entity.setSortNo(req.getSortNo() == null ? 0 : req.getSortNo());

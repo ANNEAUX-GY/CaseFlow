@@ -27,6 +27,9 @@ public class OrgEmployee implements Serializable {
     private String idPath;
     private String dept;
     private String title;
+
+    /** 办案组别：INITIAL初查组 / CLEAR清案组 / NULL=不限（指派校验的权威来源） */
+    private String policeGroup;
     private String phone;
     private String email;
     private Integer levelNo;

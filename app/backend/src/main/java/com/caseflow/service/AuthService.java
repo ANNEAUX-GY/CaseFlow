@@ -184,6 +184,8 @@ public class AuthService {
         u.setApplyRole(applyRole);
         u.setPhone(phone);
         u.setDept(Validators.trim(req.getDept()));
+        // 组别：普通民警注册时必选（前端已强制），后端兜底归一为「不限」
+        u.setPoliceGroup(com.caseflow.flow.PoliceGroup.normalize(req.getPoliceGroup()));
         // 新账号必须关联员工档案：选已有的，或组织树里还没这个人就现场建一个（同一事务，一起回滚）
         Long employeeId = bindingService.resolve(req.getEmployeeId(), req.getNewEmployee(),
                 EmployeeBindingService.ORIGIN_SELF_REGISTER, null);

@@ -545,6 +545,34 @@ public class CaseService {
     // 指派 / 改派
     // ------------------------------------------------------------------
 
+    /**
+     * 推导该案件要求什么办案组别。
+     *
+     * <p>依据是强制措施：刑拘在办的案件必然已登记 DETENTION，此时该由清案组接手；
+     * 其余（未采取措施 / 取保监居 / 行政 / 未立案）不限制组别。
+     *
+     * <p>推导口径与列表页 module 参数的过滤逻辑保持一致（见 page() 里的 module 分支），
+     * 否则会出现「在刑拘在办页签里选人，却被提示初查组限制」的错觉。
+     */
+    private String requiredGroupOf(CaseInfo c) {
+        return com.caseflow.flow.PoliceGroup.requiredOf(c.getCaseType(), moduleOf(c));
+    }
+
+    /** 案件当前所属盯办子模块：DETENTION刑拘在办 / INITIAL初查 / BAIL_RESIDENCE取保监居 */
+    private String moduleOf(CaseInfo c) {
+        String m = c.getCaseMeasure();
+        if (!StringUtils.hasText(m) || "NONE".equals(m)) {
+            return "INITIAL";
+        }
+        if ("DETENTION".equals(m)) {
+            return "DETENTION";
+        }
+        if ("BAIL".equals(m) || "RESIDENCE".equals(m)) {
+            return "BAIL_RESIDENCE";
+        }
+        return "INITIAL";
+    }
+
     @Transactional(rollbackFor = Exception.class)
     public CaseVO assign(AssignRequest req) {
         if (req.getCaseId() == null) {
@@ -573,10 +601,27 @@ public class CaseService {
             throw new BizException("请至少选择一名承办人");
         }
         for (Long empId : target) {
-            OrgEmployee e = employeeService.employeeMap().get(empId);
-            if (e == null) {
-                throw new BizException("员工不存在：ID=" + empId);
-            }
+      OrgEmployee e = employeeService.employeeMap().get(empId);
+       if (e == null) {
+  throw new BizException("员工不存在：ID=" + empId);
+      }
+        }
+
+        // 办案组别校验（2026-10-04）：初查任务只能派给初查组、刑拘在办只能派给清案组，
+        // 其他案件不限制。组别取自**员工档案** org_employee.police_group
+        // （指派选的是员工，组别理应挂在档案上；账号上的组别只是注册时自报）。
+   // 存量员工没填组别 = 「不限」，不会被拦——上线即瘫痪比放宽规则更糟。
+        String required = requiredGroupOf(c);
+        if (!com.caseflow.flow.PoliceGroup.NONE.equals(required)) {
+    for (Long empId : target) {
+    OrgEmployee e = employeeService.employeeMap().get(empId);
+      String g = e.getPoliceGroup();
+                if (!com.caseflow.flow.PoliceGroup.canTake(required, g)) {
+           throw new BizException("「" + com.caseflow.flow.PoliceGroup.label(required) + "」只能指派给"
+        + com.caseflow.flow.PoliceGroup.label(required) + "人员；"
+  + e.getName() + " 属于「" + com.caseflow.flow.PoliceGroup.label(g) + "」");
+    }
+   }
         }
 
         // 旧指派关系全部置为历史（改派留痕），再写入新关系

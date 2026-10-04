@@ -19,6 +19,8 @@ public class EmployeeSaveRequest {
     private Long parentId;
     private String dept;
     private String title;
+    /** 办案组别：INITIAL初查组 / CLEAR清案组 / NONE不限（留空视为不限，兼容存量） */
+    private String policeGroup;
     private String phone;
     private String email;
     private Integer sortNo;
