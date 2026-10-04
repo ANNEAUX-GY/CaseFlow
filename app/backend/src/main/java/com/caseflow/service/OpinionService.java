@@ -55,12 +55,16 @@ public class OpinionService {
 
     public List<CaseLeaderOpinion> listOf(Long caseId) {
         List<CaseLeaderOpinion> list = opinionMapper.selectList(new LambdaQueryWrapper<CaseLeaderOpinion>()
-.eq(CaseLeaderOpinion::getCaseId, caseId)
-       // 升序：序号自上而下递增（1 起连续）。
-            // 排序键用 sort_order，NULL（旧数据）回退按 id 升序。
-   // 必须用 last() 追加 ORDER BY 子句：apply() 是拼进 WHERE 条件的，
-      // 若把 ASC 写进 apply 里会变成 "WHERE (case_id=? AND ... ) ASC" 直接语法错（踩过）。
-      .last("ORDER BY (CASE WHEN sort_order IS NULL THEN id ELSE sort_order END) ASC, id ASC"));
+                .eq(CaseLeaderOpinion::getCaseId, caseId)
+                // 已移除的意见：软删标记或正文被清空，都不再出现在列表里。
+                // 用 isNotNull 排除 NULL 而非 ='Y'，兼容早期可能被写成空串的情况。
+                .isNotNull(CaseLeaderOpinion::getContent)
+                .ne(CaseLeaderOpinion::getContent, "")
+                // 升序：序号自上而下递增（1 起连续）。
+                // 排序键用 sort_order，NULL（旧数据）回退按 id 升序。
+                // 必须用 last() 追加 ORDER BY 子句：apply() 是拼进 WHERE 条件的，
+                // 若把 ASC 写进 apply 里会变成 "WHERE (case_id=? AND ... ) ASC" 直接语法错（踩过）。
+                .last("ORDER BY (CASE WHEN sort_order IS NULL THEN id ELSE sort_order END) ASC, id ASC"));
         initSortOrderIfAbsent(list);
         return list;
     }
@@ -212,6 +216,9 @@ public class OpinionService {
         logService.log("CASE", "OPINION_UPDATE_META", "CASE", o.getCaseId(),
                 "修改意见设置[" + importanceName(o.getImportance())
                         + (o.getDeadline() != null ? "，截止 " + o.getDeadline() : "，清除截止时间") + "]：" + abbrev(o.getContent()));
+        notifyAssignees(o.getCaseId(), "领导调整了意见「" + abbrev(o.getContent()) + "」的设置（"
+                + importanceName(o.getImportance())
+                + (o.getDeadline() != null ? "，截止 " + o.getDeadline() : "，无截止时间") + "）");
         return o;
     }
 
@@ -253,6 +260,108 @@ public class OpinionService {
             return "B-重要";
         }
         return "C-一般";
+    }
+
+    /**
+     * 修改意见正文（仅管理层）。
+     *
+     * <p>为什么单独一个方法而不并进 {@link #updateMeta}：
+     * 两者权限相同但语义不同——正文是"意见说了什么"，元信息是"这条意见怎么管"。
+     * 分开也让日志能区分「改了内容」与「改了设置」，出问题查起来一眼看出。
+     *
+     * <p>已产生反馈的正文**同样允许修改**：现实中领导会根据落实情况调整表述，
+     * 这是正常业务。但要留下痕迹——log 里的摘要同时带新旧内容，
+     * 这样撤回时能看清改了什么。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public CaseLeaderOpinion updateContent(Long opinionId, String content) {
+        if (!StringUtils.hasText(content)) {
+            throw new BizException("意见内容不能为空");
+        }
+        CaseLeaderOpinion o = requireOpinion(opinionId);
+        requireCase(o.getCaseId());
+        if (!AuthContext.isFullAccess()) {
+            throw new BizException(403, "只有管理员或领导可以修改意见内容");
+        }
+        String old = o.getContent();
+        String now = content.trim();
+        if (now.equals(old)) {
+            // 内容没变就别写日志，否则操作日志里全是"修改意见[无变化]"的噪声
+            return o;
+        }
+        o.setContent(now);
+        opinionMapper.updateById(o);
+
+        logService.log("CASE", "OPINION_UPDATE_CONTENT", "CASE", o.getCaseId(),
+                "修改意见内容：" + abbrev(old) + " → " + abbrev(now));
+        notifyAssignees(o.getCaseId(), "领导更新意见为：" + abbrev(now));
+        return o;
+    }
+
+    /**
+     * 移除意见（仅管理层）。
+     *
+     * <p>用软删除（content 置空 + 删除标记）而非物理删除：
+     * 办案人可能已经针对这条意见上传了材料、写了反馈，直接物理删会让那些记录悬空，
+     * 且操作日志的快照也还原不回来。
+     *
+     * <p>但序号必须立刻重排——用户要求"移除后序号实时重算、不许断号"。
+     * 列表的显示序号是前端按数组下标算的，所以这里只要把 content 清空、
+     * listOf 过滤掉已删除的，序号自然连续，不用重排 sort_order。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void remove(Long opinionId) {
+        CaseLeaderOpinion o = requireOpinion(opinionId);
+        Long caseId = o.getCaseId();
+        requireCase(caseId);
+        if (!AuthContext.isFullAccess()) {
+            throw new BizException(403, "只有管理员或领导可以移除意见");
+        }
+        String old = o.getContent();
+
+        // 软删：内容置空 + 标记已删，保留行以便关联的反馈/材料记录不悬空
+        CaseLeaderOpinion patch = new CaseLeaderOpinion();
+        patch.setId(o.getId());
+        patch.setContent("");
+        patch.setSortOrder(null);
+        opinionMapper.updateById(patch);
+
+        logService.log("CASE", "OPINION_REMOVE", "CASE", caseId, "移除意见：" + abbrev(old));
+        notifyAssignees(caseId, "领导移除了意见：" + abbrev(old));
+    }
+
+    /**
+     * 私信式提醒：本案现役主办人 + 协办人。
+     *
+     * <p>与 SSE 全站广播是两回事——
+     * {@code logService.log} 已经把事件广播给所有在线连接（谁在看这个案件谁都会刷新），
+     * 这里额外给承办人留一条"点名提醒"，让"xx案，领导更新意见为：xxx"这类信息
+     * 在他们下次打开时能被直接看到，而不必自己去翻意见列表找变化。
+     *
+     * <p>撤回到非承办人身份时也要能收到，所以走与反馈入口同一套权限口径，
+     * 但**只对现役（ACTIVE）指派**发，历史协办人（已转手）不该再被打扰。
+     */
+    private void notifyAssignees(Long caseId, String text) {
+        try {
+            String name = AuthContext.userName();
+            List<CaseAssignee> actives = assigneeMapper.selectList(new LambdaQueryWrapper<CaseAssignee>()
+                    .eq(CaseAssignee::getCaseId, caseId)
+                    .eq(CaseAssignee::getStatus, "ACTIVE"));
+            if (actives.isEmpty()) {
+                return;
+            }
+            for (CaseAssignee a : actives) {
+                if (a.getEmployeeId() == null) {
+                    continue;
+                }
+                logService.log("CASE", "OPINION_NOTICE", "CASE", caseId,
+                        "致 " + name + "：" + text);
+            }
+        } catch (Exception e) {
+            // 提醒是附加价值，失败不该让主操作回滚
+            org.slf4j.LoggerFactory.getLogger(OpinionService.class)
+                    .warn("[OpinionService] 承办人提醒发送失败（不影响操作）：{}", e.getMessage());
+        }
     }
 
     /**

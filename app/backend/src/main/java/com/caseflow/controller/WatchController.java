@@ -253,6 +253,20 @@ public class WatchController {
                 str(body.get("deadline")), str(body.get("importance"))));
     }
 
+    /** 修改意见正文（管理层） */
+    @PostMapping("/opinions/{id}/content")
+    public Result<CaseLeaderOpinion> updateOpinionContent(@PathVariable Long id,
+                                                          @RequestBody Map<String, Object> body) {
+        return Result.ok(opinionService.updateContent(id, str(body.get("content"))));
+    }
+
+    /** 移除意见（管理层）；软删，保留关联记录以免悬空 */
+    @PostMapping("/opinions/{id}/remove")
+    public Result<Void> removeOpinion(@PathVariable Long id) {
+        opinionService.remove(id);
+        return Result.ok();
+    }
+
     /** 办案人对某条意见反馈落实情况；note 含结构化上传声明句（替代佐证材料上传） */
     @PostMapping("/opinions/{id}/feedback")
     public Result<CaseLeaderOpinion> feedbackOpinion(@PathVariable Long id,
