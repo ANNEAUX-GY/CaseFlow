@@ -22,6 +22,12 @@
           <el-icon><Folder /></el-icon>
           <span>我的案件</span>
         </el-menu-item>
+        <el-menu-item index="/my-todos">
+          <el-icon><List /></el-icon>
+          <span>我的待办</span>
+          <!-- 待办角标：待办未完成数（含即将超期），一眼提醒还有多少事要做 -->
+          <span v-if="pendingTodoCount > 0" class="cf-nav-badge">{{ pendingTodoCount }}</span>
+        </el-menu-item>
         <el-menu-item index="/reminders">
           <el-icon><AlarmClock /></el-icon>
           <span>到期提醒</span>
@@ -102,6 +108,7 @@ import { Odometer, Tickets, AlarmClock, Connection, View, UserFilled, Collection
 import { useUserStore } from '../store/user'
 import { usePendingStore } from '../store/pending'
 import { useCaseTypeStore } from '../store/caseType'
+import { useMyTodoStore } from '../store/myTodo'
 import { useDevice } from '../utils/device'
 
 const props = defineProps({
@@ -114,6 +121,8 @@ const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
 const pendingStore = usePendingStore()
+const myTodoStore = useMyTodoStore()
+const pendingTodoCount = computed(() => myTodoStore.count)
 const caseTypeStore = useCaseTypeStore()
 const { mode, setDeviceMode, layoutLabel, deviceKindLabel } = useDevice()
 

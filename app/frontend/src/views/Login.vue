@@ -63,6 +63,15 @@ const onLogin = async () => {
     await userStore.login(account, form.password)
     // 按角色决定落地页：管理层进工作台，普通民警进「我的案件」
     router.push(homePathOf(userStore.userInfo?.role))
+    // 普通民警登录后弹欢迎汇总框（需求：每次登录都弹）。
+    // 等待路由切换完成再由落地页触发——Login 组件随即被销毁，
+    // 弹窗挂在它上面会一起没了，所以把"要弹窗"记在 sessionStorage，
+    // 由 Layout 挂载时消费（见 Layout.vue 的 checkWelcome）。
+    if (!userStore.isFullAccess) {
+      try {
+        sessionStorage.setItem('cf_welcome_pending', '1')
+      } catch (e) { /* 隐私模式忽略 */ }
+    }
   } catch (e) {
     // 错误提示已由 axios 拦截器统一弹出（含「等待审核」「密码错误」等后端原文），此处不再重复提示
   } finally {

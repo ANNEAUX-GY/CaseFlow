@@ -168,3 +168,51 @@ export const ACTION_LABEL = {
   PUNISH: '批准行政处罚',
   CLOSE: '解除收案'
 }
+
+// ============ 民警端待办（2026-10-04） ============
+// 命名加 TODO_ 前缀，与上面意见模块的 URGENCY_META（已逾期/临期/正常）区分：
+// 那是按截止时间实时算的紧急性，这是民警手动标的紧急程度，语义不同不可混用。
+/** 紧急程度：手动三档，不随时间变化（与截止时间刻意分开） */
+export const TODO_URGENCY_META = {
+  URGENT: { label: '紧急', type: 'danger' },
+  HIGH: { label: '较急', type: 'warning' },
+  NORMAL: { label: '一般', type: 'info' }
+}
+
+/** 重点程度：手动三档 */
+export const TODO_IMPORTANCE_META = {
+  KEY: { label: '重点', type: 'danger' },
+  MEDIUM: { label: '次重点', type: 'warning' },
+  NORMAL: { label: '一般', type: 'info' }
+}
+
+/** 待办状态 */
+export const TODO_STATUS_META = {
+  PENDING: { label: '待办', type: 'warning' },
+  DONE: { label: '已完成', type: 'success' },
+  CANCELLED: { label: '已取消', type: 'info' }
+}
+
+/** 紧急程度归一：NULL（历史数据）视为一般 */
+export function todoUrgencyOf(row) {
+  const v = row && row.urgency
+  return TODO_URGENCY_META[v] ? v : 'NORMAL'
+}
+
+/** 重点程度归一：NULL（历史数据）视为一般 */
+export function todoImportanceOf(row) {
+  const v = row && row.importance
+  return TODO_IMPORTANCE_META[v] ? v : 'NORMAL'
+}
+
+/** 距截止天数 → 展示文案。负数=已超期，0=今天到期 */
+export function todoDueTextOf(row) {
+  if (!row || !row.deadline) return { text: '', cls: '', overdue: false }
+  const d = row.daysLeft
+  const dt = String(row.deadline).replace('T', ' ').slice(5, 16)
+  if (d == null) return { text: dt, cls: '', overdue: false }
+  if (d < 0) return { text: dt + '（已超期 ' + (-d) + ' 天）', cls: 'is-overdue', overdue: true }
+  if (d === 0) return { text: dt + '（今天到期）', cls: 'is-today', overdue: false }
+  if (d <= 3) return { text: dt + '（剩 ' + d + ' 天）', cls: 'is-soon', overdue: false }
+  return { text: dt, cls: '', overdue: false }
+}

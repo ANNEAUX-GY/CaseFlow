@@ -6,7 +6,7 @@ import { GATED_PATHS, useCaseTypeStore } from '../store/caseType'
  * 普通民警（非全权限角色）只能进这两个页面：内容都只与本人民下案件相关。
  * 用白名单而不是逐个页面加标记 —— 以后新增的页面默认就是管理层专属，不会漏配。
  */
-const STAFF_PAGES = ['/my-cases', '/reminders']
+const STAFF_PAGES = ['/my-cases', '/reminders', '/my-todos']
 
 /** 登录后的落地页：管理层进工作台，普通民警进我的案件 */
 export const homePathOf = (role) => (isFullAccessRole(role) ? '/dashboard' : '/my-cases')
@@ -33,6 +33,8 @@ const routes = [
     children: [
       // 普通民警主页：系统按实名（绑定的员工档案）匹配出的本人名下案件
       { path: 'my-cases', name: 'MyCases', component: () => import('../views/MyCases.vue'), meta: { title: '我的案件' } },
+      // 我的待办（普通民警端）：领导意见自动派生，可按紧急/重点排序
+      { path: 'my-todos', name: 'MyTodos', component: () => import('../views/MyTodos.vue'), meta: { title: '我的待办' } },
       { path: 'dashboard', name: 'Dashboard', component: () => import('../views/Dashboard.vue'), meta: { title: '工作台' } },
       { path: 'cases', name: 'Cases', component: () => import('../views/CaseList.vue'), meta: { title: '案件管理' } },
       { path: 'reminders', name: 'Reminders', component: () => import('../views/Reminder.vue'), meta: { title: '到期提醒' } },

@@ -176,7 +176,14 @@ export const todoApi = {
     }),
   rules: () => http.get('/todos/rules'),
   overview: (params) => http.get('/todos/overview', { params }),
-  summary: (params) => http.get('/todos/overview/summary', { params })
+  summary: (params) => http.get('/todos/overview/summary', { params }),
+  // ---- 民警端待办（2026-10-04）----
+  /** 本人待办列表。sortBy 支持多字段组合，如 'urgency,importance' */
+  myTodos: (params) => http.get('/todos/mine', { params }),
+  /** 民警调整待办的紧急/重点程度 */
+  updateMyTodoGrade: (id, data) => http.post(`/todos/mine/${id}/grade`, data),
+  /** 登录欢迎弹窗汇总：今日需完成 / 即将超期 / 新增领导意见 */
+  welcomeSummary: () => http.get('/todos/welcome-summary')
 }
 
 export const fileApi = {

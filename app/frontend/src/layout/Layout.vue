@@ -79,6 +79,12 @@
           </transition>
         </router-view>
       </el-main>
+
+      <!-- 登录欢迎弹窗（仅普通民警，每次登录弹一次）。
+           由 Login.vue 写入 sessionStorage 标记、这里消费——
+           因为登录后 Login 组件立刻被销毁，弹窗不能挂在它上面。
+           append-to-body 会把弹窗挂到 body，不受抽屉/侧栏容器影响。 -->
+      <WelcomeDialog v-if="!userStore.isFullAccess" ref="welcomeRef" />
     </el-container>
   </el-container>
 </template>
@@ -91,8 +97,10 @@ import { useUserStore } from '../store/user'
 import { usePendingStore } from '../store/pending'
 import { useEventStore } from '../store/events'
 import { useCaseTypeStore } from '../store/caseType'
+import { useMyTodoStore } from '../store/myTodo'
 import { useDevice } from '../utils/device'
 import NavPanel from './NavPanel.vue'
+import WelcomeDialog from '../components/WelcomeDialog.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -114,6 +122,8 @@ const toggleLayout = () => setDeviceMode(isMobile.value ? 'desktop' : 'mobile')
 const pendingStore = usePendingStore()
 // 案件类型选择器（统一入口门控）：顶栏显示当前类型 + 退出按钮，也负责登出时清状态
 const caseTypeStore = useCaseTypeStore()
+// 我的待办计数（普通民警侧栏红点 + 欢迎弹窗数据源）
+const myTodoStore = useMyTodoStore()
 
 const loadPending = () => {
   if (!userStore.isFullAccess) return
@@ -124,7 +134,33 @@ onMounted(() => {
   loadPending()
   // 登录后建立全局 SSE 事件流：任何案件操作实时广播（办理进度/最近操作自动刷新）
   eventStore.connect()
+  // 普通民警：取一次我的待办计数（侧栏红点）
+  if (!userStore.isFullAccess) myTodoStore.refresh()
+  // 消费登录时写下的"待弹欢迎框"标记（仅普通民警）
+  checkWelcome()
 })
+
+/**
+ * 登录欢迎弹窗的触发点。
+ *
+ * <p>为什么不直接写在 Login.vue：登录成功后 router.push 会立刻销毁 Login 组件，
+ * 挂在它上面的弹窗会跟着一起没了。改由 Login 写 sessionStorage 标记、
+ * Layout 挂载时消费——Layout 是整个会话只挂载一次的外壳，弹窗挂在它上面才稳。
+ */
+const welcomeRef = ref(null)
+const checkWelcome = () => {
+  if (userStore.isFullAccess) return
+  let pending = false
+  try {
+    pending = sessionStorage.getItem('cf_welcome_pending') === '1'
+    if (pending) sessionStorage.removeItem('cf_welcome_pending')
+  } catch (e) {
+    return
+  }
+  if (!pending) return
+  // 等首屏渲染完再弹，避免和页面入场动画抢焦点
+  setTimeout(() => welcomeRef.value?.show(), 400)
+}
 
 const eventStore = useEventStore()
 onBeforeUnmount(() => eventStore.disconnect())
@@ -144,6 +180,7 @@ const onLogout = async () => {
   navOpen.value = false
   await userStore.logout()
   pendingStore.reset()
+  myTodoStore.reset()
   // 退出登录必须连案件类型一起清：否则下一个登录的人会继承上一个人的类型选择
   caseTypeStore.reset()
   router.push('/login')
