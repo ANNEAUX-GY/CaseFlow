@@ -80,15 +80,17 @@
               :disabled="!canToggle(t)"
               @change="(v) => toggle(t, v)"
             />
-            <span v-if="!canToggle(t) && t.status !== 'DONE'" class="cf-todo__block">
-              {{ blockReason(t) }}
-            </span>
 
             <!-- 卡片主体：点击打开详情 -->
             <div class="cf-todo__card-body" @click="openDetail(t)">
               <div class="cf-todo__card-title">
                 <span class="cf-todo__no">{{ i + 1 }}</span>
                 <span class="cf-todo__name" :class="{ 'is-done-text': t.status === 'DONE' }">{{ t.content }}</span>
+                <!-- 「为什么勾不动」：放在标题行内（flex 自适应收缩），
+                     不放主行 checkbox 旁——那里是固定槽位，插入长文字会把整行挤乱（踩过） -->
+                <span v-if="!canToggle(t) && t.status !== 'DONE'" class="cf-todo__block">
+                  {{ blockReason(t) }}
+                </span>
                 <!-- 状态徽章：一眼分清 已完成 / 待反馈 / 进行中 / 未完成 -->
                 <el-tag v-if="t.status === 'DONE'" size="small" type="success" effect="dark">已完成</el-tag>
                 <template v-else-if="t.opinionId">
@@ -865,11 +867,14 @@ onBeforeUnmount(() => {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px;
   padding: 6px 8px; background: #fbfcfe; border: 1px dashed #dfe4ea; border-radius: 6px;
 }
-/* 「为什么勾不动」的内联说明：常驻可见，不悬浮、不遮挡任何按钮 */
+/* 「为什么勾不动」的内联说明：放在标题行内，常驻可见不悬浮。
+   位置在 .cf-todo__card-title（flex 行）里，需允许收缩换行，
+   不能像固定槽位那样占死宽度——放主行 checkbox 旁曾把整行挤乱（踩过）。 */
 .cf-todo__block {
-  flex: none; align-self: center; font-size: 12px; line-height: 1.4;
+  flex: 0 1 auto; min-width: 0; font-size: 12px; line-height: 1.4;
   color: #a8620a; background: #fdf6ec; border: 1px solid #f0dcc0;
-  padding: 1px 7px; border-radius: 3px; max-width: 190px;
+  padding: 1px 7px; border-radius: 3px;
+  max-width: 100%; overflow-wrap: anywhere;
 }
 .cf-todo__meta-edit-label { font-size: 12px; color: #8a929e; flex: none }
 
