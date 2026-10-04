@@ -2,6 +2,7 @@
   <!-- 信箱铃铛 + 未读角标。悬浮/点击弹出下拉面板（邮件式）。
        挂在顶栏，管理层与普通用户都显示；未读数实时随 SSE 增减。 -->
   <el-popover
+    ref="popRef"
     placement="bottom-end"
     :width="380"
     trigger="click"
@@ -36,7 +37,10 @@
               <span class="cf-notif__type">{{ typeLabel(n.type) }}</span>
             </div>
             <div class="cf-notif__content">{{ n.content }}</div>
-            <div class="cf-notif__time">{{ fmt(n.createdAt) }}</div>
+            <div class="cf-notif__time">
+              {{ fmt(n.createdAt) }}
+              <span v-if="n.caseId" class="cf-notif__go">查看案件 →</span>
+            </div>
           </div>
         </li>
       </transition-group>
@@ -61,6 +65,7 @@
  * 区分逻辑全在后端，前端无感知。
  */
 import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Bell } from '@element-plus/icons-vue'
 import { notificationApi } from '../api'
@@ -69,11 +74,13 @@ import { useUserStore } from '../store/user'
 
 const eventStore = useEventStore()
 const userStore = useUserStore()
+const router = useRouter()
 const myUserId = computed(() => userStore.userInfo?.userId || null)
 
 const list = ref([])
 const unreadCount = ref(0)
 const markingAll = ref(false)
+const popRef = ref(null)
 let unsubscribe = null
 
 const fmt = (s) => (s ? String(s).replace('T', ' ').slice(0, 16) : '-')
@@ -99,15 +106,23 @@ const refresh = async () => {
 /** 打开下拉时刷新（可能期间又来了新通知） */
 const onShow = () => refresh()
 
-/** 点一条 = 标已读 + 从列表移除 */
+/** 点一条 = 标已读 + 从列表移除 + 跳到对应案件详情（需求：点信件能跳转）。
+ *  路由按角色分：普通用户走「我的案件」，管理层走「案件管理」——
+ *  两边都支持 ?caseId= 直开详情抽屉（打开后各自把 query 抹掉，刷新不重复弹）。 */
 const read = async (n) => {
   try {
     await notificationApi.markRead(n.id)
   } catch (e) {
-    /* 标记失败不打断，下次打开仍在 */
+    /* 标记失败不打断跳转 */
   }
   list.value = list.value.filter((x) => x.id !== n.id)
   unreadCount.value = Math.max(0, unreadCount.value - 1)
+  if (n.caseId) {
+    // 关面板再跳转：el-popover 的 hide()，别手动置 v-model（trigger=click 模式没有它）
+    popRef.value?.hide()
+    const path = userStore.isFullAccess ? '/cases' : '/my-cases'
+    router.push({ path, query: { caseId: n.caseId } })
+  }
 }
 
 const markAll = async () => {
@@ -191,6 +206,8 @@ onBeforeUnmount(() => {
 .cf-notif__content { margin-top: 3px; font-size: 13px; color: #3d4653; line-height: 1.5;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden }
 .cf-notif__time { margin-top: 4px; font-size: 12px; color: #b9c0ca }
+/* 「查看案件」常驻提示（项目约定：禁悬浮提示，说明要一直可见） */
+.cf-notif__go { margin-left: 8px; color: #1b4a8c; font-weight: 600 }
 .cf-notif__empty { text-align: center; padding: 28px 0 20px }
 .cf-notif__empty-title { font-size: 14px; font-weight: 600; color: #1b2430; margin: 8px 0 4px }
 /* 已读移除淡出 */

@@ -146,7 +146,7 @@
 
 <script setup>
 import { reactive, ref, computed, onMounted, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { caseApi, employeeApi } from '../api'
 import CaseTable from '../components/CaseTable.vue'
@@ -162,6 +162,7 @@ import { withCaseType, useCaseTypeStore } from '../store/caseType'
 import PageFooter from '../components/PageFooter.vue'
 
 const route = useRoute()
+const router = useRouter()
 const { isMobile } = useDevice()
 const categoryStore = useCategoryStore()
 const caseTypeStore = useCaseTypeStore()
@@ -377,6 +378,15 @@ watch(() => route.query, (q) => {
     query.employeeId = id
     if (q.employeeName) employeeOptions.value = [{ id, name: q.employeeName }]
     load()
+  }
+  // 信箱点信件跳过来：直接打开对应案件的详情抽屉。
+  // 打开后立刻把 caseId 从地址栏抹掉，否则刷新会重复打开（与 MyCases 同一约定）。
+  if (q.caseId) {
+    currentId.value = Number(q.caseId)
+    detailVisible.value = true
+    const rest = { ...q }
+    delete rest.caseId
+    router.replace({ path: '/cases', query: rest })
   }
 }, { immediate: true })
 
