@@ -445,3 +445,24 @@ addFeedback（先记反馈再 done，顺序也满足规则1校验）。两条不
   ——测「反馈后离开未读」要用 IN_PROGRESS（进行中）反馈。
 - `backend/src/main/resources/sql/` 在 .git/info/exclude 本机排除里，
   **根 sql/schema.sql 才进远程**——别人 clone 后缺运行时副本是既有现状，别当新问题。
+
+## 统一信箱（2026-10-04，commit a6cf407）
+顶栏铃铛 + 下拉面板，任何与自己有关的操作变更归集。
+- **唯一埋点在 LogService.log 之后接 NotificationService.onLog**——全站写操作自动进信箱，
+  不用各模块单独埋。失败只记日志不回滚。
+- 新表 `case_notification`（每收件人一条，read_at 落行上，无需第二张已读表）。
+- **分发按收件人维度**：普通用户=本案 ACTIVE 承办/协办
+  （CaseAssignee.employeeId 反查 SysUser.userId）；管理层=全站所有用户（除自己）；
+  任何人不收自己触发的。
+- **白名单必须用真实 module_action**：全项目 logService.log 枚举出来是
+  CASE_OPINION_ADD（不是 OPINION_CREATE）、CASE_TODO_ADD、FILE_UPLOAD 等，
+  module 统一是 CASE/FILE/EMPLOYEE/AUTH。凭空想象 action 名必错。
+- SSE 定向事件加 kind=notification + userId，前端按当前 userId 过滤实时 +1。
+- **坑：无 body 的 POST 接口，自检脚本 call() 会把 method 误判成 GET**（报 500
+  "GET not supported"）；axios http.post 无 body 仍正确发 POST，是脚本问题不是产品问题。
+
+## 本项目「信箱/收件箱」类需求的统一套路（已做两个：意见收件箱 + 统一信箱）
+- 已读 = 按人，要么独立表（意见，一条多人看），要么每收件人一条（通知，量小铺开）
+- 邮件式交互：点开即读、点「知道了/关闭」才移除、全部已读一键清空、transition-group 淡出
+- 未读数字与列表条数**必须同口径**（数字≠列表会被当 bug 报）
+- 入口统一放顶栏，不跳页
