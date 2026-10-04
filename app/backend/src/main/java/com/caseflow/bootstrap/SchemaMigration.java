@@ -84,7 +84,17 @@ public class SchemaMigration implements ApplicationRunner {
             {"case_plan", "stage", "VARCHAR(24) NULL"},
             {"case_plan", "step_key", "VARCHAR(32) NULL"},
             {"case_plan", "task_key", "VARCHAR(32) NULL"},
-            {"case_plan", "is_std", "TINYINT NOT NULL DEFAULT 0"}
+            {"case_plan", "is_std", "TINYINT NOT NULL DEFAULT 0"},
+            // 民警端待办（2026-10-04）：补派生与列表展示所需字段。
+            // case_todo 表本身在旧库里已存在（远程代码漏了建表语句，本次补进 schema.sql），
+            // 这里只补列；新环境由 schema.sql 的 CREATE TABLE IF NOT EXISTS 一次建全。
+            // 五列全部可空：urgency/importance 为 NULL 时读取归一为"一般"，
+            // deadline 为 NULL 视为无期限，opinion_id 为 NULL 视为历史手工待办。
+            {"case_todo", "opinion_id", "BIGINT NULL"},
+            {"case_todo", "urgency", "VARCHAR(8) NULL"},
+            {"case_todo", "importance", "VARCHAR(8) NULL"},
+            {"case_todo", "dept_source", "VARCHAR(128) NULL"},
+            {"case_todo", "deadline", "DATETIME NULL"}
     };
 
     /** 旧数据回填：把历史「案件类型」自由文本里的大类词归位到 case_type（小类位清空）。

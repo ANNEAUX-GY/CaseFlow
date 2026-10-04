@@ -25,6 +25,24 @@ public class CaseTodoVO implements Serializable {
     private String status;
     private String statusName;
     private Integer sort;
+    /** 紧急程度 URGENT紧急/HIGH较急/NORMAL一般（NULL 归一为 NORMAL） */
+    private String urgency;
+    private String urgencyName;
+    /** 重点程度 KEY重点/MEDIUM次重点/NORMAL一般（NULL 归一为 NORMAL） */
+    private String importance;
+    private String importanceName;
+    /** 所属部门/来源（提意见人所在部门） */
+    private String deptSource;
+    /** 截止时间（取意见的落实截止时间，可空） */
+    private LocalDateTime deadline;
+    /** 距截止天数：负数=已超期，0=今天到期，null=无期限 */
+    private Integer daysLeft;
+    /** 源领导意见 ID：点条目可跳到对应意见详情 */
+    private Long opinionId;
+    /** 紧急程度排序权重（后端算好给前端用，避免各端各写一套映射） */
+    private Integer urgencyWeight;
+    /** 重点程度排序权重 */
+    private Integer importanceWeight;
     private LocalDateTime doneAt;
     private String doneByName;
     private String remark;

@@ -46,6 +46,12 @@ public class OpinionService {
     private CaseAssigneeMapper assigneeMapper;
     @Resource
     private LogService logService;
+    /**
+     * 民警待办服务：领导提意见后自动派生待办。
+     * 构造器/字段注入均无循环依赖（StaffTodoService 只查 opinionMapper，不回调本类）。
+     */
+    @Resource
+    private StaffTodoService staffTodoService;
 
     public List<CaseLeaderOpinion> listOf(Long caseId) {
         List<CaseLeaderOpinion> list = opinionMapper.selectList(new LambdaQueryWrapper<CaseLeaderOpinion>()
@@ -107,10 +113,20 @@ public class OpinionService {
         opinionMapper.insert(o);
 
         logService.log("CASE", "OPINION_ADD", "CASE", caseId,
-                "提出意见：" + abbrev(o.getContent())
-                        + (o.getDeadline() != null ? "（截止 " + o.getDeadline() + "）" : "")
-                        + "（重要性 " + o.getImportance() + "）");
-        return o;
+      "提出意见：" + abbrev(o.getContent())
+      + (o.getDeadline() != null ? "（截止 " + o.getDeadline() + "）" : "")
+        + "（重要性 " + o.getImportance() + "）");
+
+        // 自动派生民警待办（2026-10-04）：领导提意见 = 民警收到一条待办。
+        // 放在 log 之后、同一事务内：派生失败会连带回滚这条意见，
+        // 避免出现"有意见但没待办"的漏项。
+        try {
+      staffTodoService.deriveFromOpinion(o);
+        } catch (Exception e) {
+        logService.log("CASE", "OPINION_TODO_DERIVE_FAIL", "CASE", caseId,
+   "意见已记录但派生待办失败：" + e.getMessage());
+     }
+   return o;
     }
 
     /** 下一条意见的排序位次：现有最大值 + 1；无记录则 1。 */

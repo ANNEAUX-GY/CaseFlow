@@ -103,6 +103,36 @@ CREATE TABLE IF NOT EXISTS case_file (
     uploaded_at   DATETIME     DEFAULT CURRENT_TIMESTAMP COMMENT '上传时间'
 );
 
+-- 5.1.1 待办（2026-10-04 补建：实体与 Mapper 早已存在，但建表语句一直缺失，
+--   导致全新环境部署时报表不存在；这里补齐并一次性给足民警端所需字段）
+--
+--   数据来源：**由领导意见自动派生**。领导在意见面板提一条意见，
+--   本表就有一条对应待办；不做两套人工录入，避免两边对不上。
+--   opinion_id 是与 case_leader_opinion 的关联，UNIQUE 保证一条意见只派生一条待办
+--   （重复调用派生接口时靠这个幂等，不会产生重复待办）。
+CREATE TABLE IF NOT EXISTS case_todo (
+    id             BIGINT       AUTO_INCREMENT PRIMARY KEY COMMENT '主键',
+    case_id        BIGINT       DEFAULT NULL COMMENT '案件 ID',
+    opinion_id     BIGINT       DEFAULT NULL COMMENT '来源领导意见 ID（派生待办时写入，幂等去重用）',
+    content        VARCHAR(512) NOT NULL COMMENT '任务标题（取意见内容，冗余存储便于列表展示与检索）',
+    status         VARCHAR(16)  NOT NULL DEFAULT 'PENDING' COMMENT 'PENDING待办/DONE已完成/CANCELLED已取消',
+    sort           INT     NOT NULL DEFAULT 0 COMMENT '排序',
+    urgency        VARCHAR(8)   DEFAULT NULL COMMENT '紧急程度：URGENT紧急/HIGH较急/NORMAL一般；NULL=旧数据按NORMAL',
+    importance     VARCHAR(8)   DEFAULT NULL COMMENT '重点程度：KEY重点/MEDIUM次重点/NORMAL一般；NULL=旧数据按 NORMAL',
+    dept_source    VARCHAR(128) DEFAULT NULL COMMENT '所属部门/来源（取提意见人所在部门，冗余便于列表展示）',
+    deadline       DATETIME     DEFAULT NULL COMMENT '截止时间（取意见的落实截止时间，可空）',
+    done_at        DATETIME     DEFAULT NULL COMMENT '完成时间',
+    done_by        BIGINT       DEFAULT NULL COMMENT '完成人',
+    remark         VARCHAR(512) DEFAULT NULL COMMENT '备注/完成说明',
+    created_by     BIGINT       DEFAULT NULL COMMENT '创建人',
+    created_at     DATETIME     DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at     DATETIME     DEFAULT CURRENT_TIMESTAMP COMMENT '更新时间'
+);
+
+-- 已有库升级：新增 5 列（opinion_id/urgency/importance/dept_source/deadline）由
+-- com.caseflow.bootstrap.SchemaMigration 幂等补齐；case_todo 表本身可能已存在，
+-- 上面 CREATE TABLE IF NOT EXISTS 会自动补建。
+
 -- 5.1 嫌疑人（案件关联的身份信息；随案件快照一并存档，支持撤回还原）
 CREATE TABLE IF NOT EXISTS case_suspect (
     id            BIGINT       AUTO_INCREMENT PRIMARY KEY COMMENT '主键',

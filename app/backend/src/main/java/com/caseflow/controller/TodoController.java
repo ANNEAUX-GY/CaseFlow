@@ -5,6 +5,7 @@ import com.caseflow.dto.TodoReorderRequest;
 import com.caseflow.dto.TodoSaveRequest;
 import com.caseflow.security.FullAccessOnly;
 import com.caseflow.service.FileService;
+import com.caseflow.service.StaffTodoService;
 import com.caseflow.service.TodoService;
 import com.caseflow.vo.CaseFileVO;
 import com.caseflow.vo.CaseTodoVO;
@@ -43,6 +44,54 @@ public class TodoController {
     private TodoService todoService;
     @Resource
     private FileService fileService;
+    @Resource
+    private StaffTodoService staffTodoService;
+
+    // ---------------- 民警端待办事项（2026-10-04） ----------------
+    // 数据来自领导意见自动派生；权限强制收敛到「本人承办/协办」，
+    // 与案件列表共用 myVisibleCaseIds 口径，管理层传参也扩不大范围。
+
+    /**
+     * 本人待办列表（登录即可，范围恒为本人）。
+     *
+     * @param status   可选 PENDING / DONE
+     * @param sortBy   逗号分隔的排序字段，如 "urgency,importance,deadline"；空则用默认组合
+     * @param uOrder   紧急程度方向 asc/desc，默认 desc（紧急在前）
+     * @param iOrder   重点程度方向 asc/desc，默认 desc（重点在前）
+     */
+    @GetMapping("/mine")
+    public Result<List<CaseTodoVO>> myTodos(
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String sortBy,
+            @RequestParam(required = false) String urgencyOrder,
+            @RequestParam(required = false) String importanceOrder,
+            @RequestParam(required = false) String keyword) {
+        return Result.ok(staffTodoService.myTodos(status, sortBy, urgencyOrder, importanceOrder, keyword));
+    }
+
+    /** 民警端调整待办的紧急/重点程度（只能改本人相关案件的） */
+    @PostMapping("/mine/{id}/grade")
+    public Result<CaseTodoVO> updateGrade(@PathVariable Long id,
+                                        @RequestBody Map<String, Object> body) {
+        Object u = body == null ? null : body.get("urgency");
+        Object i = body == null ? null : body.get("importance");
+        return Result.ok(staffTodoService.updateGrade(id,
+                u == null ? null : String.valueOf(u),
+        i == null ? null : String.valueOf(i)));
+    }
+
+    /** 登录欢迎弹窗汇总：今日需完成 / 即将超期 / 新增领导意见 */
+    @GetMapping("/welcome-summary")
+    public Result<Map<String, Object>> welcomeSummary() {
+        return Result.ok(staffTodoService.welcomeSummary());
+    }
+
+    /** 为历史领导意见补派生待办（幂等，仅管理层） */
+    @PostMapping("/backfill-from-opinions")
+    @FullAccessOnly("补派生待办")
+    public Result<Integer> backfill() {
+        return Result.ok(staffTodoService.backfillFromOpinions());
+    }
 
     /** 某案件的待办清单（含佐证材料明细：上传人、上传时间） */
     @GetMapping("/case/{caseId}")
