@@ -6,6 +6,7 @@ import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import com.caseflow.entity.CaseTodoFeedback;
 
 /**
  * 待办视图：内容 + 完成状态 + 佐证材料（含上传人 / 上传时间）。
@@ -49,6 +50,18 @@ public class CaseTodoVO implements Serializable {
     private String createdByName;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+
+    // ---- 子任务与反馈（2026-10-04） ----
+    /** 父任务 ID：NULL=顶层主任务；非空=子任务 */
+    private Long parentId;
+    /** 本任务的子任务总数（仅主任务有值） */
+    private Integer subtaskTotal;
+    /** 已完成的子任务数（仅主任务有值） */
+    private Integer subtaskDone;
+    /** 全部反馈记录（按时间正序；仅详情弹窗接口填充，列表不返回以免过重） */
+    private List<CaseTodoFeedback> feedbacks = new ArrayList<>();
+    /** 子任务列表（仅详情弹窗接口填充） */
+    private List<CaseTodoVO> subtasks = new ArrayList<>();
 
     /** 佐证材料数量 */
     private Integer evidenceCount;

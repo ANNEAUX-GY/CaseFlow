@@ -95,6 +95,9 @@ public class SchemaMigration implements ApplicationRunner {
             {"case_todo", "importance", "VARCHAR(8) NULL"},
             {"case_todo", "dept_source", "VARCHAR(128) NULL"},
             {"case_todo", "deadline", "DATETIME NULL"},
+            // 子任务（2026-10-04）：NULL=顶层主任务，非空=挂在该 id 下。
+            // 存量任务全部为 NULL，行为不变，无需回填。
+            {"case_todo", "parent_id", "BIGINT NULL"},
             // 办案组别（2026-10-04）：初查组/清案组/不限。
             // org_employee 是指派校验的**权威来源**（账号可没绑员工档案）；
             // sys_user.police_group 是注册时自报 + 审核时确认的组别，

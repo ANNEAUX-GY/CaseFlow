@@ -116,6 +116,7 @@ CREATE TABLE IF NOT EXISTS case_todo (
     id             BIGINT       AUTO_INCREMENT PRIMARY KEY COMMENT '主键',
     case_id        BIGINT       DEFAULT NULL COMMENT '案件 ID',
     opinion_id     BIGINT       DEFAULT NULL COMMENT '来源领导意见 ID（派生待办时写入，幂等去重用）',
+    parent_id      BIGINT       DEFAULT NULL COMMENT '父任务 ID：NULL=顶层主任务；非空=子任务（细节工作）。NULL 兼容全部存量数据',
     content        VARCHAR(512) NOT NULL COMMENT '任务标题（取意见内容，冗余存储便于列表展示与检索）',
     status         VARCHAR(16)  NOT NULL DEFAULT 'PENDING' COMMENT 'PENDING待办/DONE已完成/CANCELLED已取消',
     sort           INT     NOT NULL DEFAULT 0 COMMENT '排序',
@@ -134,6 +135,31 @@ CREATE TABLE IF NOT EXISTS case_todo (
 -- 已有库升级：新增 5 列（opinion_id/urgency/importance/dept_source/deadline）由
 -- com.caseflow.bootstrap.SchemaMigration 幂等补齐；case_todo 表本身可能已存在，
 -- 上面 CREATE TABLE IF NOT EXISTS 会自动补建。
+
+-- 5.1.2 待办反馈记录（2026-10-04）
+--
+-- 为什么单独建表：case_todo.remark 是**单字段、覆盖式**的完成说明，
+-- 每次完成反馈都会冲掉上一条。用户需求要「展示该任务的**全部**反馈记录」，
+-- 所以改为累积式存储——每次提交反馈或变更状态都追加一条。
+--
+-- 历史 remark 不迁移：存量任务首次提交反馈时才开始累积，
+-- 避免上线后突然冒出一批时间不明的老记录。
+CREATE TABLE IF NOT EXISTS case_todo_feedback (
+    id           BIGINT       AUTO_INCREMENT PRIMARY KEY COMMENT '主键',
+    todo_id      BIGINT       NOT NULL COMMENT '所属待办（主任务或子任务）',
+    case_id      BIGINT       NOT NULL COMMENT '案件 ID（冗余，便于按案件清理与查询）',
+    content      VARCHAR(1000) NOT NULL COMMENT '反馈内容',
+    status_at    VARCHAR(16)  DEFAULT NULL COMMENT '反馈时的状态快照：DONE/IN_PROGRESS/PENDING',
+    creator_id   BIGINT       DEFAULT NULL COMMENT '记录人账号 ID',
+    creator_name VARCHAR(64)  DEFAULT NULL COMMENT '记录人姓名（冗余展示）',
+    created_at   DATETIME     DEFAULT CURRENT_TIMESTAMP COMMENT '记录时间（按此排序累积展示）',
+    CONSTRAINT fk_todo_feedback_todo FOREIGN KEY (todo_id) REFERENCES case_todo(id) ON DELETE CASCADE
+);
+
+-- 按任务取全部反馈（主查询：todo_id + 时间正序），一条索引覆盖
+CREATE INDEX IF NOT EXISTS idx_todo_feedback_todo ON case_todo_feedback(todo_id, created_at);
+-- 按案件清理时用
+CREATE INDEX IF NOT EXISTS idx_todo_feedback_case ON case_todo_feedback(case_id);
 
 -- 5.1 嫌疑人（案件关联的身份信息；随案件快照一并存档，支持撤回还原）
 CREATE TABLE IF NOT EXISTS case_suspect (

@@ -81,6 +81,9 @@ public class CaseTodo implements Serializable {
     private Long doneBy;
     /** 完成说明（选填） */
     private String remark;
+    /** 父任务 ID：NULL=顶层主任务；非空=子任务（细节工作）。NULL 兼容存量 */
+    private Long parentId;
+
     private Long createdBy;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

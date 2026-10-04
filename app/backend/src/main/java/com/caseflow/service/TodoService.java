@@ -4,10 +4,12 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.caseflow.entity.CaseAssignee;
 import com.caseflow.entity.CaseInfo;
 import com.caseflow.entity.CaseTodo;
+import com.caseflow.entity.CaseTodoFeedback;
 import com.caseflow.entity.SysUser;
 import com.caseflow.exception.BizException;
 import com.caseflow.mapper.CaseAssigneeMapper;
 import com.caseflow.mapper.CaseInfoMapper;
+import com.caseflow.mapper.CaseTodoFeedbackMapper;
 import com.caseflow.mapper.CaseTodoMapper;
 import com.caseflow.mapper.SysUserMapper;
 import com.caseflow.security.AuthContext;
@@ -45,6 +47,8 @@ public class TodoService {
     @Resource
     private CaseSnapshotService snapshotService;
     @Resource
+    private CaseTodoFeedbackMapper feedbackMapper;
+    @Resource
     private LogService logService;
 
     /** 单个案件待办条数上限，防止误批量粘贴把详情页撑爆 */
@@ -58,14 +62,45 @@ public class TodoService {
         if (caseId == null) {
             return new ArrayList<>();
         }
+        // 只取顶层主任务（parent_id IS NULL）：子任务在详情弹窗里看，
+        // 混进主列表会让「共 N 项」的数字失真，也会让序号含义不明。
+        // 存量任务 parent_id 全为 NULL，行为与原来完全一致。
         List<CaseTodo> list = todoMapper.selectList(new LambdaQueryWrapper<CaseTodo>()
                 .eq(CaseTodo::getCaseId, caseId)
+                .isNull(CaseTodo::getParentId)
                 .orderByAsc(CaseTodo::getSort).orderByAsc(CaseTodo::getId));
+        // 一次性把子任务统计好，避免每个主任务各查一次（N+1）
+        java.util.Map<Long, int[]> subStat = subtaskStat(caseId);
         List<CaseTodoVO> vos = new ArrayList<>();
         for (CaseTodo t : list) {
-            vos.add(toVO(t, withEvidence));
+            CaseTodoVO vo = toVO(t, withEvidence);
+            int[] st = subStat.get(t.getId());
+            vo.setSubtaskTotal(st == null ? 0 : st[0]);
+            vo.setSubtaskDone(st == null ? 0 : st[1]);
+            vos.add(vo);
         }
         return vos;
+    }
+
+    /**
+     * 某案件的子任务统计：parentId → [总数, 已完成数]。
+     *
+     * <p>一次查询全案件子任务后在内存里聚合——主任务可能有几十条，
+     * 逐条查会打出几十个 SQL。
+     */
+    private java.util.Map<Long, int[]> subtaskStat(Long caseId) {
+        java.util.Map<Long, int[]> map = new java.util.HashMap<>();
+        List<CaseTodo> subs = todoMapper.selectList(new LambdaQueryWrapper<CaseTodo>()
+                .eq(CaseTodo::getCaseId, caseId)
+                .isNotNull(CaseTodo::getParentId));
+        for (CaseTodo s : subs) {
+            int[] arr = map.computeIfAbsent(s.getParentId(), k -> new int[2]);
+            arr[0]++;
+            if ("DONE".equals(s.getStatus())) {
+                arr[1]++;
+            }
+        }
+        return map;
     }
 
     /** 案件详情用：带佐证材料明细 */
@@ -292,8 +327,19 @@ public class TodoService {
     // ------------------------------------------------------------------
 
     /**
-     * 标记完成。**必须已上传佐证材料**，否则拒绝——
-     * 这是需求里明确要求的硬约束，前端 disabled 之外服务端还要再挡一次。
+     * 标记完成。
+     *
+     * <p><b>2026-10-04 规则变更</b>：原来强制「必须先上传佐证材料」，
+     * 但用户已明确不需要佐证材料了。改为两条新约束：
+     * <ol>
+     *   <li><b>主任务至少要有一条反馈说明</b> —— 否则「完成了」没有依据，
+     *       后续无从追溯；对<b>子任务</b>不设此限制（它是主任务的细节，
+     *       说明由主任务承载）。</li>
+     *   <li><b>子任务全完成才能完成主任务</b> —— 有未完成子任务时
+     *       主任务不算做完，直接拒并列出还差哪几项。</li>
+     * </ol>
+     *
+     * <p>佐证数据保留可查（历史已上传的不删），只是不再作为完成门槛。
      */
     @Transactional(rollbackFor = Exception.class)
     public CaseTodoVO done(Long todoId, String remark) {
@@ -303,22 +349,69 @@ public class TodoService {
         if ("DONE".equals(t.getStatus())) {
             throw new BizException("该待办已完成，无需重复操作");
         }
-        if (fileService.countOfTodo(todoId) <= 0) {
-            throw new BizException("请先上传佐证材料，再勾选完成");
+        // 规则 2：有子任务时，必须全部完成
+        List<CaseTodo> subs = subtasksOf(todoId);
+        if (!subs.isEmpty()) {
+            List<String> undone = new ArrayList<>();
+            for (CaseTodo s : subs) {
+                if (!"DONE".equals(s.getStatus())) {
+                    undone.add(abbrev(s.getContent()));
+                }
+            }
+            if (!undone.isEmpty()) {
+                throw new BizException("还有 " + undone.size() + " 个子任务未完成：" +
+                        String.join("、", undone) + "。全部完成后才能勾选本任务。");
+            }
+        }
+        // 规则 1：主任务必须有反馈说明（本次填的 remark，或历史已积累的反馈记录）
+        boolean hasNote = StringUtils.hasText(remark) && !remark.trim().isEmpty();
+        if (!hasNote && feedbackMapper.selectCount(new LambdaQueryWrapper<CaseTodoFeedback>()
+                .eq(CaseTodoFeedback::getTodoId, todoId)) <= 0) {
+            throw new BizException("请先填写反馈说明，再勾选完成");
         }
 
         String before = snapshotService.capture(t.getCaseId());
+        LocalDateTime now = LocalDateTime.now();
         t.setStatus("DONE");
-        t.setDoneAt(LocalDateTime.now());
+        t.setDoneAt(now);
         t.setDoneBy(AuthContext.userId());
-        t.setRemark(remark);
-        t.setUpdatedAt(t.getDoneAt());
+        if (hasNote) {
+            t.setRemark(remark.trim());
+        }
+        t.setUpdatedAt(now);
         todoMapper.updateById(t);
+        // 反馈说明留痕：本次填的写进累积表，历史 remark 作为首条
+        if (hasNote) {
+            addFeedback(t, remark.trim());
+        }
         touchCase(c);
 
         logService.log("CASE", "TODO_DONE", "CASE", t.getCaseId(),
                 "完成待办：" + abbrev(t.getContent()), before, snapshotService.capture(t.getCaseId()));
         return toVO(t, true);
+    }
+
+    /** 某任务的子任务（按 sort、id 排序，与主列表口径一致） */
+    public List<CaseTodo> subtasksOf(Long todoId) {
+        if (todoId == null) {
+            return new ArrayList<>();
+        }
+        return todoMapper.selectList(new LambdaQueryWrapper<CaseTodo>()
+                .eq(CaseTodo::getParentId, todoId)
+                .orderByAsc(CaseTodo::getSort).orderByAsc(CaseTodo::getId));
+    }
+
+    /** 追加一条反馈记录（累积式，见 CaseTodoFeedback 说明） */
+    private void addFeedback(CaseTodo t, String content) {
+        CaseTodoFeedback f = new CaseTodoFeedback();
+        f.setTodoId(t.getId());
+        f.setCaseId(t.getCaseId());
+        f.setContent(content);
+        f.setStatusAt(t.getStatus());
+        f.setCreatorId(AuthContext.userId());
+        f.setCreatorName(AuthContext.userName());
+        f.setCreatedAt(LocalDateTime.now());
+        feedbackMapper.insert(f);
     }
 
     /** 撤销完成（退回待办）。管理员操作，便于纠错。 */
@@ -348,6 +441,135 @@ public class TodoService {
         logService.log("CASE", "TODO_REOPEN", "CASE", t.getCaseId(),
                 "撤销待办完成：" + abbrev(t.getContent()), before, snapshotService.capture(t.getCaseId()));
         return toVO(t, true);
+    }
+
+    // ------------------------------------------------------------------
+    // 子任务与反馈记录（2026-10-04）
+    // ------------------------------------------------------------------
+
+    /**
+     * 任务详情：一次返回主任务 + 子任务列表 + 全部反馈记录。
+     *
+     * <p>做成单个接口而不是三个，是为了让浮窗一次渲染完成——
+     * 分三个接口会先闪空态再填充，且三次往返。
+     */
+    public CaseTodoVO detail(Long todoId) {
+        CaseTodo t = requireTodo(todoId);
+        CaseTodoVO vo = toVO(t, true);
+        List<CaseTodo> subs = subtasksOf(todoId);
+        List<CaseTodoVO> subVos = new ArrayList<>();
+        int done = 0;
+        for (CaseTodo s : subs) {
+            CaseTodoVO sv = toVO(s, false);
+            subVos.add(sv);
+            if ("DONE".equals(s.getStatus())) {
+                done++;
+            }
+        }
+        vo.setSubtasks(subVos);
+        vo.setSubtaskTotal(subs.size());
+        vo.setSubtaskDone(done);
+        vo.setFeedbacks(feedbacksOf(todoId));
+        return vo;
+    }
+
+    /** 某任务的全部反馈记录，按时间正序（累积展示） */
+    public List<CaseTodoFeedback> feedbacksOf(Long todoId) {
+        return feedbackMapper.selectList(new LambdaQueryWrapper<CaseTodoFeedback>()
+                .eq(CaseTodoFeedback::getTodoId, todoId)
+                .orderByAsc(CaseTodoFeedback::getCreatedAt)
+                .orderByAsc(CaseTodoFeedback::getId));
+    }
+
+    /**
+     * 添加子任务（细节工作）。**普通用户与管理员均可**——
+     * 执行细节最清楚的是干活的人，卡在管理员会拖慢进度。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public CaseTodoVO addSubtask(Long todoId, String content) {
+        if (!StringUtils.hasText(content)) {
+            throw new BizException("请填写子任务内容");
+        }
+        CaseTodo parent = requireTodo(todoId);
+        CaseInfo c = requireCase(parent.getCaseId());
+        // 承办人才能操作本案的待办；管理层全权限（checkOperate 内部已含这两层）
+        checkOperate(c);
+        if (parent.getParentId() != null) {
+            throw new BizException("子任务下不能再加子任务，目前支持两级");
+        }
+        List<CaseTodo> subs = subtasksOf(todoId);
+        if (subs.size() >= MAX_PER_CASE) {
+            throw new BizException("子任务数量已达上限（" + MAX_PER_CASE + " 个）");
+        }
+
+        CaseTodo s = new CaseTodo();
+        s.setCaseId(parent.getCaseId());
+        s.setParentId(todoId);
+        s.setContent(content.trim());
+        s.setStatus("PENDING");
+        // 子任务排在主任务之后：取该案件当前最大 sort +1
+        int sort = 0;
+        for (CaseTodo t : todoMapper.selectList(new LambdaQueryWrapper<CaseTodo>()
+                .eq(CaseTodo::getCaseId, parent.getCaseId()))) {
+            if (t.getSort() != null && t.getSort() > sort) {
+                sort = t.getSort();
+            }
+        }
+        s.setSort(sort + 1);
+        s.setCreatedBy(AuthContext.userId());
+        s.setCreatedAt(LocalDateTime.now());
+        s.setUpdatedAt(LocalDateTime.now());
+        todoMapper.insert(s);
+        touchCase(c);
+
+        logService.log("CASE", "TODO_SUBTASK_ADD", "CASE", parent.getCaseId(),
+                "为待办「" + abbrev(parent.getContent()) + "」添加子任务：" + abbrev(s.getContent()));
+        return toVO(s, false);
+    }
+
+    /**
+     * 提交反馈（累积一条记录，不改任务状态）。
+     *
+     * <p>与 done() 的分工：这里只留痕，完成与否由 done() 决定。
+     * 之所以拆开，是因为「主任务至少要有一条反馈说明才能完成」
+     * 要求反馈和完成是两个动作——先反馈再勾选。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public CaseTodoVO addFeedback(Long todoId, String content) {
+        if (!StringUtils.hasText(content)) {
+            throw new BizException("请填写反馈内容");
+        }
+        CaseTodo t = requireTodo(todoId);
+        CaseInfo c = requireCase(t.getCaseId());
+        checkOperate(c);
+
+        addFeedback(t, content.trim());
+        t.setUpdatedAt(LocalDateTime.now());
+        todoMapper.updateById(t);
+        touchCase(c);
+
+        logService.log("CASE", "TODO_FEEDBACK", "CASE", t.getCaseId(),
+                "待办反馈：" + abbrev(t.getContent()) + " → " + abbrev(content));
+        return detail(todoId);
+    }
+
+    /**
+     * 勾选 / 撤销子任务完成。
+     *
+     * <p>走统一的 done/reopen，规则自动生效：
+     * 子任务无「必须有反馈说明」的限制（说明由主任务承载），
+     * 且子任务没有下级故不触发「子任务全完成」检查。
+     */
+    public CaseTodoVO toggleSubtask(Long subId, boolean done) {
+        CaseTodo s = requireTodo(subId);
+        if (s.getParentId() == null) {
+            throw new BizException("这是主任务，请在待办列表里勾选");
+        }
+        if (done) {
+            CaseTodoVO vo = done(subId, "（子任务完成）");
+            return vo;
+        }
+        return reopen(subId);
     }
 
     // ------------------------------------------------------------------
@@ -506,6 +728,7 @@ public class TodoService {
         vo.setRemark(t.getRemark());
         vo.setCreatedAt(t.getCreatedAt());
         vo.setUpdatedAt(t.getUpdatedAt());
+        vo.setParentId(t.getParentId());
         vo.setDoneByName(userName(t.getDoneBy()));
         vo.setCreatedByName(userName(t.getCreatedBy()));
         int cnt = fileService.countOfTodo(t.getId());
