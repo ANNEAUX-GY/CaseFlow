@@ -245,7 +245,20 @@ const openComplete = async (id) => {
   openCompleteMain()
 }
 
-defineExpose({ open, openComplete })
+/**
+ * 勾选子任务时打开「完成子任务」的反馈弹窗。
+ *
+ * <p>与主任务同一套汇报形式（落实状态 + 落实说明 + 上传声明）——
+ * 用户明确要求：**每个子任务完成后都要走这个汇报弹窗**，
+ * 不能在列表里直接勾上。先加载主任务详情（子任务列表要能对上号），
+ * 再弹出以该子任务为对象的反馈弹窗。
+ */
+const openCompleteSub = async (parentId, subId) => {
+  await open(parentId)
+  openFeedbackDlg({ subId, complete: true })
+}
+
+defineExpose({ open, openComplete, openCompleteSub })
 
 // ---- 落实反馈弹窗状态 ----
 const fb = reactive({
@@ -292,12 +305,32 @@ const submitFeedback = async ({ status, note }) => {
   fb.loading = true
   try {
     if (fb.complete) {
-      if (fb.subId) {
-        await todoApi.done(fb.subId, note)
+      // 按用户在弹窗里**实际选的落实状态**分派，而不是勾选时的意图：
+      // 选「完成」才标记完成；选「进行中/未完成」说明用户改主意了，
+      // 只记一条反馈、不动完成状态——否则弹窗里的状态选择形同虚设。
+      const targetId = fb.subId || todoId.value
+      if (status === 'DONE') {
+        // 弹窗里填的落实说明是用户**主动提交的汇报内容**，要进反馈流留痕——
+        // 这不是「系统自动提交」（自动指的是 done 时替用户凭空造一条），
+        // 而是用户在汇报弹窗里亲手填写并点了提交。先记反馈再标记完成，
+        // 顺序也满足主任务「至少一条反馈才能完成」的规则校验。
+        if (note) {
+          if (fb.subId) {
+            await todoApi.addFeedback(fb.subId, { status, content: note })
+          } else {
+            await todoApi.addFeedback(todoId.value, { status, content: note })
+          }
+        }
+        await todoApi.done(targetId, note)
+        ElMessage.success(fb.subId ? '子任务已完成' : '已标记完成')
       } else {
-        await todoApi.done(todoId.value, note)
+        if (fb.subId) {
+          await todoApi.addFeedback(fb.subId, { status, content: note })
+        } else {
+          await todoApi.addFeedback(todoId.value, { status, content: note })
+        }
+        ElMessage.success('反馈已记录（未标记完成）')
       }
-      ElMessage.success('已标记完成')
     } else if (fb.subId) {
       await todoApi.addFeedback(fb.subId, { status, content: note })
       ElMessage.success('反馈已记录')

@@ -464,7 +464,7 @@ const fbDlg = reactive({ visible: false, title: '', quote: '', status: '', loadi
 const submittingId = ref(null)
 
 /**
- * 打开提交反馈弹窗。
+ * 打开提交反馈弹窗（主任务，纯反馈不完成）。
  *
  * <p><b>这里只开弹窗，不写任何数据。</b>真正落库要等用户在弹窗里主动点
  * 「提交反馈」按钮（FeedbackDialog emit submit）才会发生——
@@ -478,14 +478,18 @@ const openSubmit = (t) => {
   fbDlg.visible = true
 }
 
-/** 用户在弹窗里主动点了「提交反馈」才走到这里——这是唯一的提交入口 */
+/**
+ * 用户在弹窗里主动点了「提交反馈」才走到这里——这是唯一的提交入口。
+ * 纯反馈不改完成状态；勾选完成走 detailRef.openComplete 的弹窗（同样的汇报形式）。
+ */
 const submitFeedback = async ({ status, note }) => {
   if (!submittingId.value) return
   const t = todos.value.find((x) => x.id === submittingId.value)
   if (!t) return
   fbDlg.loading = true
   try {
-    await todoApi.addFeedback(t.id, { status, note })
+    // 字段名必须是 content（后端 TodoSaveRequest），传 note 后端收不到——上一轮踩过
+    await todoApi.addFeedback(t.id, { status, content: note })
     ElMessage.success('反馈已提交')
     fbDlg.visible = false
     await load()
@@ -558,15 +562,16 @@ const openSubsAndFocus = async (t) => {
 }
 
 const toggleSub = async (t, s, checked) => {
+  if (checked) {
+    // 勾选子任务 = 打开与主任务同一套的汇报弹窗（落实状态+说明+上传声明），
+    // 选「完成」才真正勾上——不能在列表里直接勾掉（用户明确的交互要求）。
+    detailRef.value?.openCompleteSub(t.id, s.id)
+    return
+  }
   savingSubId.value = s.id
   try {
-    if (checked) {
-      await todoApi.toggleSubtask(s.id, true)
-      ElMessage.success('子任务已完成')
-    } else {
-      await todoApi.toggleSubtask(s.id, false)
-      ElMessage.success('已撤销子任务完成')
-    }
+    await todoApi.toggleSubtask(s.id, false)
+    ElMessage.success('已撤销子任务完成')
     await fetchSubs(t)
     await load()
     emit('changed')
