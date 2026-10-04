@@ -400,3 +400,17 @@ addFeedback（先记反馈再 done，顺序也满足规则1校验）。两条不
 - **反馈区**：默认最新 3 条（slice(-3)），区头右侧「展开全部 N 条/收起」按钮切换
 - **子任务区**：默认收成一行摘要（共 N 个已完成 M 个，有未完成带橙色提醒），点区头展开（箭头转向）
 - 打开浮窗时折叠态重置。**以后往浮窗加长列表区一律默认折叠 + 摘要行。**
+
+## 疑问问答模块（2026-10-04，commit f3f3a42）
+新表 case_question：员工在任务详情浮窗提问、管理层回答。**独立于待办与任务**
+（不派生待办、不进完成规则、不进反馈流——用户明确要求）。
+- todo_id 可空仅作上下文备注，**不设外键**：删任务不级联删问答（沟通记录留档）。
+- 权限：提问=承办人或管理层；回答=仅管理层。Controller 不加 @FullAccessOnly（权限下沉 Service 惯例）。
+- 一问一答，已回答不可再答（更正就再提一条）。
+- 前端：浮窗「疑问」区，列表 max-height 240px 滚动，按当前任务 todoId 过滤；
+  caseId 从 data.value.caseId 取（TodoDetailDialog 无 props！之前在这里栽过一次 props is not defined）。
+
+## 新建后端文件模板（JDK8/Spring Boot 2.x，别照抄新版本写法）
+- `import javax.annotation.Resource;`（**不是 jakarta**）
+- `import com.caseflow.security.AuthContext;`（**不是 support 包**）
+- JDK8 没有 `List.of()` → 用 `new java.util.ArrayList<>()`
