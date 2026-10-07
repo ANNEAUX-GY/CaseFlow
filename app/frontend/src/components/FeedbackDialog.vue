@@ -48,7 +48,9 @@
 
     <template #footer>
       <el-button @click="visible = false">取消</el-button>
-      <el-button type="primary" :loading="loading" @click="submit">提交反馈</el-button>
+      <!-- 确认文案随场景变：纯反馈=「提交反馈」；勾选完成进来的=「确认完成」
+           （同一弹窗复用，但后者语义是完成汇报，别再叫提交反馈） -->
+      <el-button type="primary" :loading="loading" @click="submit">{{ confirmText }}</el-button>
     </template>
   </el-dialog>
 </template>
@@ -72,6 +74,8 @@ const props = defineProps({
   quote: { type: String, default: '' },
   /** 打开时默认选中的落实状态 */
   defaultStatus: { type: String, default: 'DONE' },
+  /** 确认按钮文案：反馈场景「提交反馈」/ 完成场景「确认完成」 */
+  confirmText: { type: String, default: '提交反馈' },
   loading: { type: Boolean, default: false }
 })
 const emit = defineEmits(['update:modelValue', 'submit'])

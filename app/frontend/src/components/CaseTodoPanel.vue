@@ -204,12 +204,16 @@
               <el-button size="small" type="primary" plain class="cf-todo__act" @click="openDetail(t)">
                 <el-icon><View /></el-icon>详情·子任务
               </el-button>
-              <!-- 提交反馈：独立入口，不必先开浮窗。
-                   主任务与子任务一视同仁——只要是承办人的活就能提交，
-                   与「有没有子任务」无关。已完成的任务不再显示（没什么可提交的了）。
-                   原先挂在按钮上的悬浮提示已去掉：会盖住旁边的操作按钮，
-                   改用按钮文字本身表意（「提交反馈」已说明用途）。 -->
-              <el-button v-if="canSubmit && t.status !== 'DONE'"
+              <!-- 反馈入口按角色分（2026-10-06 需求）：
+                   普通用户（承办人）=「提交反馈」：独立入口，不必先开浮窗，
+                     已完成的不再显示（没什么可提交的了）；
+                   管理层 =「查看反馈」：反馈是承办人的汇报，领导只查阅不代提交，
+                     点开详情浮窗（反馈记录就在浮窗顶部），已完成的历史记录也能翻。
+                   悬浮提示已去掉：会盖住旁边的操作按钮，改用按钮文字本身表意。 -->
+              <el-button v-if="isAdmin" size="small" class="cf-todo__act" @click="openDetail(t)">
+                <el-icon><View /></el-icon>查看反馈
+              </el-button>
+              <el-button v-else-if="canSubmit && t.status !== 'DONE'"
                 size="small" type="warning" plain class="cf-todo__act"
                 :loading="submittingId === t.id" @click="openSubmit(t)">
                 <el-icon><ChatLineSquare /></el-icon>提交反馈
@@ -452,15 +456,16 @@ watch([isAdmin, isMobile], () => nextTick(setupSortable))
 
 /* ============ 提交工作反馈（纯手动，2026-10-04） ============ */
 /**
- * 谁能提交。
+ * 提交入口只给普通用户；管理层不代承办人写反馈，改为「查看反馈」
+ * （打开详情浮窗查阅反馈记录，2026-10-06 需求）。
  *
  * <p>本组件拿不到案件的 assignHistory（没接 detail prop），所以**不在前端判定
  * 「是否本案承办人」**，而是交给后端 addFeedback 里的 checkOperate：
  * 非承办人会被拦下并返回「只有案件承办人或管理层可以…」的中文原因。
- * 按钮对所有能看到该案件的人显示——非承办人点了会得到明确提示，
+ * 按钮对所有普通用户显示——非承办人点了会得到明确提示，
  * 比按钮凭空消失更好（后者会让人以为系统坏了）。
  */
-const canSubmit = computed(() => true)
+const canSubmit = computed(() => !isAdmin.value)
 
 const fbDlg = reactive({ visible: false, title: '', quote: '', status: '', loading: false })
 const submittingId = ref(null)

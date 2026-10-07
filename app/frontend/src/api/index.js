@@ -167,7 +167,11 @@ export const questionApi = {
 export const notificationApi = {
   unread: () => http.get('/notifications/unread'),
   unreadCount: () => http.get('/notifications/unread-count'),
-  markRead: (id) => http.post(),
+  /** 信箱列表（新→旧）：box=unread|read|all，已读历史从这里取 */
+  list: (box) => http.get('/notifications/list', { params: { box } }),
+  /** 点开一条即标已读（幂等）。注意 URL 不能省——此前写成 http.post() 漏了地址，
+   *  标已读从未真正落到服务端，信件重开又变未读（2026-10-06 修复） */
+  markRead: (id) => http.post(`/notifications/${id}/read`),
   markAllRead: () => http.post('/notifications/read-all')
 }
 

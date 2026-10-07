@@ -187,8 +187,10 @@
         </template>
       </div>
 
-      <!-- 提交反馈入口：走落实反馈弹窗（状态+说明+上传声明） -->
-      <div class="cf-td__sec">
+      <!-- 提交反馈入口：走落实反馈弹窗（状态+说明+上传声明）。
+           仅普通用户（承办人）显示——反馈是承办人的汇报动作，
+           管理层只查阅上方的「反馈记录」，不代提交（2026-10-06 需求） -->
+      <div v-if="!isAdmin" class="cf-td__sec">
         <div class="cf-td__sec-head"><span>提交反馈</span></div>
         <div class="cf-td__actions">
           <el-button type="primary" size="small" @click="openRecord">
@@ -223,12 +225,14 @@
       </el-button>
     </template>
 
-    <!-- 落实反馈弹窗（主任务/子任务共用，图二口径） -->
+    <!-- 落实反馈弹窗（主任务/子任务共用，图二口径）：
+         完成场景确认按钮叫「确认完成」，纯反馈场景才叫「提交反馈」 -->
     <FeedbackDialog
       v-model="fb.visible"
       :title="fb.title"
       :quote="fb.quote"
       :default-status="fb.status"
+      :confirm-text="fb.complete ? '确认完成' : '提交反馈'"
       :loading="fb.loading"
       @submit="submitFeedback"
     />

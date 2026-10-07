@@ -153,6 +153,28 @@ public class NotificationService {
                 .orderByDesc(CaseNotification::getId));
     }
 
+    /** 我的信箱列表（新→旧）：box=unread 未读 / read 已读 / all 全部。
+     *  <p>已读消息保留在库（read_at 非空，不删行），信箱要能翻历史（2026-10-06 需求）。
+     *  拉取封顶 200 条：管理层收全站操作，量会一直涨，下拉面板不需要全量。 */
+    public List<CaseNotification> listForMe(String box) {
+        Long uid = AuthContext.userId();
+        if (uid == null) {
+            return new ArrayList<>();
+        }
+        String b = box == null ? "all" : box.toLowerCase();
+        LambdaQueryWrapper<CaseNotification> q = new LambdaQueryWrapper<CaseNotification>()
+                .eq(CaseNotification::getUserId, uid)
+                .orderByDesc(CaseNotification::getCreatedAt)
+                .orderByDesc(CaseNotification::getId);
+        if ("unread".equals(b)) {
+            q.isNull(CaseNotification::getReadAt);
+        } else if ("read".equals(b)) {
+            q.isNotNull(CaseNotification::getReadAt);
+        }
+        q.last("LIMIT 200");
+        return notificationMapper.selectList(q);
+    }
+
     /** 未读数（顶栏角标用，走 count 不拉全量） */
     public int unreadCount() {
         Long uid = AuthContext.userId();
