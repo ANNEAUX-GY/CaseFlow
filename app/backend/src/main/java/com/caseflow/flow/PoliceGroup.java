@@ -6,10 +6,10 @@ import java.util.List;
 /**
  * 办案组别（2026-10-04）与指派约束。
  *
- * <p>规则来自业务约定：
+ * <p>规则来自业务约定（2026-10-07 修订：不限组放开）：
  * <ul>
- *   <li><b>初查</b>任务 → 只能指派给<b>初查组</b>；</li>
- *   <li><b>刑拘在办</b> → 只能指派给<b>清案组</b>；</li>
+ *   <li><b>初查</b>任务 → 只能指派给<b>初查组</b>或<b>不限</b>；</li>
+ *   <li><b>刑拘在办</b> → 只能指派给<b>清案组</b>或<b>不限</b>；</li>
  *   <li><b>其他案件</b>（行政/未立案/取保等）→ 不限制组别。</li>
  * </ul>
  *
@@ -107,11 +107,12 @@ public final class PoliceGroup {
     /**
      * 判断某人能否承接该案件。
      *
-     * <p><b>规则刻意分两档</b>：
+     * <p><b>规则（2026-10-07 修订）</b>：
      * <ul>
-     *   <li>要求「初查组」时，清案组与不限组<b>一律不接</b>——业务上就是两个专业分工；</li>
-     *   <li>要求「清案组」时同理由；</li>
-     *   <li>不限制时任何人可接。</li>
+     *   <li>案件不限组别 → 任何人可接；</li>
+     *   <li>要求「初查组/清案组」→ 本组成员可接，<b>「不限」组成员也可接</b>
+     *       ——不限 &gt; 其他任何组，机动力量哪里需要去哪里；</li>
+     *   <li>唯一仍拦的：初查组 × 清案组互换——两个专业分工不互派。</li>
      * </ul>
      */
     public static boolean canTake(String required, String actual) {
@@ -119,6 +120,10 @@ public final class PoliceGroup {
         if (NONE.equals(need)) {
             return true;
         }
-        return need.equals(normalize(actual));
+        String have = normalize(actual);
+        if (NONE.equals(have)) {
+            return true;   // 不限：可承接任何组别的案件
+        }
+        return need.equals(have);
     }
 }

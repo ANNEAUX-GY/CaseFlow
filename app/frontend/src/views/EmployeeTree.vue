@@ -278,6 +278,28 @@ const toChartTree = (nodes, depth = 0) =>
     children: toChartTree(n.children, depth + 1)
   }))
 
+/** 树状图数据：顶层不止一人时（所长与副职平级、新员工挂顶层），
+ *  ECharts 的 tree 系列只把第一棵树画进画布，其余整棵消失
+ *  （2026-10-07 实测：3 个顶层只剩王总一个节点）。
+ *  包一层看不见的虚拟根把森林变成一棵树；depth 传 -1，
+ *  让真实顶层仍算第 0 层，层级配色与原来完全一致。 */
+const orgChartData = computed(() => {
+  const wrapped = toChartTree(treeData.value)
+  if (wrapped.length <= 1) {
+    return wrapped
+  }
+  return [{
+    name: '__virtual__',
+    depth: -1,
+    virtual: true,
+    symbolSize: 0.1,
+    itemStyle: { opacity: 0 },
+    lineStyle: { opacity: 0 },
+    label: { show: false },
+    children: wrapped
+  }]
+})
+
 // 层级越深给越高画布，保证三行标签始终有落脚空间（避免纵向也挤在一起）
 const maxDepth = (nodes) =>
   (nodes || []).reduce((m, n) => Math.max(m, 1 + maxDepth(n.children)), 0)
@@ -310,7 +332,7 @@ const orgTreeOption = computed(() => ({
   series: [
     {
       type: 'tree',
-      data: toChartTree(treeData.value),
+      data: orgChartData.value,
       orient: 'TB',
       edgeShape: 'polyline',
       // 分叉点抬高到 38%，让横向折线落在子节点标签上方而不是穿过文字

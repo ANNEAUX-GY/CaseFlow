@@ -619,21 +619,23 @@ public class CaseService {
       }
         }
 
-        // 办案组别校验（2026-10-04）：初查任务只能派给初查组、刑拘在办只能派给清案组，
-        // 其他案件不限制。组别取自**员工档案** org_employee.police_group
+        // 办案组别校验（2026-10-04，2026-10-07 修订）：初查任务只能派给初查组或不限，
+        // 刑拘在办只能派给清案组或不限（不限 > 其他任何组），其他案件不限制。
+        // 组别取自**员工档案** org_employee.police_group
         // （指派选的是员工，组别理应挂在档案上；账号上的组别只是注册时自报）。
-   // 存量员工没填组别 = 「不限」，不会被拦——上线即瘫痪比放宽规则更糟。
+        // 存量员工没填组别 = 「不限」，不会被拦——上线即瘫痪比放宽规则更糟。
         String required = requiredGroupOf(c);
         if (!com.caseflow.flow.PoliceGroup.NONE.equals(required)) {
-    for (Long empId : target) {
-    OrgEmployee e = employeeService.employeeMap().get(empId);
-      String g = e.getPoliceGroup();
+            for (Long empId : target) {
+                OrgEmployee e = employeeService.employeeMap().get(empId);
+                String g = e.getPoliceGroup();
                 if (!com.caseflow.flow.PoliceGroup.canTake(required, g)) {
-           throw new BizException("「" + com.caseflow.flow.PoliceGroup.label(required) + "」只能指派给"
-        + com.caseflow.flow.PoliceGroup.label(required) + "人员；"
-  + e.getName() + " 属于「" + com.caseflow.flow.PoliceGroup.label(g) + "」");
-    }
-   }
+                    throw new BizException("「" + com.caseflow.flow.PoliceGroup.label(required)
+                            + "」案件只能指派给" + com.caseflow.flow.PoliceGroup.label(required)
+                            + "或「不限」人员；" + e.getName() + " 属于「"
+                            + com.caseflow.flow.PoliceGroup.label(g) + "」");
+                }
+            }
         }
 
         // 旧指派关系按目标集合对齐（改派留痕）：
