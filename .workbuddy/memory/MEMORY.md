@@ -47,7 +47,11 @@
   改埋点只动 LogService 一处。
 - **待办是意见的唯一载体**（勿回退）：`case_todo.opinion_id` 派生；`parent_id` 两级。
   主任务权限=管理层，子任务=承办人；`@FullAccessOnly` 在方法前拦截，Service 分层无效。
-- **案件类型门控**：4 栏目受门控；状态双写 store+localStorage；跨栏目跳转用 `gotoGated`。
+- **案件类型门控**：5 栏目受门控（含 /case-boards）；状态双写 store+localStorage；
+  跨栏目跳转用 `gotoGated`。
+- **按类别浏览板块页**（2026-10-08）：选完类型默认落 `/case-boards`，按字典小类
+  分卡（案件数=page size=1 取 total，与列表同链路）→ 点卡进 `/cases?category=X`；
+  「未分类」走后端 `category=NONE`（IS NULL OR 空串）；OTHER 类型无小类只有全量卡。
 - **办案组别**：`org_employee.police_group` 为权威，NULL/非法归一「不限」，前后端口径必须一致。
 - **流程流转**：定义唯一入口 `flow/CaseFlowTemplate.java`；进度不落库实时算；
   流转后旧任务 CANCELLED、进度归零。
