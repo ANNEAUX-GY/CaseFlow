@@ -163,6 +163,10 @@
                     <span v-if="s.status === 'DONE' && s.doneAt" class="cf-todo__sub-done">
                       {{ fmtTime(s.doneAt) }}
                     </span>
+                    <!-- 子任务详情：普通用户与管理层都能点开看这条子任务自己的反馈记录。
+                         不点就只能看到这一行字，看不到它到底交了什么。 -->
+                    <el-button link type="primary" size="small" class="cf-todo__sub-detail"
+                      @click="openSubDetail(t, s)">详情</el-button>
                   </div>
                   <div v-if="!(subData[t.id]?.list || []).length" class="cf-todo__sub-none cf-muted">
                     还没有子任务，在下面添加第一条
@@ -520,14 +524,15 @@ const openSubmit = (t) => {
  * 用户在弹窗里主动点了「提交反馈」才走到这里——这是唯一的提交入口。
  * 纯反馈不改完成状态；勾选完成走 detailRef.openComplete 的弹窗（同样的汇报形式）。
  */
-const submitFeedback = async ({ status, note }) => {
+const submitFeedback = async ({ status, note, uploadTime, uploadPlatform, uploadFile }) => {
   if (!submittingId.value) return
   const t = todos.value.find((x) => x.id === submittingId.value)
   if (!t) return
   fbDlg.loading = true
   try {
     // 字段名必须是 content（后端 TodoSaveRequest），传 note 后端收不到——上一轮踩过
-    await todoApi.addFeedback(t.id, { status, content: note })
+    // 上传声明三要素单独传（2026-10-08 拆列），不再拼成一句话
+    await todoApi.addFeedback(t.id, { status, content: note, uploadTime, uploadPlatform, uploadFile })
     ElMessage.success('反馈已提交')
     fbDlg.visible = false
     await load()
@@ -542,6 +547,15 @@ const submitFeedback = async ({ status, note }) => {
 
 /** 打开详情浮窗（反馈记录 + 落实反馈弹窗） */
 const openDetail = (t) => detailRef.value?.open(t.id)
+
+/**
+ * 打开某条子任务自己的详情浮窗（2026-10-08）。
+ *
+ * <p>普通用户与管理层都点得到——需求明确要求两端都能查看子任务详情。
+ * 主任务标题一并传过去：切到子任务后浮窗里不再持有主任务对象，
+ * 返回条上要显示「退回去是哪一个」。
+ */
+const openSubDetail = (t, s) => detailRef.value?.openSubDetail(s.id, t.content)
 
 const toggle = async (t, checked) => {
   if (checked) {
@@ -894,6 +908,8 @@ onBeforeUnmount(() => {
 .cf-todo__sub.is-done .cf-todo__sub-name { color: #8a929e; text-decoration: line-through }
 .cf-todo__sub-name { flex: 1; min-width: 0; word-break: break-all; color: #1b2430 }
 .cf-todo__sub-done { flex: none; font-size: 12px; color: #8a929e }
+/* 子任务「详情」入口：与勾选框分开，点了只看反馈不改状态 */
+.cf-todo__sub-detail { flex: none; font-size: 12px; padding: 0 2px }
 .cf-todo__sub-none { font-size: 12px; padding: 2px 0 }
 .cf-todo__sub-add { display: flex; gap: 8px; margin-top: 6px }
 .cf-todo__sub-add .el-input { flex: 1 }

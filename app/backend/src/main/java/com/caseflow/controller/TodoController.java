@@ -171,13 +171,42 @@ public class TodoController {
         return Result.ok(todoService.addSubtask(todoId, req == null ? null : req.getContent()));
     }
 
-    /** 提交反馈（累积一条记录，不改任务状态；status = 落实状态 DONE/IN_PROGRESS/NOT_DONE） */
+    /**
+     * 提交反馈（累积一条记录，不改任务状态；status = 落实状态 DONE/IN_PROGRESS/NOT_DONE）。
+     *
+     * <p>{@code @RequestBody} 上<b>刻意不加 {@code @Validated}</b>：
+     * {@link TodoSaveRequest#content} 带 {@code @NotBlank}（新增/编辑待办时必填），
+     * 但反馈允许「只填上传声明、不写说明」——声明本身就是一条有效反馈。
+     * 加了校验会把这种提交挡在门外，所以后端改用自己的判空。
+     */
     @PostMapping("/{todoId}/feedbacks")
     public Result<CaseTodoVO> addFeedback(@PathVariable Long todoId,
                                           @RequestBody TodoSaveRequest req) {
         return Result.ok(todoService.addFeedback(todoId,
                 req == null ? null : req.getStatus(),
-                req == null ? null : req.getContent()));
+                req == null ? null : req.getContent(),
+                req == null ? null : req.getUploadTime(),
+                req == null ? null : req.getUploadPlatform(),
+                req == null ? null : req.getUploadFile()));
+    }
+
+    /**
+     * 修改一条反馈记录（2026-10-08）：能改落实说明、上传平台、上传文件名、时间。
+     *
+     * <p><b>权限</b>：提交人本人或管理层（Service 内 {@code checkFeedbackEditable} 判定）。
+     * <b>刻意不加 {@code @FullAccessOnly}</b>：民警改了上传文件名却提交不了，
+     * 等于逼他「删了重提」，反而把时间顺序也弄乱了。
+     */
+    @PutMapping("/{todoId}/feedbacks/{feedbackId}")
+    public Result<CaseTodoVO> updateFeedback(@PathVariable Long todoId,
+                                            @PathVariable Long feedbackId,
+                                            @RequestBody TodoSaveRequest req) {
+        return Result.ok(todoService.updateFeedback(feedbackId,
+                req == null ? null : req.getStatus(),
+                req == null ? null : req.getContent(),
+                req == null ? null : req.getUploadTime(),
+                req == null ? null : req.getUploadPlatform(),
+                req == null ? null : req.getUploadFile()));
     }
 
     /** 勾选 / 撤销子任务完成（done=false 即撤销） */

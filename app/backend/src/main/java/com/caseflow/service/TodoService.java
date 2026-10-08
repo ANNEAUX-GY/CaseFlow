@@ -522,15 +522,34 @@ public class TodoService {
 
     /** 追加一条反馈记录（累积式，见 CaseTodoFeedback 说明）。status 为本次落实状态 */
     private void addFeedback(CaseTodo t, String content, String status) {
+        addFeedback(t, content, status, null, null, null);
+    }
+
+    /**
+     * 追加一条反馈记录，<b>上传声明三要素单独入库</b>（2026-10-08）。
+     *
+     * <p>为什么不把声明句拼进 content：用户要能单独改「上传平台 / 上传文件名」，
+     * 拼在一句话里就只能整句重写。详见 {@link FeedbackDeclare}。
+     */
+    private void addFeedback(CaseTodo t, String content, String status,
+                             String uploadTime, String uploadPlatform, String uploadFile) {
         CaseTodoFeedback f = new CaseTodoFeedback();
         f.setTodoId(t.getId());
         f.setCaseId(t.getCaseId());
-        f.setContent(content);
+        f.setContent(content == null ? "" : content.trim());
         f.setStatusAt(normalizeFeedbackStatus(status));
+        f.setUploadTime(trimToEmpty(uploadTime));
+        f.setUploadPlatform(trimToEmpty(uploadPlatform));
+        f.setUploadFile(trimToEmpty(uploadFile));
         f.setCreatorId(AuthContext.userId());
         f.setCreatorName(AuthContext.userName());
         f.setCreatedAt(LocalDateTime.now());
         feedbackMapper.insert(f);
+    }
+
+    /** 空值统一存空串而不是 NULL：便于用「是否为空」判断，也避免前端拿到 null 显示成 "null" */
+    private static String trimToEmpty(String s) {
+        return s == null ? "" : s.trim();
     }
 
     /** 落实状态归一：只认 完成/进行中/未完成 三档，空或非法值回落「进行中」 */
@@ -576,12 +595,24 @@ public class TodoService {
             o.setFeedbackAt(null);
         } else {
             o.setFeedbackStatus(hit.getStatusAt());
-            o.setFeedbackNote(hit.getContent());
+            // 说明 + 声明句拼回去：意见侧只有一个 feedback_note 文本字段，
+            // 不拼的话上传声明在意见页就看丢了（待办页已拆成三列，此处仍是单字段）
+            o.setFeedbackNote(withDeclare(hit));
             o.setFeedbackBy(hit.getCreatorId());
             o.setFeedbackByName(hit.getCreatorName());
             o.setFeedbackAt(hit.getCreatedAt());
         }
         opinionMapper.updateById(o);
+    }
+
+    /** 反馈记录 → 一段完整文本（说明 + 上传声明），供只有单文本字段的地方使用 */
+    private static String withDeclare(CaseTodoFeedback f) {
+        String note = f.getContent() == null ? "" : f.getContent().trim();
+        String sentence = FeedbackDeclare.sentence(f.getUploadTime(), f.getUploadPlatform(), f.getUploadFile());
+        if (sentence.isEmpty()) {
+            return note;
+        }
+        return note.isEmpty() ? sentence : note + "\n" + sentence;
     }
 
     /** 撤销完成（退回待办）。管理员操作，便于纠错。 */
@@ -684,11 +715,38 @@ public class TodoService {
         return n;
     }
 
+    /**
+     * 某任务的全部反馈记录，按时间正序（累积展示）。
+     *
+     * <p><b>读侧兜底解析</b>：三列为空但 content 里还有声明句时（存量数据
+     * 回填没跑到、或旧代码写入的），在这里现拆一次返回。
+     * 这样即使数据库没回填成功，界面上照样能看到、也能编辑三要素。
+     */
     public List<CaseTodoFeedback> feedbacksOf(Long todoId) {
-        return feedbackMapper.selectList(new LambdaQueryWrapper<CaseTodoFeedback>()
+        List<CaseTodoFeedback> list = feedbackMapper.selectList(new LambdaQueryWrapper<CaseTodoFeedback>()
                 .eq(CaseTodoFeedback::getTodoId, todoId)
                 .orderByAsc(CaseTodoFeedback::getCreatedAt)
                 .orderByAsc(CaseTodoFeedback::getId));
+        for (CaseTodoFeedback f : list) {
+            fillDeclareIfAbsent(f);
+        }
+        return list;
+    }
+
+    /** 三列任一为空且 content 里有声明句 → 就地拆开（只影响返回对象，不写库） */
+    private void fillDeclareIfAbsent(CaseTodoFeedback f) {
+        boolean empty = !StringUtils.hasText(f.getUploadPlatform()) && !StringUtils.hasText(f.getUploadFile());
+        if (!empty) {
+            return;
+        }
+        String[] d = FeedbackDeclare.parse(f.getContent());
+        if (d == null) {
+            return;
+        }
+        f.setUploadTime(d[0]);
+        f.setUploadPlatform(d[1]);
+        f.setUploadFile(d[2]);
+        f.setContent(d[3]);
     }
 
     /**
@@ -743,17 +801,22 @@ public class TodoService {
      *
      * <p>与 done() 的分工：这里只留痕并标记落实状态（完成/进行中/未完成），
      * 完成与否由 done() 决定。反馈弹窗里选「完成」提交时应走 done()。
+     *
+     * @param uploadTime/uploadPlatform/uploadFile 上传声明三要素（2026-10-08 拆列，
+     *        此前是拼进 content 的一句话，无法单独改其中一项）
      */
     @Transactional(rollbackFor = Exception.class)
-    public CaseTodoVO addFeedback(Long todoId, String status, String content) {
-        if (!StringUtils.hasText(content)) {
+    public CaseTodoVO addFeedback(Long todoId, String status, String content,
+                                  String uploadTime, String uploadPlatform, String uploadFile) {
+        if (!StringUtils.hasText(content) && !StringUtils.hasText(uploadPlatform)
+                && !StringUtils.hasText(uploadFile)) {
             throw new BizException("请填写反馈内容");
         }
         CaseTodo t = requireTodo(todoId);
         CaseInfo c = requireCase(t.getCaseId());
         checkOperate(c);
 
-        addFeedback(t, content.trim(), status);
+        addFeedback(t, content == null ? "" : content.trim(), status, uploadTime, uploadPlatform, uploadFile);
         t.setUpdatedAt(LocalDateTime.now());
         todoMapper.updateById(t);
         // 意见派生待办：落实状态同步回意见
@@ -768,10 +831,91 @@ public class TodoService {
         return detail(todoId);
     }
 
-    /** 兼容旧调用：不带落实状态的反馈按「进行中」处理 */
+    /** 兼容旧调用：不带上传声明的反馈 */
     @Transactional(rollbackFor = Exception.class)
-    public CaseTodoVO addFeedback(Long todoId, String content) {
-        return addFeedback(todoId, null, content);
+    public CaseTodoVO addFeedback(Long todoId, String status, String content) {
+        return addFeedback(todoId, status, content, null, null, null);
+    }
+
+    /**
+     * 修改一条反馈记录（2026-10-08）。
+     *
+     * <p><b>谁能改</b>：反馈的<b>提交人本人</b>或<b>管理层</b>。
+     * 和「疑问问答」的编辑口径一致（本人或管理层），理由相同：
+     * 反馈是某个人写下的汇报，另一个人无权替他把"已完成"改成"进行中"。
+     *
+     * <p><b>修订痕迹</b>：不覆盖 creatorId/creatorName/createdAt——
+     * 「谁在什么时候交的」不能因为改了一次说明就变掉；另存 editedBy/editedAt。
+     *
+     * <p><b>为什么允许改</b>：上传文件名/平台这类信息最容易写错
+     *（写错一个字、漏了后缀），而反馈记录是累积留痕、不能删，
+     * 不给改就只剩"删了重提"，反而把时间顺序也弄乱了。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public CaseTodoVO updateFeedback(Long feedbackId, String status, String content,
+                                     String uploadTime, String uploadPlatform, String uploadFile) {
+        CaseTodoFeedback f = feedbackMapper.selectById(feedbackId);
+        if (f == null) {
+            throw new BizException("该反馈记录不存在或已被删除");
+        }
+        CaseTodo t = requireTodo(f.getTodoId());
+        CaseInfo c = requireCase(t.getCaseId());
+        checkFeedbackEditable(f);
+
+        String newContent = content == null ? "" : content.trim();
+        String newTime = trimToEmpty(uploadTime);
+        String newPlatform = trimToEmpty(uploadPlatform);
+        String newFile = trimToEmpty(uploadFile);
+        if (newContent.isEmpty() && newPlatform.isEmpty() && newFile.isEmpty()) {
+            throw new BizException("落实说明与上传声明不能同时为空");
+        }
+        // MyBatis-Plus updateById 跳 null：三列要显式 set，空串才能把旧值清掉
+        f.setContent(newContent);
+        f.setStatusAt(normalizeFeedbackStatus(status));
+        f.setEditedBy(AuthContext.userId());
+        f.setEditedByName(AuthContext.userName());
+        f.setEditedAt(LocalDateTime.now());
+        feedbackMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<CaseTodoFeedback>()
+                .eq(CaseTodoFeedback::getId, feedbackId)
+                .set(CaseTodoFeedback::getContent, newContent)
+                .set(CaseTodoFeedback::getStatusAt, f.getStatusAt())
+                .set(CaseTodoFeedback::getUploadTime, newTime)
+                .set(CaseTodoFeedback::getUploadPlatform, newPlatform)
+                .set(CaseTodoFeedback::getUploadFile, newFile)
+                .set(CaseTodoFeedback::getEditedBy, f.getEditedBy())
+                .set(CaseTodoFeedback::getEditedByName, f.getEditedByName())
+                .set(CaseTodoFeedback::getEditedAt, f.getEditedAt()));
+
+        t.setUpdatedAt(LocalDateTime.now());
+        todoMapper.updateById(t);
+        // 内容改了要同步回意见，否则意见上显示的还是改之前的落实说明
+        syncOpinion(t);
+        touchCase(c);
+
+        logService.logAnchored("CASE", "TODO_FEEDBACK_UPDATE", "CASE", t.getCaseId(),
+                "修改反馈（" + abbrev(t.getContent()) + "）：" + abbrev(newContent),
+                null, null,
+                t.getParentId() == null ? LogService.Anchor.ofTodo(t.getId())
+                        : LogService.Anchor.ofSubtask(t.getParentId(), t.getId()));
+        return detail(f.getTodoId());
+    }
+
+    /**
+     * 能否修改这条反馈：提交人本人或管理层。
+     *
+     * <p>注意与 {@link #checkOperate} 的区别：那条判的是"能否操作这个案件的待办"，
+     * 这里判的是"能否改**这个人**写的这一条"。协办人也能对本案待办提交反馈，
+     * 但改不了主办人写的内容。
+     */
+    private void checkFeedbackEditable(CaseTodoFeedback f) {
+        if (AuthContext.isFullAccess()) {
+            return;
+        }
+        Long me = AuthContext.userId();
+        if (me != null && me.equals(f.getCreatorId())) {
+            return;
+        }
+        throw new BizException(403, "只能修改本人提交的反馈，如需更正请联系所长或法制员");
     }
 
     /**

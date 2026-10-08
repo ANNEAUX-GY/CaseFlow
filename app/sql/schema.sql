@@ -148,8 +148,17 @@ CREATE TABLE IF NOT EXISTS case_todo_feedback (
     id           BIGINT       AUTO_INCREMENT PRIMARY KEY COMMENT '主键',
     todo_id      BIGINT       NOT NULL COMMENT '所属待办（主任务或子任务）',
     case_id      BIGINT       NOT NULL COMMENT '案件 ID（冗余，便于按案件清理与查询）',
-    content      VARCHAR(1000) NOT NULL COMMENT '反馈内容',
+    content      VARCHAR(1000) NOT NULL COMMENT '落实说明（不含上传声明句）',
     status_at    VARCHAR(16)  DEFAULT NULL COMMENT '反馈时的状态快照：DONE/IN_PROGRESS/PENDING',
+    -- 上传声明三要素（2026-10-08）：原先「于 X 在 Y 上传了 Z。」是拼进 content 的一句话，
+    -- 用户要求能单独改「上传平台 / 上传文件名」，拼在一句里就只能整句重写，故拆列。
+    upload_time     VARCHAR(32)  DEFAULT NULL COMMENT '上传时间（文本，精确到秒）',
+    upload_platform VARCHAR(128) DEFAULT NULL COMMENT '上传平台名称',
+    upload_file     VARCHAR(255) DEFAULT NULL COMMENT '上传的文件名称',
+    -- 修订痕迹：改反馈不覆盖首次提交人，另存谁在何时改过
+    edited_by      BIGINT       DEFAULT NULL COMMENT '最近修订人账号 ID',
+    edited_by_name VARCHAR(64)  DEFAULT NULL COMMENT '最近修订人姓名',
+    edited_at      DATETIME     DEFAULT NULL COMMENT '最近修订时间',
     creator_id   BIGINT       DEFAULT NULL COMMENT '记录人账号 ID',
     creator_name VARCHAR(64)  DEFAULT NULL COMMENT '记录人姓名（冗余展示）',
     created_at   DATETIME     DEFAULT CURRENT_TIMESTAMP COMMENT '记录时间（按此排序累积展示）',

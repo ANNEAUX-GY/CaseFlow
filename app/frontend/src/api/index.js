@@ -202,8 +202,13 @@ export const todoApi = {
   detail: (todoId) => http.get(`/todos/${todoId}/detail`),
   /** 添加子任务（普通用户与管理员均可） */
   addSubtask: (todoId, content) => http.post(`/todos/${todoId}/subtasks`, { content }),
-  /** 提交反馈（累积一条，不改状态）。data: { status: DONE|IN_PROGRESS|NOT_DONE, content } */
+  /** 提交反馈（累积一条，不改状态）。data: { status, content, uploadTime, uploadPlatform, uploadFile } */
   addFeedback: (todoId, data) => http.post(`/todos/${todoId}/feedbacks`, data),
+  /**
+   * 修改一条反馈（2026-10-08）：能改落实说明、上传平台、上传文件名、时间。
+   * 权限 = 提交人本人或管理层（后端校验）。
+   */
+  updateFeedback: (todoId, feedbackId, data) => http.put(`/todos/${todoId}/feedbacks/${feedbackId}`, data),
   /** 删除子任务（普通用户与管理员均可） */
   removeSubtask: (subId) => http.delete(`/todos/${subId}`),
   /** 勾选/撤销子任务完成 */

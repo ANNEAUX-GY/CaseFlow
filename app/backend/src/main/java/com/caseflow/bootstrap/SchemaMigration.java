@@ -1,5 +1,6 @@
 package com.caseflow.bootstrap;
 
+import com.caseflow.service.FeedbackDeclare;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
@@ -11,9 +12,12 @@ import javax.annotation.Resource;
 import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -116,7 +120,18 @@ public class SchemaMigration implements ApplicationRunner {
             // 员工档案补全后以 org_employee 为准。两列都可空，NULL 视为「不限」，
             // 存量账号/员工不选组也能继续用，只是不会被组别限制指派。
             {"org_employee", "police_group", "VARCHAR(16) NULL"},
-            {"sys_user", "police_group", "VARCHAR(16) NULL"}
+            {"sys_user", "police_group", "VARCHAR(16) NULL"},
+            // 上传声明三要素 + 修订痕迹（2026-10-08）：
+            // 原先「于 X 在 Y 上传了 Z。」是拼进 content 的一句话，用户要求能单独改
+            // 「上传平台 / 上传文件名」，拼在一句里就只能整句重写，故拆成独立列。
+            // 存量数据由 backfillFeedbackDeclare() 解析回填（幂等：只补 upload_platform 为 NULL 的行）。
+            // 六列全部可空：NULL = 该反馈没有上传声明 / 从未修订，行为与原来一致。
+            {"case_todo_feedback", "upload_time", "VARCHAR(32) NULL"},
+            {"case_todo_feedback", "upload_platform", "VARCHAR(128) NULL"},
+            {"case_todo_feedback", "upload_file", "VARCHAR(255) NULL"},
+            {"case_todo_feedback", "edited_by", "BIGINT NULL"},
+            {"case_todo_feedback", "edited_by_name", "VARCHAR(64) NULL"},
+            {"case_todo_feedback", "edited_at", "DATETIME NULL"}
     };
 
     /** 旧数据回填：把历史「案件类型」自由文本里的大类词归位到 case_type（小类位清空）。
@@ -157,6 +172,7 @@ public class SchemaMigration implements ApplicationRunner {
             migrateCategory(conn, existing);
             removeCivilType(conn);
             seedCategories(conn, existing);
+            backfillFeedbackDeclare(conn, existing);
         } catch (Exception e) {
             // 不阻断启动：库里可能只有只读权限。缺列的表现是「撤回」功能不可用，
             // 报错信息会明确指出，不会静默损坏数据。
@@ -226,6 +242,54 @@ public class SchemaMigration implements ApplicationRunner {
             log.info("[SchemaMigration] 案件类别字典已种入 {} 条默认小类", r.length);
         } catch (Exception e) {
             log.warn("[SchemaMigration] 类别字典种子跳过：{}", e.getMessage());
+        }
+    }
+
+    /**
+     * 上传声明回填：从存量 {@code content} 里把「于 X 在 Y 上传了 Z。」拆到三列。
+     *
+     * <p>幂等：只处理 {@code upload_platform IS NULL} 的行，拆过一次的不会被重复处理。
+     * 拆不出声明句的行原样保留（content 仍是全文），读侧还有一次兜底解析，
+     * 所以即使这里因为某种原因没跑到，界面上也照样能编辑。
+     */
+    private void backfillFeedbackDeclare(Connection conn, Set<String> existing) {
+        if (!existing.contains("case_todo_feedback.upload_platform")) {
+            return;
+        }
+        // 先把待拆的行读出来（解析在 Java 里做，SQL 侧没有正则）
+        List<Object[]> rows = new ArrayList<>();
+        try (Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery(
+                     "SELECT id, content FROM case_todo_feedback WHERE upload_platform IS NULL")) {
+            while (rs.next()) {
+                // parse 返回 [时间, 平台, 文件, 去掉声明句后的剩余说明]；全 null 表示没有声明句
+                String[] d = FeedbackDeclare.parse(rs.getString(2));
+                if (d != null) {
+                    rows.add(new Object[]{rs.getLong(1), d[0], d[1], d[2], d[3]});
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[SchemaMigration] 上传声明回填读取跳过：{}", e.getMessage());
+            return;
+        }
+        if (rows.isEmpty()) {
+            return;
+        }
+        // 参数化写入，不拼字符串（文件名里常有引号/括号）
+        try (PreparedStatement ps = conn.prepareStatement(
+                "UPDATE case_todo_feedback SET upload_time=?, upload_platform=?, upload_file=?, content=? WHERE id=?")) {
+            for (Object[] r : rows) {
+                ps.setString(1, (String) r[1]);
+                ps.setString(2, (String) r[2]);
+                ps.setString(3, (String) r[3]);
+                ps.setString(4, (String) r[4]);
+                ps.setLong(5, (Long) r[0]);
+                ps.addBatch();
+            }
+            int[] n = ps.executeBatch();
+            log.info("[SchemaMigration] 上传声明已拆列：{} 条反馈", n.length);
+        } catch (Exception e) {
+            log.warn("[SchemaMigration] 上传声明回填写入跳过：{}", e.getMessage());
         }
     }
 

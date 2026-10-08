@@ -8,11 +8,20 @@
     @closed="onClosed"
   >
     <div v-loading="loading" class="cf-td">
+      <!-- 正在看子任务自己的详情：顶部给一条常驻的返回条。
+           项目禁用悬浮提示（「回到主任务」藏在悬浮里没人找得到），所以做成可见的一行。 -->
+      <div v-if="detail.parentId" class="cf-td__back">
+        <el-button link type="primary" size="small" @click="backToParent">
+          ← 返回主任务：{{ parentContentOf(detail.parentId) }}
+        </el-button>
+      </div>
+
       <!-- 概览 -->
       <div v-if="detail.id" class="cf-td__head">
         <el-tag :type="statusType" effect="dark" size="small">
           {{ detail.statusName || (detail.status === 'DONE' ? '已完成' : '待办') }}
         </el-tag>
+        <el-tag v-if="detail.parentId" size="small" type="info" effect="plain">子任务</el-tag>
         <span v-if="detail.subtaskTotal" class="cf-td__subinfo">
           子任务 {{ detail.subtaskDone }}/{{ detail.subtaskTotal }}已完成
         </span>
@@ -21,7 +30,9 @@
         </span>
       </div>
 
-      <!-- 反馈记录（累积，时间正序；带落实状态标签） -->
+      <!-- 反馈记录（累积，时间正序；带落实状态标签）。
+           上传声明三要素（时间/平台/文件名）独立成块展示并可逐项修改
+           ——原先三者是拼在说明里的一句话，改一个字得整句重写（2026-10-08）。 -->
       <div class="cf-td__sec">
         <div class="cf-td__sec-head">
           <span>反馈记录</span>
@@ -49,8 +60,23 @@
               <el-tag v-if="subTitleOf(f)" size="small" type="info" effect="plain" class="cf-td__fb-from">
                 {{ subTitleOf(f) }}
               </el-tag>
+              <!-- 修订痕迹：改过就在块内常驻标注，别让「谁交的」与「谁改的」混淆 -->
+              <span v-if="f.editedAt" class="cf-td__fb-edited">
+                （{{ f.editedByName || '-' }} 于 {{ fmt(f.editedAt) }} 修改）
+              </span>
+              <span class="cf-spacer"></span>
+              <!-- 修改反馈：提交人本人或管理层（后端二次校验，前端只控显隐） -->
+              <el-button v-if="canEditFeedback(f)" link type="primary" size="small"
+                class="cf-td__q-op" @click.stop="openEditFeedback(f)">修改</el-button>
             </div>
-            <div class="cf-td__fb-text">{{ f.content }}</div>
+            <div v-if="f.content" class="cf-td__fb-text">{{ f.content }}</div>
+            <!-- 上传声明块：三要素分行展示，各自可改（改一项不影响其余两项） -->
+            <div v-if="f.uploadPlatform || f.uploadFile" class="cf-td__fb-declare">
+              <span class="cf-td__fb-declare-k">上传声明</span>
+              <span v-if="f.uploadTime" class="cf-td__fb-declare-i">时间 {{ f.uploadTime }}</span>
+              <span v-if="f.uploadPlatform" class="cf-td__fb-declare-i">平台 {{ f.uploadPlatform }}</span>
+              <span v-if="f.uploadFile" class="cf-td__fb-declare-i">文件 {{ f.uploadFile }}</span>
+            </div>
           </li>
         </ul>
         <div v-else class="cf-muted cf-td__empty">
@@ -85,6 +111,10 @@
             <span v-if="s.status === 'DONE' && s.doneAt" class="cf-muted">
               {{ fmt(s.doneAt) }} · {{ s.doneByName || '-' }}
             </span>
+            <!-- 详情：普通用户与管理层都能点开看这条子任务自己的反馈记录。
+                 不点详情就只能看到子任务那一行字，看不到它交了什么。 -->
+            <el-button link type="primary" size="small" class="cf-td__sub-del"
+              @click="openSubDetail(s.id, detail.content)">详情</el-button>
             <!-- 编辑子任务内容：写错了要能改，不能只能删了重加 -->
             <el-button v-if="editingSubId !== s.id" link type="primary" size="small"
               class="cf-td__sub-del" @click="startEditSub(s)">
@@ -247,14 +277,16 @@
       </el-button>
     </template>
 
-    <!-- 落实反馈弹窗（主任务/子任务共用，图二口径）：
-         完成场景确认按钮叫「确认完成」，纯反馈场景才叫「提交反馈」 -->
+    <!-- 落实反馈弹窗（主任务/子任务/修改已有反馈共用，图二口径）：
+         完成场景确认按钮叫「确认完成」，纯反馈场景叫「提交反馈」，
+         修改已有反馈叫「保存修改」——三者语义不同，别都叫提交 -->
     <FeedbackDialog
       v-model="fb.visible"
       :title="fb.title"
       :quote="fb.quote"
       :default-status="fb.status"
-      :confirm-text="fb.complete ? '确认完成' : '提交反馈'"
+      :confirm-text="fb.confirmText"
+      :initial="fb.initial"
       :loading="fb.loading"
       @submit="submitFeedback"
     />
@@ -318,6 +350,17 @@ const isParent = computed(() => !detail.value?.parentId)
 
 const title = computed(() => detail.value?.content || '任务详情')
 const statusType = computed(() => (done.value ? 'success' : 'warning'))
+
+/** 主任务标题（返回条上显示，让人知道退回去是哪一个）。
+ *  子任务详情里 subtasks 为空，取不到就退回进子任务前缓存的那份。 */
+const parentContentOf = (pid) => {
+  if (!pid) return ''
+  const hit = subtasks.value.find((s) => String(s.id) === String(pid))
+  if (hit) return hit.content || ''
+  return parentTitleCache.value || ''
+}
+/** 主任务标题缓存：切到子任务后本浮窗不再持有主任务对象，标题得先记下来 */
+const parentTitleCache = ref('')
 
 /**
  * 能否标记完成——与后端两条规则保持一致，前端先拦一次给出即时反馈，
@@ -531,30 +574,113 @@ const openCompleteSub = async (parentId, subId) => {
   openFeedbackDlg({ subId, complete: true })
 }
 
+/**
+ * 打开某个子任务自己的详情（2026-10-08）。
+ *
+ * <p><b>为什么要它</b>：反馈是「挂在这条子任务上」的。之前只有主任务详情能看到
+ * 反馈汇总，而且子任务的记录混在里面、要靠「子任务：xxx」标签逐条分辨；
+ * 想确认「这一条子任务到底交了什么」很费劲。需求明确要求
+ * 普通用户与管理层都能查看子任务详情、并在详情里改反馈。
+ *
+ * <p>实现上复用本浮窗：{@code detail} 接口对子任务同样返回它自己的反馈
+ * （子任务没有下一级，{@code feedbacksOf} 只查它自己），切 {@code todoId} 重开即可，
+ * 不必另做一个弹窗——两个弹窗的反馈展示/编辑逻辑完全一样，复制一份必然漂移。
+ *
+ * <p>返回条靠 {@code detail.parentId} 判断是否显示，不另存「来路」状态。
+ *
+ * @param parentContent 主任务标题。切到子任务后本浮窗不再持有主任务对象，
+ *        标题得由调用方给（列表页那张卡知道自己是哪条主任务）。
+ */
+const openSubDetail = async (subId, parentContent) => {
+  parentTitleCache.value = parentContent || detail.value?.content || ''
+  await open(subId)
+}
+
+/** 返回主任务详情（从子任务详情退回来）。
+ *  主任务 id 直接取自 {@code detail.parentId}——不另存一份「来路」状态，
+ *  那种冗余状态一旦和实际数据对不上就会凭空多出一条返回入口（或该有却没有）。 */
+const backToParent = async () => {
+  const pid = detail.value?.parentId
+  if (!pid) return
+  await open(pid)
+}
+
+/** 关闭浮窗时清掉标题缓存 */
+const onClosed = () => {
+  todoId.value = null
+  data.value = {}
+  parentTitleCache.value = ''
+}
+
 /** 带定位锚点打开（信箱「查看案件」用）：打开后滚动到目标并短暂高亮 */
 const openAt = async (id, anchor) => { await open(id, anchor) }
 
-defineExpose({ open, openAt, openComplete, openCompleteSub })
+defineExpose({ open, openAt, openComplete, openCompleteSub, openSubDetail })
+
+/** 确认按钮文案：完成 / 提交 / 修改是三种语义，不能都叫「提交」 */
+const CONFIRM_TEXT = {
+  complete: '确认完成',
+  submit: '提交反馈',
+  edit: '保存修改'
+}
 
 // ---- 落实反馈弹窗状态 ----
 const fb = reactive({
   visible: false, title: '反馈落实情况', quote: '', status: 'DONE',
   loading: false,
   // complete = 提交后要标记完成；subId 非空 = 反馈对象是子任务
-  complete: false, subId: null
+  complete: false, subId: null,
+  // editId 非空 = 修改已有反馈（2026-10-08）；initial 传给 FeedbackDialog 回填
+  editId: null, initial: null,
+  confirmText: CONFIRM_TEXT.submit
 })
 
 const openFeedbackDlg = ({ target = 'main', subId = null, complete = false }) => {
   const row = subId ? subtasks.value.find((s) => s.id === subId) : detail.value
   fb.complete = complete
   fb.subId = subId
+  fb.editId = null
+  fb.initial = null
   fb.title = complete
     ? (subId ? '完成子任务' : '标记完成')
     : (subId ? '反馈子任务落实情况' : '反馈落实情况')
   fb.quote = row?.content || ''
   fb.status = complete ? 'DONE' : 'IN_PROGRESS'
+  fb.confirmText = complete ? CONFIRM_TEXT.complete : CONFIRM_TEXT.submit
   fb.visible = true
 }
+
+/**
+ * 打开「修改这条反馈」弹窗（2026-10-08）。
+ *
+ * <p>回填四项：落实状态、落实说明、上传时间/平台/文件名。
+ * 三要素各自独立，用户只改平台名就只改平台名。
+ *
+ * <p><b>上传时间留空不补当前时间</b>：这条反馈本来就没有上传声明，
+ * 硬塞一个「现在」进去会让人以为当时真在那个时刻传的。
+ * FeedbackDialog 里只在「新建」场景才默认当前时间。
+ */
+const openEditFeedback = (f) => {
+  fb.complete = false
+  fb.editId = f.id
+  fb.subId = null
+  fb.initial = {
+    status: f.statusAt || 'IN_PROGRESS',
+    note: f.content || '',
+    uploadTime: f.uploadTime || '',
+    uploadPlatform: f.uploadPlatform || '',
+    uploadFile: f.uploadFile || ''
+  }
+  fb.title = '修改反馈'
+  fb.quote = subTitleOf(f) || detail.value?.content || ''
+  fb.status = f.statusAt || 'IN_PROGRESS'
+  fb.confirmText = CONFIRM_TEXT.edit
+  fb.visible = true
+}
+
+/** 谁能改这条反馈：提交人本人或管理层（与后端 checkFeedbackEditable 同口径） */
+const canEditFeedback = (f) =>
+  isAdmin.value || String(f.creatorId) === String(userStore.userInfo?.userId)
 
 const openRecord = () => openFeedbackDlg({ target: 'main', complete: false })
 const openCompleteMain = () => {
@@ -576,42 +702,47 @@ const undoMain = async () => {
   }
 }
 
-/** 反馈弹窗提交：complete=标记完成（主/子任务），否则只记录一条带状态的反馈 */
-const submitFeedback = async ({ status, note }) => {
+/**
+ * 反馈弹窗提交。三条路径：
+ * 1) fb.editId 非空 → 改已有那条（不动任务状态）
+ * 2) fb.complete → 标记完成（主/子任务）；按弹窗里实际选的落实状态分派
+ * 3) 其余 → 只记一条带状态的反馈
+ */
+const submitFeedback = async ({ status, note, uploadTime, uploadPlatform, uploadFile }) => {
   fb.loading = true
   try {
+    // ---- 路径 1：修改已有反馈 ----
+    if (fb.editId) {
+      await todoApi.updateFeedback(todoId.value, fb.editId, {
+        status, content: note, uploadTime, uploadPlatform, uploadFile
+      })
+      ElMessage.success('反馈已修改')
+      fb.visible = false
+      await load()
+      emit('changed')
+      return
+    }
+    const payload = { status, content: note, uploadTime, uploadPlatform, uploadFile }
     if (fb.complete) {
       // 按用户在弹窗里**实际选的落实状态**分派，而不是勾选时的意图：
       // 选「完成」才标记完成；选「进行中/未完成」说明用户改主意了，
       // 只记一条反馈、不动完成状态——否则弹窗里的状态选择形同虚设。
       const targetId = fb.subId || todoId.value
+      // 弹窗里填的落实说明是用户**主动提交的汇报内容**，要进反馈流留痕——
+      // 这不是「系统自动提交」（自动指的是 done 时替用户凭空造一条），
+      // 而是用户在汇报弹窗里亲手填写并点了提交。先记反馈再标记完成，
+      // 顺序也满足主任务「至少一条反馈才能完成」的规则校验。
+      if (note || uploadPlatform) {
+        await todoApi.addFeedback(targetId, payload)
+      }
       if (status === 'DONE') {
-        // 弹窗里填的落实说明是用户**主动提交的汇报内容**，要进反馈流留痕——
-        // 这不是「系统自动提交」（自动指的是 done 时替用户凭空造一条），
-        // 而是用户在汇报弹窗里亲手填写并点了提交。先记反馈再标记完成，
-        // 顺序也满足主任务「至少一条反馈才能完成」的规则校验。
-        if (note) {
-          if (fb.subId) {
-            await todoApi.addFeedback(fb.subId, { status, content: note })
-          } else {
-            await todoApi.addFeedback(todoId.value, { status, content: note })
-          }
-        }
         await todoApi.done(targetId, note)
         ElMessage.success(fb.subId ? '子任务已完成' : '已标记完成')
       } else {
-        if (fb.subId) {
-          await todoApi.addFeedback(fb.subId, { status, content: note })
-        } else {
-          await todoApi.addFeedback(todoId.value, { status, content: note })
-        }
         ElMessage.success('反馈已记录（未标记完成）')
       }
-    } else if (fb.subId) {
-      await todoApi.addFeedback(fb.subId, { status, content: note })
-      ElMessage.success('反馈已记录')
     } else {
-      await todoApi.addFeedback(todoId.value, { status, content: note })
+      await todoApi.addFeedback(fb.subId || todoId.value, payload)
       ElMessage.success('反馈已记录')
     }
     fb.visible = false
@@ -707,16 +838,16 @@ const toggleSub = async (s, checked) => {
   }
 }
 
-const onClosed = () => {
-  todoId.value = null
-  data.value = {}
-}
-
 watch(visible, (v) => { if (!v) onClosed() })
 </script>
 
 <style>
 .cf-td { padding: 2px 4px }
+/* 「返回主任务」条：从子任务详情退回上一层。常驻可见不悬浮（项目约定） */
+.cf-td__back {
+  margin-bottom: 10px; padding: 5px 8px;
+  background: #eef3fa; border-left: 3px solid #1b4a8c; border-radius: 3px;
+}
 .cf-td__head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px }
 .cf-td__subinfo { font-size: 13px; color: #1b4a8c; font-weight: 600 }
 .cf-td__sec { margin-top: 16px; padding-top: 12px; border-top: 1px dashed #e4e8ee }
@@ -770,6 +901,17 @@ watch(visible, (v) => { if (!v) onClosed() })
   color: #a8620a; background: #fdf6ec; border: 1px solid #f0dcc0;
   padding: 1px 7px; border-radius: 3px; overflow-wrap: anywhere }
 .cf-td__fb-time { font-variant-numeric: tabular-nums }
+/* 修订痕迹：改过反馈就常驻标注（禁悬浮提示），区分「谁交的」与「谁改的」 */
+.cf-td__fb-edited { color: #a8620a; font-size: 12px }
+/* 上传声明块：三要素分行。独立成块而不是拼进说明里，
+   用户才能一眼看出「时间/平台/文件」各自是什么，改单项时也知道在改哪一项。 */
+.cf-td__fb-declare {
+  margin-top: 5px; padding: 5px 8px;
+  background: #f4f8fd; border-left: 3px solid #7d9bcd; border-radius: 3px;
+  font-size: 12px; color: #3d4654; display: flex; flex-wrap: wrap; gap: 4px 12px;
+}
+.cf-td__fb-declare-k { font-weight: 600; color: #1b4a8c }
+.cf-td__fb-declare-i { word-break: break-all }
 .cf-td__fb-text { font-size: 13px; color: #1b2430; margin-top: 3px; line-height: 1.6; white-space: pre-wrap }
 .cf-td__sub { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 13px }
 .cf-td__sub.is-done /* 子任务行尾的操作按钮：删除/编辑。固定宽度避免点一个按钮整行跳动 */

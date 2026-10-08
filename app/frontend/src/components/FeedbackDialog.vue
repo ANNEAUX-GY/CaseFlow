@@ -22,10 +22,13 @@
       </el-form-item>
     </el-form>
 
-    <!-- 上传声明：替代原"佐证材料"上传。填了平台/文件即视为作出声明，
-         提交时自动拼成一句"于…在…上传了…。"并入落实说明 -->
+    <!-- 上传声明：替代原"佐证材料"上传。填了平台/文件即视为作出声明。
+         三要素（时间/平台/文件名）各自独立入库，所以修改时能只改其中一项，
+         不必把整句重写——2026-10-08 拆列的原因。 -->
     <div class="cf-fb__declare">
-      <div class="cf-fb__declare-title">上传声明<span class="cf-muted">（代替上传佐证材料，选填）</span></div>
+      <div class="cf-fb__declare-title">
+        上传声明<span class="cf-muted">（代替上传佐证材料，选填）</span>
+      </div>
       <div class="cf-fb__declare-tip">
         请输入：于<el-date-picker v-model="declareTime" type="datetime" size="small"
           format="YYYY-MM-DD HH:mm:ss" value-format="YYYY-MM-DD HH:mm:ss"
@@ -48,8 +51,8 @@
 
     <template #footer>
       <el-button @click="visible = false">取消</el-button>
-      <!-- 确认文案随场景变：纯反馈=「提交反馈」；勾选完成进来的=「确认完成」
-           （同一弹窗复用，但后者语义是完成汇报，别再叫提交反馈） -->
+      <!-- 确认文案随场景变：纯反馈=「提交反馈」；勾选完成进来的=「确认完成」；
+           改已有反馈=「保存修改」——三者语义不同，别都叫提交 -->
       <el-button type="primary" :loading="loading" @click="submit">{{ confirmText }}</el-button>
     </template>
   </el-dialog>
@@ -57,11 +60,16 @@
 
 <script setup>
 /**
- * 落实反馈弹窗（图二口径，主任务/子任务共用）：
- * 落实状态（完成/进行中/未完成）+ 落实说明 + 上传声明句。
+ * 落实反馈弹窗（图二口径，主任务/子任务/修改已有反馈共用）：
+ * 落实状态（完成/进行中/未完成）+ 落实说明 + 上传声明三要素。
  *
- * 弹窗本身不调接口：submit 事件把 { status, note } 交给父组件，
- * 由父组件决定走「标记完成」还是「仅记录反馈」。
+ * 弹窗本身不调接口：submit 事件把
+ * {@code { status, note, uploadTime, uploadPlatform, uploadFile }} 交给父组件，
+ * 由父组件决定走「标记完成」「仅记录一条」还是「改已有那条」。
+ *
+ * <p><b>修改已有反馈时（2026-10-08）</b>：用 {@code initial} 回填三项声明，
+ * 用户只改平台名就只改平台名——三要素独立入库（原先拼成一句话，
+ * 改一个字就得整句重写）。
  */
 import { computed, reactive, watch } from 'vue'
 import { ElMessage } from 'element-plus'
@@ -74,9 +82,14 @@ const props = defineProps({
   quote: { type: String, default: '' },
   /** 打开时默认选中的落实状态 */
   defaultStatus: { type: String, default: 'DONE' },
-  /** 确认按钮文案：反馈场景「提交反馈」/ 完成场景「确认完成」 */
+  /** 确认按钮文案：反馈场景「提交反馈」/ 完成场景「确认完成」/ 修改场景「保存修改」 */
   confirmText: { type: String, default: '提交反馈' },
-  loading: { type: Boolean, default: false }
+  loading: { type: Boolean, default: false },
+  /**
+   * 修改已有反馈时的初始值（2026-10-08）。
+   * 不传 = 新建（说明与声明都留空）。
+   */
+  initial: { type: Object, default: null }
 })
 const emit = defineEmits(['update:modelValue', 'submit'])
 
@@ -119,15 +132,26 @@ const nowText = () => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }
 
-// 打开时重置：状态取 defaultStatus，说明留空，声明时间默认当前（精确到秒）
+// 打开时重置：新建则状态取 defaultStatus、说明留空、声明时间默认当前；
+// 修改则回填 initial 里的四项。
+// 注意：修改时**不补当前时间**——这条反馈本来没有上传声明，
+// 硬塞「现在」进去会让人以为当时真在那个时刻传的。
 watch(visible, (v) => {
-  if (v) {
-    state.status = props.defaultStatus || 'DONE'
-    state.note = ''
-    state.declareTime = nowText()
-    state.declarePlatform = ''
-    state.declareFile = ''
+  if (!v) return
+  const init = props.initial
+  if (init) {
+    state.status = init.status || props.defaultStatus || 'DONE'
+    state.note = init.note || ''
+    state.declarePlatform = init.uploadPlatform || ''
+    state.declareFile = init.uploadFile || ''
+    state.declareTime = init.uploadTime || ''
+    return
   }
+  state.status = props.defaultStatus || 'DONE'
+  state.note = ''
+  state.declareTime = nowText()
+  state.declarePlatform = ''
+  state.declareFile = ''
 })
 
 /** 声明句：平台/文件任一填写即生成；时间留空则取提交时刻 */
@@ -147,18 +171,23 @@ const submit = () => {
     ElMessage.warning('上传声明的平台名称与文件名称需填写完整，或两项都留空')
     return
   }
-  const parts = []
-  if (state.note.trim()) parts.push(state.note.trim())
-  if (declareSentence.value) parts.push(declareSentence.value)
+  const hasDeclare = !!(platform && file)
+  if (!state.note.trim() && !hasDeclare) {
+    ElMessage.warning('请填写落实说明或上传声明')
+    return
+  }
   if (!state.status) {
     ElMessage.warning('请选择落实状态')
     return
   }
-  if (!parts.length) {
-    ElMessage.warning('请填写落实说明或上传声明')
-    return
-  }
-  emit('submit', { status: state.status, note: parts.join('\n') })
+  // 三要素分开给出，不再拼成一句话——后端各自入库，改单项不影响其余
+  emit('submit', {
+    status: state.status,
+    note: (state.note || '').trim(),
+    uploadTime: hasDeclare ? (state.declareTime || nowText()) : '',
+    uploadPlatform: platform,
+    uploadFile: file
+  })
 }
 </script>
 
