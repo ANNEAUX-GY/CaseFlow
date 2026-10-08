@@ -75,7 +75,8 @@
                  「为什么勾不动」不用悬浮提示（会挡住旁边的操作按钮，用户明确要求去掉），
                  改成紧跟在卡片里的内联文字——一直可见，不挡任何东西。 -->
             <el-checkbox
-              class="cf-todo__check"
+              class="cf-check cf-todo__check"
+              :class="{ 'cf-check--locked': t.status === 'DONE' && !isAdmin }"
               :model-value="t.status === 'DONE'"
               :disabled="!canToggle(t)"
               @change="(v) => toggle(t, v)"
@@ -155,7 +156,7 @@
                 <template v-else>
                   <div v-for="s in (subData[t.id]?.list || [])" :key="s.id" class="cf-todo__sub"
                     :class="{ 'is-done': s.status === 'DONE' }">
-                    <el-checkbox size="small"
+                    <el-checkbox class="cf-check"
                       :model-value="s.status === 'DONE'"
                       :disabled="savingSubId === s.id"
                       @change="(v) => toggleSub(t, s, v)" />
@@ -865,9 +866,15 @@ onBeforeUnmount(() => {
 .cf-todo__drag:active { cursor: grabbing }
 .cf-todo__card.is-dragging { opacity: .5 }
 .cf-todo__card-main { display: flex; gap: 10px; padding: 12px 12px 10px 12px }
-.cf-todo__check { margin-top: 2px }
-.cf-todo__check .el-checkbox__inner { width: 18px; height: 18px; border-radius: 4px }
-.cf-todo__check .el-checkbox__inner::after { height: 9px; left: 6px; top: 2px }
+/* 勾选框尺寸/配色统一在 index.css 的 .cf-check；这里只管与序号圆点的对齐。
+   Element 的 .el-checkbox 盒子高 32px（行高撑的），方框落在盒子中下部，
+   于是比并排的 22px 序号圆点低 4~5px。这里把盒子也压到 22px 并顶对齐，
+   让勾与序号落在同一条水平线上（实测 diff 0）。 */
+.cf-todo__check {
+  align-self: flex-start;
+  height: 22px;
+  margin-top: 1px;
+}
 
 .cf-todo__card-body { flex: 1; min-width: 0; cursor: pointer }
 .cf-todo__card-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap }

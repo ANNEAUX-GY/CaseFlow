@@ -104,6 +104,7 @@
             <!-- 勾选 = 走同一个落实反馈弹窗（选「完成」才真正勾上）；
                  取消勾选 = 撤销该子任务完成（承办人本人与管理员均可） -->
             <el-checkbox
+              class="cf-check"
               :model-value="s.status === 'DONE'"
               :disabled="savingId === s.id"
               @change="(v) => toggleSub(s, v)" />

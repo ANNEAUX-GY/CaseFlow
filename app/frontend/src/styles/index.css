@@ -965,6 +965,69 @@ html { scrollbar-gutter: stable; }
 .cf-filter-bar__search { width: 260px; }
 
 /* ==========================================================
+   完成勾选框：主任务与子任务共用一套（原先两处各写各的、大小不一）
+   Element 默认样式有三个问题：
+   1) 未选中是 1px 浅灰细框，贴在白卡片上几乎看不见「这里能点」；
+   2) 选中是深蓝实心方块 + 旋转边框画的粗勾，小尺寸下显得笨重；
+   3) 主任务 18px、子任务 14px，同一列表里大小不一。
+   改法：统一 20px 圆角方框（4px 圆角），常态描边加粗到 2px 并给警蓝倾向，
+   选中填警蓝 + 白色粗勾，禁用用浅灰虚线边（一眼看出点不动）。
+   ========================================================== */
+.cf-check { margin: 0 }
+.cf-check .el-checkbox__inner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid #a8b8ce;
+  border-radius: 5px;
+  background: #fff;
+  transition: border-color .15s, background-color .15s, box-shadow .15s;
+}
+.cf-check:hover .el-checkbox__inner { border-color: var(--cf-primary); box-shadow: 0 0 0 3px rgba(27, 74, 140, .12) }
+/* 勾：改用 SVG 背景图而不是 Element 的旋转边框伪元素——伪元素的粗细和位置
+   在 20px 尺寸下总有一两像素对不齐，SVG 一次到位、任何尺寸都 crisp */
+.cf-check .el-checkbox__inner::after { display: none }
+.cf-check.is-checked .el-checkbox__inner {
+  background-color: var(--cf-primary);
+  border-color: var(--cf-primary);
+  background-image: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M2.6 7.4 L5.6 10.4 L11.4 3.9' fill='none' stroke='%23fff' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 14px 14px;
+}
+.cf-check.is-checked:hover .el-checkbox__inner { background-color: var(--cf-primary-hover); border-color: var(--cf-primary-hover) }
+.cf-check.is-disabled .el-checkbox__inner {
+  border-style: dashed;
+  border-color: #d3dae4;
+  background-color: #f6f8fa;
+}
+.cf-check.is-disabled.is-checked .el-checkbox__inner {
+  border-style: solid;
+  border-color: #b8c4d4;
+  background-color: #eef1f5;
+}
+.cf-check.is-disabled.is-checked .el-checkbox__inner::after { display: none }
+.cf-check.is-disabled .el-checkbox__inner { background-image: none }
+/* 禁用态的勾换成灰色（放在最后，优先级高于 is-checked 的白勾） */
+.cf-check.is-disabled.is-checked .el-checkbox__inner {
+  background-image: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M2.6 7.4 L5.6 10.4 L11.4 3.9' fill='none' stroke='%23a9b4c4' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 14px 14px;
+}
+/* 「已完成但无权限撤销」不是控件坏了：要保留完成的实心勾，
+   只把填充淡化。否则民警看到虚线灰框会以为出错了。
+   选择器写成 .cf-check.cf-check--locked…（重复一个类）是为了压过 Element
+   自己的 `.el-checkbox__input.is-disabled.is-checked .el-checkbox__inner`
+   —— 两者特异性相同，谁后加载谁赢，实测输了它（底色没变）。 */
+.cf-check.cf-check--locked.is-disabled.is-checked .el-checkbox__inner {
+  border-style: solid;
+  border-color: var(--cf-primary);
+  background-color: #d6e2f2;
+  background-image: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M2.6 7.4 L5.6 10.4 L11.4 3.9' fill='none' stroke='%231b4a8c' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+.cf-check .el-checkbox__label { display: none }
+
+/* ==========================================================
    案件待办（to do）
    ========================================================== */
 .cf-todo__body { padding: var(--cf-gap-4); }
