@@ -183,7 +183,13 @@ public class CaseService {
             q.eq(CaseInfo::getSourceType, query.getSourceType());
         }
         if (StringUtils.hasText(query.getCategory())) {
-            q.eq(CaseInfo::getCategory, query.getCategory());
+            if ("NONE".equalsIgnoreCase(query.getCategory().trim())) {
+                // 「按类别浏览」板块页的「未分类」入口：类别为空（NULL 或空串）的案件。
+                // 与 OTHER 类型的 NOT IN 口径同理——等值匹配会把空值存量漏掉。
+                q.and(w -> w.isNull(CaseInfo::getCategory).or().eq(CaseInfo::getCategory, ""));
+            } else {
+                q.eq(CaseInfo::getCategory, query.getCategory());
+            }
         }
         if (StringUtils.hasText(query.getCaseType())) {
             String ct = query.getCaseType().trim();

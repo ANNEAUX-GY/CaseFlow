@@ -49,7 +49,7 @@ export const CASE_TYPE_OPTIONS = [
 ]
 
 /** 受门控的栏目：进入前必须先选类型 */
-export const GATED_PATHS = ['/watch', '/todos', '/cases', '/reminders']
+export const GATED_PATHS = ['/watch', '/todos', '/cases', '/reminders', '/case-boards']
 
 /** 本地已保存的原始值 → 选项 key */
 function readStored() {

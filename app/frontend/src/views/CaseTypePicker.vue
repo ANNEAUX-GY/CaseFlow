@@ -65,6 +65,11 @@ const choose = async (o) => {
   // from 可能是纯路径（'/cases'），也可能是带 query 的完整地址
   // （'/cases?status=IN_PROGRESS&employeeId=3'）——后者来自工作台/员工图谱的跨栏目跳转
   const target = resolveFrom()
+  // 按类别浏览（2026-10-08）：选完类型先进板块页按类别下钻；
+  // 但跨栏目跳转带了明确筛选（status/employeeId 等）的仍直达列表，不截胡
+  if (target.path === '/cases' && !target.query) {
+    target.path = '/case-boards'
+  }
   store.rememberPath(target.path)
   router.push(target.query ? { path: target.path, query: target.query } : { path: target.path })
 }
@@ -106,40 +111,6 @@ defineExpose({ loadCounts })
 </script>
 
 <style>
-/* 2026-10-04 放大：原先容器 852px / 卡片 275×125 偏小，
-   45~50 岁使用者要凑近看字。三档全放开：
-   容器加宽到 1180px、卡片加高到 190px、字号统一上调 2px。 */
-.cf-picker { padding: 40px 32px 28px; max-width: 1180px; margin: 0 auto }
-.cf-picker__head { text-align: center; margin-bottom: 28px }
-.cf-picker__title { font-size: 22px; font-weight: 600; color: #1b2430 }
-.cf-picker__sub { font-size: 15px; color: #5a6472; margin-top: 10px; line-height: 1.75 }
-.cf-picker__cards {
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;
-}
-.cf-picker__card {
-  border: 1px solid #dfe4ea; border-radius: 8px; padding: 26px 22px;
-  cursor: pointer; background: #fff; transition: all .15s;
-  min-width: 0;
-  /* 三卡片等高，长描述不会把某张卡顶矮 */
-  display: flex; flex-direction: column;
-}
-.cf-picker__card:hover { border-color: #1b4a8c; background: #f7faff; transform: translateY(-2px) }
-.cf-picker__card:focus-visible { outline: 2px solid #1b4a8c; outline-offset: 2px }
-.cf-picker__card.is-active { border-color: #1b4a8c; background: #f2f6fc; box-shadow: 0 0 0 2px #1b4a8c inset }
-.cf-picker__card-top { display: flex; align-items: center; gap: 10px; margin-bottom: 14px }
-.cf-picker__badge {
-  display: inline-block; padding: 5px 14px; border-radius: 4px;
-  font-size: 15px; font-weight: 600; color: #fff;
-}
-.cf-picker__badge.is-danger { background: #c62a2a }
-.cf-picker__badge.is-warning { background: #d98a0b }
-.cf-picker__badge.is-info { background: #5a6472 }
-.cf-picker__ok { color: #1b4a8c; font-size: 20px; margin-left: auto }
-.cf-picker__desc { font-size: 14px; color: #5a6472; line-height: 1.75; flex: 1 }
-/* 案件数是选择前就要看的信息，给足视觉权重并与描述拉开距离 */
-.cf-picker__count {
-  font-size: 14px; color: #1b2430; margin-top: 16px; padding-top: 12px;
-  border-top: 1px dashed #e4e8ee; font-weight: 600;
-}
-.cf-picker__foot { text-align: center; font-size: 13px; margin-top: 24px }
+/* 卡片样式已上移到 styles/index.css（cf-picker 系列，与「按类别浏览」板块页共用）。
+   放组件内会按需注入——板块页直链进入时本组件未加载，样式缺失会裸奔（2026-10-08）。 */
 </style>

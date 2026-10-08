@@ -5,7 +5,13 @@
     <div class="cf-gatebar" :class="'is-' + (caseTypeStore.currentOption?.type || 'info')">
       <span class="cf-gatebar__tag">{{ caseTypeStore.currentOption?.label || '未选择' }}</span>
       <span>当前共 {{ total }} 件</span>
+      <template v-if="query.category">
+        <span class="cf-gatebar__divider"></span>
+        <span>类别：<b>{{ categoryLabel }}</b></span>
+        <el-button link size="small" @click="clearCategory">清除</el-button>
+      </template>
       <span class="cf-spacer"></span>
+      <el-button link type="primary" @click="router.push('/case-boards')">按类别浏览</el-button>
       <span class="cf-gatebar__tip">需更换类型请用顶部类型条的「退出类型」</span>
     </div>
 
@@ -219,6 +225,20 @@ const syncCascade = () => {
   } else cascadeFilter.value = []
 }
 
+// ---- 按类别浏览板块页跳转进来（2026-10-08）----
+// 板块卡带 ?category=小类名；「未分类」卡传 NONE（后端走 IS NULL/空串分支）。
+// NONE 不在级联树里，syncCascade 自然置空级联显示，类别名在上方类型条单独展示。
+const categoryLabel = computed(() => {
+  if (query.category === 'NONE') return '未分类'
+  return query.category || ''
+})
+const clearCategory = () => {
+  query.category = ''
+  query.page = 1
+  cascadeFilter.value = []
+  load()
+}
+
 const formVisible = ref(false)
 const assignVisible = ref(false)
 const detailVisible = ref(false)
@@ -368,6 +388,13 @@ const onRemove = async (row) => {
 
 watch(() => route.query, (q) => {
   if (!q) return
+  // 按类别浏览板块页跳过来：按类别过滤并同步级联显示（NONE=未分类）
+  if (q.category) {
+    query.category = q.category
+    query.page = 1
+    syncCascade()
+    load()
+  }
   if (q.status) {
     query.status = q.status
     load()

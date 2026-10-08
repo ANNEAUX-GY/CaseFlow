@@ -189,7 +189,7 @@ MySQL 8 会让建表段失败（`init_db` 直接崩）。**二级索引必须放
 - 员工图谱 Excel 列固定：姓名/工号/上级工号/部门/职务/手机/邮箱；演示账号 `boss/admin123`；自检账号 `e2e_staff`/`e2e_law`（`e2e123456`）。
 
 ### Git / 部署细节
-- push 两种相反处置：卡住无输出 → 加 `env -u http_proxy -u https_proxy`；报 Connection was reset → 去掉 env -u 走代理。仓库级 `credential.helper=manager`；本地 curl 测 API 加 `--noproxy '*'`。
+- push 的正确姿势（2026-10-08 晚实测）：`GIT_TERMINAL_PROMPT=0 git push --progress origin main`，**不要加 `env -u http_proxy...`**（那会在本机静默卡死、退出码 0 但根本没推）。走系统代理才通。旧笔记「卡住加 env -u / reset 去掉 env -u」已作废。
 - 端口用 `CF_SERVER_PORT` 且必须 `--server.port` 压过本机 `SERVER__PORT`。
 - 托管模式 LoginInterceptor 必须放行 `/`、`/index.html`、`/assets/**`、`/favicon.ico`；前端 `base='/api/'`，pom 拷 dist 进 static，必须 clean package，先 taskkill 8080。
 - 账号：注册 `audit_status` 非 1 不能登录；手机号唯一 `^1[3-9]\d{9}$`；BCrypt 明文首登自动升级；`TokenStore` 多端 5 会话——停用/删除/重置密码必须 `removeAll`。
