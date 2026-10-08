@@ -143,13 +143,18 @@
       <el-col :span="12" :xs="24">
         <ChartPanel title="承办人在手负载（点击查看其案件）" :empty="!ownerData.length">
           <template #tools>
+            <!-- 条数会随人员增长：明说「可上下滑动」，别让人以为只有这几根条 -->
+            <span v-if="ownerData.length > OWNER_SCROLL_AT" class="cf-dash__chart-hint">
+              列出 {{ ownerData.length }} 人 · 可上下滑动
+            </span>
             <el-select v-model="loadMetric" size="small">
               <el-option label="在手 / 逾期" value="both" />
               <el-option label="仅在手" value="total" />
               <el-option label="仅逾期" value="overdue" />
             </el-select>
           </template>
-          <EChart :option="ownerOption" :height="isMobile ? 180 : 220" @click="onOwnerClick" />
+          <EChart :option="ownerOption" :height="ownerChartHeight" :max-height="ownerViewport"
+            @click="onOwnerClick" />
         </ChartPanel>
       </el-col>
     </el-row>
@@ -555,6 +560,23 @@ const ownerOption = computed(() => {
   })
 })
 
+/* ---- 人员增多时的滚动（2026-10-08）----
+ * 面板高度不能动（它和左边「案件状态分布」同排等高，一动整行就错位），
+ * 所以：**视口固定、画布按人数长高、超出部分用原生滚动条上下滑**。
+ * 后端已不再截断 Top 10（StatsService.OWNER_LOAD_LIMIT 只作兜底），
+ * 这里若还按固定高度画，条子会被越压越扁、名字挤成一团。 */
+const OWNER_ROW_H = 20      // 每人一条的高度（低于这个字号就看不清了）
+const OWNER_CHART_PAD = 34  // 网格上下留白（chart.js 里 top 28 + bottom 6）
+const OWNER_SCROLL_AT = 8   // 超过这个条数才提示「可上下滑动」
+
+/** 视口高度：维持原样，页面外观不变 */
+const ownerViewport = computed(() => (isMobile.value ? 180 : 220))
+/** 画布高度：够放就等于视口（不出现滚动条），不够就按人数长高 */
+const ownerChartHeight = computed(() => {
+  const need = OWNER_CHART_PAD + ownerData.value.length * OWNER_ROW_H
+  return Math.max(ownerViewport.value, need)
+})
+
 // ---- 图表联动：点柱体直接跳到对应清单 ----
 const onStatusClick = (p) => {
   const item = statusData.value[p.dataIndex]
@@ -673,6 +695,14 @@ onBeforeUnmount(() => {
 </script>
 
 <style>
+/* 负载图工具区的常驻说明（人员变多时才出现）。
+   项目禁用悬浮提示，所以「可以滑动」这件事必须一直看得见，
+   否则用户只会以为图就这么高、下面的人没案子。 */
+.cf-dash__chart-hint {
+  font-size: 12px;
+  color: var(--cf-text-3);
+  white-space: nowrap;
+}
 /* 「7 天内到期」与「最近操作」同排等高（2026-10-08）：
    两列高度由内部写死的内容区决定（表格 262 / 日志区 262），
    这里给面板外框一个**确定高度**，让两者严格对齐、底部不出现高低差。

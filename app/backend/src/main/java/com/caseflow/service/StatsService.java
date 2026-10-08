@@ -127,7 +127,7 @@ public class StatsService {
         vo.setDueByType(dueByType(filtered, now));
         // 负载类口径同样跟随筛选联动：筛选「刑事」时承办人负载即各人的刑事案量
         vo.setDeptLoad(deptLoad(filtered, empMap, now));
-        vo.setOwnerLoad(ownerLoad(filtered, empMap, now, 10));
+        vo.setOwnerLoad(ownerLoad(filtered, empMap, now));
         return vo;
     }
 
@@ -167,7 +167,7 @@ public class StatsService {
         vo.setTypeTrend(typeTrend(none, n, today));
         vo.setDueByType(dueByType(none, now));
         vo.setDeptLoad(deptLoad(none, Collections.emptyMap(), now));
-        vo.setOwnerLoad(ownerLoad(none, Collections.emptyMap(), now, 10));
+        vo.setOwnerLoad(ownerLoad(none, Collections.emptyMap(), now));
         return vo;
     }
 
@@ -424,9 +424,22 @@ public class StatsService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * 承办人在手负载的返回条数上限（2026-10-08）。
+     *
+     * <p><b>为什么不再写死 Top 10</b>：人员增加时，第 11 名起会被<b>静默丢掉</b>——
+     * 界面上「承办人在手负载」看起来是全量，实际只画了负载最高的 10 个人，
+     * 领导会据此误判「其余的人都没案子」。上限只作兜底（防脏数据炸响应），
+     * 真正的「看得完」交给前端：画布按人数长高，超出面板的部分走原生滚动条。
+     *
+     * <p>注意这个列表只含<b>手上有在办案件</b>的人，不是全部民警，
+     * 所以条数天然远小于人员总数，200 足够宽裕。
+     */
+    private static final int OWNER_LOAD_LIMIT = 200;
+
     /** 直方图：承办人在手负载（含逾期数） */
     private List<StatsVO.NameValue> ownerLoad(List<CaseInfo> all, Map<Long, OrgEmployee> empMap,
-                                              LocalDateTime now, int topN) {
+                                              LocalDateTime now) {
         Map<Long, CaseInfo> openCases = all.stream()
                 .filter(c -> !CLOSED.contains(c.getStatus()))
                 .collect(Collectors.toMap(CaseInfo::getId, c -> c, (a, b) -> a));
@@ -451,7 +464,7 @@ public class StatsService {
         return m.values().stream()
                 .sorted(Comparator.comparingLong(StatsVO.NameValue::getValue)
                         .thenComparing(StatsVO.NameValue::getOverdue).reversed())
-                .limit(topN)
+                .limit(OWNER_LOAD_LIMIT)
                 .collect(Collectors.toList());
     }
 

@@ -203,8 +203,12 @@
         </ChartPanel>
       </el-col>
       <el-col :span="12" :xs="24">
-        <ChartPanel title="个人在手负载 Top 10（点击查看其案件）" :empty="!ownerData.length">
+        <ChartPanel title="个人在手负载（点击查看其案件）" :empty="!ownerData.length">
           <template #tools>
+            <!-- 人数会随规模增长：明说可滑动，且不再截断 Top 10 -->
+            <span v-if="ownerData.length > OWNER_SCROLL_AT" class="cf-org__chart-hint">
+              列出 {{ ownerData.length }} 人 · 可上下滑动
+            </span>
             <el-select v-model="ownerMetric" size="small">
               <el-option label="在手 / 逾期" value="both" />
               <el-option label="仅在手" value="total" />
@@ -212,7 +216,8 @@
             </el-select>
             <el-button size="small" @click="loadStats">刷新</el-button>
           </template>
-          <EChart :option="ownerOption" :height="isMobile ? 200 : 260" @click="onOwnerClick" />
+          <EChart :option="ownerOption" :height="ownerChartHeight" :max-height="ownerViewport"
+            @click="onOwnerClick" />
         </ChartPanel>
       </el-col>
     </el-row>
@@ -528,6 +533,20 @@ const ownerOption = computed(() => {
   })
 })
 
+/* ---- 人员增多时的滚动（2026-10-08）----
+ * 与工作台同一个问题、同一个解法：面板高度不动（它与左边「部门负载」同排等高），
+ * 视口固定、画布按人数长高、超出部分用原生滚动条上下滑。
+ * 后端已不再截断 Top 10，这里若还按固定高度画，人名会被越压越挤。 */
+const OWNER_ROW_H = 20      // 每人一条的高度
+const OWNER_CHART_PAD = 34  // 网格上下留白（chart.js 里 top 28 + bottom 6）
+const OWNER_SCROLL_AT = 8   // 超过这个条数才提示「可上下滑动」
+
+const ownerViewport = computed(() => (isMobile.value ? 200 : 260))
+const ownerChartHeight = computed(() => {
+  const need = OWNER_CHART_PAD + ownerData.value.length * OWNER_ROW_H
+  return Math.max(ownerViewport.value, need)
+})
+
 const onDeptClick = (p) => {
   const item = deptData.value[p.dataIndex]
   if (item) ElMessage.info(`部门「${item.name}」在手 ${item.value} 件，其中逾期 ${item.overdue} 件`)
@@ -701,6 +720,13 @@ onMounted(async () => {
   width: 1px;
   height: 10px;
   background: var(--cf-border);
+}
+/* 负载图工具区的常驻说明（人数变多时才出现）。
+   项目禁用悬浮提示，「可以滑动」这件事必须一直看得见。 */
+.cf-org__chart-hint {
+  font-size: 12px;
+  color: var(--cf-text-3);
+  white-space: nowrap;
 }
 .cf-org__row {
   display: flex;
