@@ -375,6 +375,43 @@ public class OperationLogService {
             case "EMPLOYEE.IMPORT": return "导入员工图谱";
             case "AUTH.LOGIN":    return "登录";
             case "AUTH.LOGOUT":   return "退出登录";
+            case "AUTH.REGISTER": return "注册账号";
+            case "AUTH.UPDATE_USER": return "修改账号";
+            case "AUTH.STATUS_USER": return "审核账号";
+            case "AUTH.REJECT_USER": return "驳回注册";
+            case "AUTH.RESET_PWD":   return "重置密码";
+
+            // ---- 领导意见扩展（2026-10 前后新增；漏映射会让界面直接显示英文 action）----
+            case "CASE.OPINION_UPDATE_CONTENT": return "修改意见内容";
+            case "CASE.OPINION_UPDATE_META":   return "修改意见设置";
+            case "CASE.OPINION_REMOVE":        return "移除意见";
+            case "CASE.OPINION_REORDER":       return "调整意见顺序";
+            case "CASE.OPINION_NOTICE":        return "意见提醒";
+
+            // ---- 案件转手 / 审批流----
+            case "CASE.FLOW_TRANSFER": return "案件转手";
+            case "CASE.APPROVAL_SUBMIT":  return "提交审批";
+            case "CASE.APPROVAL_PASS":    return "审批通过";
+            case "CASE.APPROVAL_REJECT":  return "审批驳回";
+
+            // ---- 待办 / 子任务（待办成为意见唯一载体后动作名统一带 TODO_）----
+            case "CASE.TODO_ADD":             return "新增待办";
+            case "CASE.TODO_UPDATE":          return "修改待办";
+            case "CASE.TODO_DELETE":          return "删除待办";
+            case "CASE.TODO_DONE":            return "完成待办";
+            case "CASE.TODO_REOPEN":          return "撤销完成";
+            case "CASE.TODO_REORDER":         return "调整待办顺序";
+            case "CASE.TODO_FEEDBACK":        return "提交工作反馈";
+            case "CASE.TODO_SUBTASK_ADD":     return "新增子任务";
+            case "CASE.TODO_SUBTASK_REOPEN":  return "撤销子任务完成";
+
+            // ---- 疑问问答（独立于待办与任务）----
+            case "CASE.QUESTION_ASK":          return "提出疑问";
+            case "CASE.QUESTION_ANSWER":        return "回答疑问";
+            case "CASE.QUESTION_ANSWER_UPDATE": return "修订回答";
+            case "CASE.QUESTION_UPDATE":        return "编辑疑问";
+            case "CASE.QUESTION_DELETE":        return "删除疑问";
+
             default:              return action;
         }
     }

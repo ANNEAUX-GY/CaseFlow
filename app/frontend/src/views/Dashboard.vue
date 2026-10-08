@@ -189,7 +189,8 @@
       </el-col>
     </el-row>
 
-    <el-row :gutter="12">
+    <!-- cf-dash-pair：让「7 天内到期」与「最近操作」两列严格等高 -->
+    <el-row :gutter="12" class="cf-dash-pair">
       <el-col :span="16" :xs="24">
         <div class="cf-panel">
           <div class="cf-panel__head">
@@ -198,8 +199,9 @@
           </div>
           <CaseTable
             :rows="data.dueSoonList || []"
-            :height="isMobile ? undefined : 230"
+            :height="isMobile ? undefined : 300"
             :min-body="isMobile ? 0 : 300"
+            compact
             :loading="loading"
             @open="openDetail"
             @assign="openAssign"
@@ -671,6 +673,14 @@ onBeforeUnmount(() => {
 </script>
 
 <style>
+/* 「7 天内到期」与「最近操作」同排等高（2026-10-08）：
+   两列高度由内部写死的内容区决定（表格 262 / 日志区 262），
+   这里给面板外框一个**确定高度**，让两者严格对齐、底部不出现高低差。
+   **不要**用 flex:1 + height:100% 让高度依赖列高——那是 flex 循环依赖，
+   会把面板撑到整页高（实测 1289px）。项目里已踩过同类坑。 */
+.cf-dash-pair { align-items: stretch }
+.cf-dash-pair :deep(.el-col) > .cf-panel { height: 346px; box-sizing: border-box }
+
 /* 案件类型分析栏：图例 chips + 组合筛选 + 三图联动（桌面端） */
 .cf-ta {
   padding: 12px 16px 16px;

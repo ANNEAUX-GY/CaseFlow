@@ -57,8 +57,8 @@
       style="width: 100%"
       @row-dblclick="(row) => emit('open', row)"
     >
-      <el-table-column v-if="showCaseNo" prop="caseNo" label="编号" width="150" />
-      <el-table-column label="案件名称" min-width="220" show-overflow-tooltip>
+      <el-table-column v-if="showCaseNo && !compact" prop="caseNo" label="编号" width="150" />
+      <el-table-column label="案件名称" :min-width="compact ? 170 : 220" show-overflow-tooltip>
         <template #default="{ row }">
           <span :style="{ color: priorityColor(row), fontWeight: row.priority === 'URGENT' ? 600 : 400 }">
             {{ row.name }}
@@ -69,7 +69,7 @@
           <span class="cf-muted" style="margin-left: 6px">{{ SOURCE_META[row.sourceType] }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="案件类型" width="140">
+      <el-table-column v-if="!compact" label="案件类型" width="140">
         <template #default="{ row }">
           <el-tag v-if="row.caseType" size="small" :type="(CASE_TYPE_META[row.caseType] || {}).type || 'info'" effect="plain">
             {{ (CASE_TYPE_META[row.caseType] || {}).label }}
@@ -78,13 +78,13 @@
           <div v-if="row.category" class="cf-muted" style="font-size: 12px">{{ row.category }}</div>
         </template>
       </el-table-column>
-      <el-table-column label="嫌疑人" width="70" align="center">
+      <el-table-column v-if="!compact" label="嫌疑人" width="70" align="center">
         <template #default="{ row }">
           <span v-if="row.suspectCount" style="font-weight: 600">{{ row.suspectCount }}</span>
           <span v-else class="cf-muted">—</span>
         </template>
       </el-table-column>
-      <el-table-column label="主办 / 协办" min-width="150" show-overflow-tooltip>
+      <el-table-column label="主办 / 协办" :min-width="compact ? 110 : 150" show-overflow-tooltip>
         <template #default="{ row }">
           <span>{{ row.owner ? row.owner.employeeName : '未指派' }}</span>
           <span v-if="row.members && row.members.length" class="cf-muted">
@@ -133,6 +133,13 @@ const props = defineProps({
   height: { type: [String, Number], default: undefined },
   showCaseNo: { type: Boolean, default: false },
   showActions: { type: Boolean, default: true },
+  /**
+   * 精简模式（2026-10-08）：工作台等窄栏位用。
+   * 全部列宽合计约 1156px，窄栏放不下会被挤到「截止期限」被截断，
+   * 所以窄栏只留最关键的：案件名称 / 主办协办 / 截止期限 / 状态 / 操作。
+   * 编号、案件类型、嫌疑人在完整列表（案件管理）里仍可看到。
+   */
+  compact: { type: Boolean, default: false },
   /* 表格区最小高度：数据少时也不塌陷，翻页/筛选不会把下方内容往上拽 */
   minBody: { type: Number, default: 300 },
   loading: { type: Boolean, default: false }
