@@ -219,10 +219,25 @@
               撤回上一步
             </el-button>
           </div>
+          <!-- 案件相关 / 其他操作 分开看：登录记录产生频繁，
+               混排时会把案件操作挤出面板（实测最近 60 条里 33 条是登录）。 -->
+          <div class="cf-oplog__tabs">
+            <button
+              v-for="t in LOG_TABS"
+              :key="t.key"
+              type="button"
+              class="cf-oplog__tab"
+              :class="{ 'is-active': logTab === t.key }"
+              @click="switchLogTab(t.key)"
+            >
+              {{ t.label }}
+              <span class="cf-oplog__tab-n">{{ logCounts[t.key] }}</span>
+            </button>
+          </div>
           <div class="cf-panel__body cf-oplog">
             <div class="cf-oplog__list">
               <button
-                v-for="l in data.recentLogs || []"
+                v-for="l in shownLogs"
                 :key="l.id"
                 type="button"
                 class="cf-oplog__item"
@@ -240,7 +255,7 @@
                   <span v-else-if="l.undoable" class="cf-oplog__flag cf-oplog__flag--ok">可撤回</span>
                 </span>
               </button>
-              <div v-if="!(data.recentLogs || []).length" class="cf-muted">暂无记录</div>
+              <div v-if="!shownLogs.length" class="cf-muted">{{ logTab === 'case' ? '暂无案件相关操作' : '暂无其他操作' }}</div>
             </div>
             <div class="cf-oplog__hint">
               点击任一条查看执行详情<span class="cf-oplog__kbd">Ctrl</span><span class="cf-oplog__kbd">Z</span>撤回上一步
@@ -335,11 +350,47 @@ const currentDeadline = ref(null)
 const logVisible = ref(false)
 const currentLogId = ref(null)
 
+/* ---- 最近操作：案件相关 / 其他操作 分开查看 ----
+ * 为什么要分而不是混排：登录记录产生极频繁（实测最近 60 条里 33 条是登录），
+ * 混排时案件操作会被挤出面板，用户几乎看不到自己关心的案件变更。
+ * 取数在后端按类型过滤（/logs/recent-by-type），不在前端筛——前端筛只能
+ * 在已被登录记录占满的 N 条里挑，案件操作照样不全。
+ */
+const LOG_TABS = [
+  { key: 'case', label: '案件相关' },
+  { key: 'other', label: '其他操作' }
+]
+const logTab = ref('case')
+const logsByType = ref({ case: [], other: [] })
+const logCounts = computed(() => ({
+  case: logsByType.value.case.length,
+  other: logsByType.value.other.length
+}))
+const shownLogs = computed(() => logsByType.value[logTab.value] || [])
+
+/** 切页签：首次进入某页签时才拉取（工作台不是所有人都有日志权限，避免多余请求） */
+const switchLogTab = async (key) => {
+  if (logTab.value === key) return
+  logTab.value = key
+  if (!logsByType.value[key].length) {
+    await loadLogsByType(key)
+  }
+}
+const loadLogsByType = async (type) => {
+  try {
+    logsByType.value[type] = await logApi.recentByType(type, 20) || []
+  } catch (e) {
+    logsByType.value[type] = []
+  }
+}
+
 const loading = ref(false)
 const load = async () => {
   loading.value = true
   try {
     data.value = await caseApi.dashboard()
+    // 最近操作：同步刷新当前页签（事件流来了新操作要在面板里看到）
+    await loadLogsByType(logTab.value)
   } finally {
     loading.value = false
   }
@@ -602,7 +653,13 @@ const onCaseEvent = (e) => {
   if (dashboardTimer) return
   dashboardTimer = setTimeout(async () => {
     dashboardTimer = null
-    try { await Promise.all([load(), loadStats()]) } catch (err) { /* 忽略 */ }
+    try {
+      await Promise.all([load(), loadStats()])
+      // 当前不在「案件相关」页签时，把另一页签也刷新一次——
+      // 否则用户切过去看到的还是旧数据（登录/员工操作只在 other 页签里）
+      const other = logTab.value === 'case' ? 'other' : 'case'
+      await loadLogsByType(other)
+    } catch (err) { /* 忽略 */ }
   }, 2000)
 }
 

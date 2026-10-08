@@ -90,10 +90,30 @@ public class OperationLogService {
 
     /** 最近 N 条（工作台「最近操作」面板用） */
     public List<LogVO> recent(int limit) {
+        return recent(limit, null);
+    }
+
+    /**
+     * 最近 N 条，可按业务类型过滤（工作台「最近操作」分页签用）。
+     *
+     * <p><b>为什么必须在数据库层过滤</b>：登录记录（module=AUTH）产生极频繁，
+     * 实测最近 60 条里 33 条是登录。若先取回最近 N 条再在内存里分类，
+     * 案件操作会被登录挤掉——工作台「案件相关」页签几乎总是空的（这是本方法的由来）。
+     *
+     * @param type {@code null}=全部分类；{@code "case"}=案件相关；{@code "other"}=其他操作
+     */
+    public List<LogVO> recent(int limit, String type) {
         int n = limit < 1 ? 8 : Math.min(limit, 100);
         LambdaQueryWrapper<OperationLog> q = new LambdaQueryWrapper<OperationLog>()
                 .orderByDesc(OperationLog::getId)
                 .last("limit " + n);
+        if ("case".equals(type)) {
+            // 案件相关：案件本体（指派/状态/待办/意见/疑问/计划）+ 案件材料
+            q.in(OperationLog::getModule, "CASE", "FILE");
+        } else if ("other".equals(type)) {
+            // 其他：登录注册改密（AUTH）+ 员工图谱增删改导入（EMPLOYEE）
+            q.in(OperationLog::getModule, "AUTH", "EMPLOYEE");
+        }
         List<OperationLog> records = logMapper.selectList(q);
         Map<Long, Long> latestIds = latestUndoableIds(targetsOf(records));
         Map<Long, CaseInfo> caseMap = casesOf(records);

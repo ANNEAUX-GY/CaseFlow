@@ -136,6 +136,8 @@ export const watchApi = {
 export const logApi = {
   page: (params) => http.get('/logs', { params }),
   recent: (params) => http.get('/logs/recent', { params }),
+  /** 按业务类型取最近日志（type=case 案件相关 / other 其他操作），工作台页签用 */
+  recentByType: (type, limit = 20) => http.get('/logs/recent-by-type', { params: { type, limit } }),
   detail: (id) => http.get(`/logs/${id}`),
   caseLogs: (caseId) => http.get(`/logs/case/${caseId}`),
   undo: (id) => http.post(`/logs/${id}/undo`),

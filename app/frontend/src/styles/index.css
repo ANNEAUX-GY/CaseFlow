@@ -754,11 +754,51 @@ html { scrollbar-gutter: stable; }
 .cf-oplog {
   display: flex;
   flex-direction: column;
-  /* 必须是确定高度：靠 flex 从兄弟列撑高会形成循环依赖，列表会把整页顶长 */
-  height: 230px;
+  /* 必须是确定高度：靠 flex 从兄弟列撑高会形成循环依赖，列表会把整页顶长。
+     232 而非 230：给上方页签条留出高度，否则列表被挤出面板。 */
+  height: 262px;
   overflow: hidden;
   padding: 6px 10px 0;
 }
+
+/* 案件相关 / 其他操作 页签（登录记录太频繁，混排会把案件操作挤出面板） */
+.cf-oplog__tabs {
+  display: flex;
+  gap: 4px;
+  padding: 0 10px 8px;
+  border-bottom: 1px solid #eef1f5;
+}
+.cf-oplog__tab {
+  border: none;
+  background: transparent;
+  padding: 4px 10px;
+  font-size: 13px;
+  color: #5a6472;
+  cursor: pointer;
+  border-radius: 4px 4px 0 0;
+  border-bottom: 2px solid transparent;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.cf-oplog__tab:hover { color: #1b4a8c; background: #f4f8ff }
+.cf-oplog__tab.is-active {
+  color: #1b4a8c;
+  font-weight: 600;
+  border-bottom-color: #1b4a8c;
+  background: #f4f8ff;
+}
+.cf-oplog__tab-n {
+  font-size: 11px;
+  color: #8a929e;
+  background: #eef1f5;
+  border-radius: 8px;
+  padding: 0 6px;
+  line-height: 16px;
+  min-width: 16px;
+  text-align: center;
+}
+.cf-oplog__tab.is-active .cf-oplog__tab-n { background: #1b4a8c; color: #fff }
 
 .cf-oplog__list {
   flex: 1;

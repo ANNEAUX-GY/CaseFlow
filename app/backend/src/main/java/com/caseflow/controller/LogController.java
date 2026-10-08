@@ -42,6 +42,19 @@ public class LogController {
         return Result.ok(operationLogService.recent(limit));
     }
 
+    /**
+     * 最近 N 条，按业务类型过滤（工作台「最近操作」页签用）。
+     *
+     * <p>type=case 案件相关（指派/增删改查/待办/材料）；type=other 其他操作（登录/注册/员工图谱）。
+     * 过滤在数据库层做——登录记录产生频繁，取回再分类会把案件操作挤没。
+     */
+    @GetMapping("/recent-by-type")
+    @FullAccessOnly("查看操作日志")
+    public Result<List<LogVO>> recentByType(@RequestParam(defaultValue = "20") int limit,
+                                           @RequestParam String type) {
+        return Result.ok(operationLogService.recent(limit, type));
+    }
+
     /** 单个案件的办理进度（详情抽屉时间线，按时间正序）。仅管理层：普通员工不展示办理进度 */
     @GetMapping("/case/{caseId}")
     @FullAccessOnly("查看办理进度")
