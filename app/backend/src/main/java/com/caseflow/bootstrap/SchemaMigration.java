@@ -98,6 +98,12 @@ public class SchemaMigration implements ApplicationRunner {
             // 子任务（2026-10-04）：NULL=顶层主任务，非空=挂在该 id 下。
             // 存量任务全部为 NULL，行为不变，无需回填。
             {"case_todo", "parent_id", "BIGINT NULL"},
+            // 回答修订痕迹（2026-10-08）：管理层答错可改答，但**不覆盖**首次回答人/时间
+            // （answerBy/answeredAt 保持原样），另存三列记录谁在何时改过，责任可追溯。
+            // 存量数据全为 NULL = 从未修订，界面不显示修订标记。
+            {"case_question", "answer_edited_by", "BIGINT NULL"},
+            {"case_question", "answer_edited_by_name", "VARCHAR(64) NULL"},
+            {"case_question", "answer_edited_at", "DATETIME NULL"},
             // 办案组别（2026-10-04）：初查组/清案组/不限。
             // org_employee 是指派校验的**权威来源**（账号可没绑员工档案）；
             // sys_user.police_group 是注册时自报 + 审核时确认的组别，

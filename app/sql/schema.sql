@@ -174,6 +174,9 @@ CREATE TABLE IF NOT EXISTS case_question (
     answer_by       BIGINT        DEFAULT NULL COMMENT '回答人账号 ID',
     answer_by_name  VARCHAR(64)   DEFAULT NULL COMMENT '回答人姓名（冗余展示）',
     answered_at     DATETIME      DEFAULT NULL COMMENT '回答时间',
+    answer_edited_by      BIGINT       DEFAULT NULL COMMENT '最后修订回答的账号 ID',
+    answer_edited_by_name VARCHAR(64)   DEFAULT NULL COMMENT '最后修订回答的姓名（冗余展示）',
+    answer_edited_at      DATETIME      DEFAULT NULL COMMENT '最后修订回答的时间'
     question_by     BIGINT        DEFAULT NULL COMMENT '提问人账号 ID',
     question_by_name VARCHAR(64)  DEFAULT NULL COMMENT '提问人姓名（冗余展示）',
     created_at      DATETIME      DEFAULT CURRENT_TIMESTAMP COMMENT '提问时间'

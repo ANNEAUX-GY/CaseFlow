@@ -111,6 +111,53 @@ public class QuestionService {
         return q;
     }
 
+    /**
+     * 修订已给出的回答：仅管理层（2026-10-08）。
+     *
+     * <p><b>为什么单独一个方法而不是复用 {@link #answer}</b>：answer() 的
+     * 「一问一答，回答后不可再改」是针对<b>首次回答</b>的约束（防重复刷答）；
+     * 而管理层答错了内容需要能改，两者是不同语义，不能共用一个入口。
+     *
+     * <p><b>回答人与首次回答时间保持原样</b>，修订信息另存
+     * answerEditedBy/answerEditedByName/answerEditedAt 三列——
+     * 否则「谁最初答的」会被改答人抹掉，争议时无从追溯。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public CaseQuestion updateAnswer(Long questionId, String content) {
+        if (!StringUtils.hasText(content)) {
+            throw new BizException("请填写回答内容");
+        }
+        CaseQuestion q = questionMapper.selectById(questionId);
+        if (q == null) {
+            throw new BizException(400, "该疑问不存在或已被删除");
+        }
+        if (!AuthContext.isFullAccess()) {
+            throw new BizException(403, "只有管理员或领导可以修改回答");
+        }
+        if (!StringUtils.hasText(q.getAnswer())) {
+            throw new BizException("该疑问尚未回答，请直接回答而不是修订");
+        }
+        String newText = content.trim();
+        if (newText.equals(q.getAnswer().trim())) {
+            return q;   // 内容没变就别刷「已修订」痕迹
+        }
+
+        String before = snapshot(q);
+        String oldText = q.getAnswer();
+        q.setAnswer(newText);
+        q.setAnswerEditedBy(AuthContext.userId());
+        q.setAnswerEditedByName(AuthContext.userName());
+        q.setAnswerEditedAt(LocalDateTime.now());
+        questionMapper.updateById(q);
+
+        // 摘要里用 oldText（setAnswer 之前的值），否则新旧对照会都显示新内容
+        logService.log("CASE", "QUESTION_ANSWER_UPDATE", "CASE", q.getCaseId(),
+                "修订回答：" + abbrev(q.getContent())
+                        + "（原「" + abbrev(oldText) + "」→「" + abbrev(newText) + "」）",
+                before, snapshot(q));
+        return q;
+    }
+
     /** 编辑问题：仅提问人本人或管理层；已回答的问题允许改，但会标记需重新确认 */
     @Transactional(rollbackFor = Exception.class)
     public CaseQuestion update(Long questionId, String content) {

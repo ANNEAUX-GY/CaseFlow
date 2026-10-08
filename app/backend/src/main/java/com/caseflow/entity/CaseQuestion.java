@@ -33,6 +33,18 @@ public class CaseQuestion implements Serializable {
     private Long answerBy;
     private String answerByName;
     private LocalDateTime answeredAt;
+    /**
+     * 最后修订回答的账号 ID（2026-10-08）。
+     *
+     * <p><b>为什么不覆盖 {@code answerBy}</b>：answerBy 记的是<b>首次回答人</b>。
+     * 管理层改答时若覆盖它，「谁最初答的」就被抹掉了——出现争议时无从追溯。
+     * 所以修订信息另存三列，回答人/回答时间保持首次的原样。
+     */
+    private Long answerEditedBy;
+    /** 最后修订回答的姓名（冗余展示） */
+    private String answerEditedByName;
+    /** 最后修订回答的时间；NULL=从未修订 */
+    private LocalDateTime answerEditedAt;
     private Long questionBy;
     private String questionByName;
     private LocalDateTime createdAt;

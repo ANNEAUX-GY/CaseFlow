@@ -159,10 +159,32 @@
               <el-button link size="small" @click="cancelEditQuestion">取消</el-button>
             </template>
             <div v-else class="cf-td__fb-text">{{ q.content }}</div>
-            <!-- 回答块：管理层看到未回答的显示行内输入框 -->
+            <!-- 回答块：管理层看到未回答的显示行内输入框；
+     已回答的可修订（2026-10-08，答错了要能改）——修订不覆盖首次回答人/时间，
+     另存修订痕迹并在块内常驻标注，避免「谁答的」与「谁改的」混淆。 -->
             <div v-if="q.answer" class="cf-td__q-answer">
-              <span class="cf-td__q-answer-by">{{ q.answerByName || '-' }} · {{ fmt(q.answeredAt) }} 回答</span>
-              <div class="cf-td__fb-text">{{ q.answer }}</div>
+              <span class="cf-td__q-answer-by">
+                {{ q.answerByName || '-' }} · {{ fmt(q.answeredAt) }} 回答
+                <span v-if="q.answerEditedAt" class="cf-td__q-answer-edited">
+                  （{{ q.answerEditedByName || '-' }} 于 {{ fmt(q.answerEditedAt) }} 修订）
+                </span>
+                <span class="cf-spacer"></span>
+                <template v-if="editingAnswerId !== q.id">
+                  <el-button v-if="isAdmin" link type="primary" size="small"
+                    class="cf-td__q-op" @click.stop="startEditAnswer(q)">修改回答</el-button>
+                </template>
+              </span>
+              <template v-if="editingAnswerId === q.id">
+                <el-input v-model="editingAnswerText" type="textarea" :rows="2" size="small" maxlength="500"
+                  @keyup.ctrl.enter="commitEditAnswer(q)" />
+                <div class="cf-td__q-edit-actions">
+                  <el-button type="primary" size="small" :loading="answeringId === q.id"
+                    :disabled="!(editingAnswerText || '').trim()" @click="commitEditAnswer(q)">保存</el-button>
+                  <el-button link size="small" @click="cancelEditAnswer">取消</el-button>
+                  <span class="cf-muted cf-td__q-edit-tip">Ctrl+Enter 保存，Esc 取消</span>
+                </div>
+              </template>
+              <div v-else class="cf-td__fb-text">{{ q.answer }}</div>
             </div>
             <div v-else-if="isAdmin" class="cf-td__q-answer cf-td__q-answer--input">
               <el-input v-model="answerText[q.id]" size="small" maxlength="500"
@@ -320,6 +342,9 @@ const answerText = reactive({})
 const answeringId = ref(null)
 const editingQuestionId = ref(null)
 const editingQuestionText = ref('')
+/** 正在修订回答的疑问 id；与 editingQuestionId 互斥（避免同时两处输入框） */
+const editingAnswerId = ref(null)
+const editingAnswerText = ref('')
 
 const loadQuestions = async () => {
   if (!todoId.value) { questions.value = []; return }
@@ -352,6 +377,34 @@ const submitAnswer = async (q) => {
     await questionApi.answer(q.id, content)
     answerText[q.id] = ''
     ElMessage.success('已回答')
+    await loadQuestions()
+    emit('changed')
+  } finally { answeringId.value = null }
+}
+
+/* ---- 修订已给出的回答（仅管理层，2026-10-08）----
+ * 与「首次回答」分开两个入口：answer 的「一问一答」是防重复刷答，
+ * 改答是纠错，两者语义不同。回答人/首次回答时间不变（后端另存修订痕迹）。
+ */
+const startEditAnswer = (q) => {
+  editingAnswerId.value = q.id
+  editingAnswerText.value = q.answer || ''
+  // 问题与回答的编辑互斥，避免同时出现两处输入框
+  cancelEditQuestion()
+}
+const cancelEditAnswer = () => {
+  editingAnswerId.value = null
+  editingAnswerText.value = ''
+}
+const commitEditAnswer = async (q) => {
+  const text = (editingAnswerText.value || '').trim()
+  if (!text) { ElMessage.warning('请填写回答内容'); return }
+  if (text === (q.answer || '').trim()) { cancelEditAnswer(); return }
+  answeringId.value = q.id
+  try {
+    await questionApi.updateAnswer(q.id, text)
+    cancelEditAnswer()
+    ElMessage.success('回答已修订')
     await loadQuestions()
     emit('changed')
   } finally { answeringId.value = null }
@@ -421,6 +474,11 @@ const open = async (id) => {
   fbExpanded.value = false
   subExpanded.value = false
   qExpanded.value = false
+  // 编辑态重置：否则上次没保存完的输入框会带到下一个任务
+  editingQuestionId.value = null
+  editingQuestionText.value = ''
+  editingAnswerId.value = null
+  editingAnswerText.value = ''
   visible.value = true
   await load()
 }
@@ -656,7 +714,16 @@ watch(visible, (v) => { if (!v) onClosed() })
 /* 疑问行的编辑/删除操作按钮 */
 .cf-td__q-op { font-size: 12px; padding: 0 2px; margin-left: 4px }
 .cf-td__q-answer--input { display: flex; gap: 8px; align-items: center; background: #fbfcfe; border-left-color: #dfe4ea }
-.cf-td__q-answer-by { font-size: 12px; color: #1e8e58 }
+.cf-td__q-answer-by {
+  font-size: 12px; color: #1e8e58;
+  /* 「修改回答」按钮与修订痕迹排在同一行的两端 */
+  display: flex; align-items: center; gap: 6px;
+}
+/* 修订痕迹：常驻可见（项目约定：禁悬浮提示，说明要一直看得见） */
+.cf-td__q-answer-edited { color: #a8620a }
+/* 修订回答的操作区 */
+.cf-td__q-edit-actions { display: flex; align-items: center; gap: 8px; margin-top: 4px }
+.cf-td__q-edit-tip { font-size: 12px }
 .cf-td__block { flex: 0 1 auto; min-width: 0; font-size: 12px; line-height: 1.4;
   color: #a8620a; background: #fdf6ec; border: 1px solid #f0dcc0;
   padding: 1px 7px; border-radius: 3px; overflow-wrap: anywhere }

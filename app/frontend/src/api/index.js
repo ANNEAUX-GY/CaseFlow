@@ -162,6 +162,8 @@ export const questionApi = {
   ask: (caseId, todoId, content) => http.post('/questions', { caseId, todoId, content }),
   answer: (id, content) => http.post(`/questions/${id}/answer`, { content }),
   update: (id, content) => http.put(`/questions/${id}`, { content }),
+  /** 修订已给出的回答（仅管理层，答错了要能改） */
+  updateAnswer: (id, content) => http.put(`/questions/${id}/answer`, { content }),
   remove: (id) => http.delete(`/questions/${id}`)
 }
 

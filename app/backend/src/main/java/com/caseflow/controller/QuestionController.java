@@ -49,6 +49,17 @@ public class QuestionController {
         return Result.ok(questionService.update(id, content));
     }
 
+    /**
+     * 修订已给出的回答（仅管理层，答错了要能改）。
+     * 权限在 Service 内校验——Controller 不加 @FullAccessOnly（项目既定惯例：
+     * 那个注解由 PermissionInterceptor 在方法执行前拦截，权限分层必须下沉 Service）。
+     */
+    @PutMapping("/{id}/answer")
+    public Result<CaseQuestion> updateAnswer(@PathVariable Long id, @RequestBody Map<String, Object> body) {
+        String content = body.get("content") == null ? null : String.valueOf(body.get("content"));
+        return Result.ok(questionService.updateAnswer(id, content));
+    }
+
     /** 删除问题（提问人本人或管理层） */
     @DeleteMapping("/{id}")
     public Result<Void> remove(@PathVariable Long id) {
