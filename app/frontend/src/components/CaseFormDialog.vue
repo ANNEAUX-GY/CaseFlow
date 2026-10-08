@@ -3,12 +3,11 @@
   <el-dialog
     v-model="visible"
     :title="isEdit ? '编辑案件' : '新建案件'"
-    :width="isMobile ? '96%' : '760px'"
-    :fullscreen="isMobile"
+    width="760px"
     destroy-on-close
     class="cf-dialog"
   >
-    <el-form :model="form" :label-width="isMobile ? '84px' : '92px'">
+    <el-form :model="form" label-width="92px">
       <el-form-item label="案件名称" required>
         <el-input v-model="form.name" placeholder="可手打案件名，例如：2026-XX 涉嫌诈骗案" maxlength="120" show-word-limit />
       </el-form-item>
@@ -85,7 +84,7 @@
           type="datetime"
           value-format="YYYY-MM-DD HH:mm:ss"
           placeholder="选择截止日期时间"
-          :style="{ width: isMobile ? '100%' : '240px' }"
+          style="width: 240px"
         />
         <el-button-group style="margin-left: 8px">
           <el-button size="small" @click="quickDeadline(1)">+1天</el-button>
@@ -124,10 +123,8 @@ import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import EmployeePicker from './EmployeePicker.vue'
 import { caseApi } from '../api'
-import { useDevice } from '../utils/device'
 import { useCategoryStore } from '../store/category'
 
-const { isMobile } = useDevice()
 const categoryStore = useCategoryStore()
 
 const props = defineProps({

@@ -1,43 +1,15 @@
 <template>
   <el-container style="height: 100%">
-    <!-- 电脑端：常驻侧栏 -->
-    <el-aside v-if="!isMobile" width="224px" class="cf-aside">
-      <NavPanel variant="aside" />
+    <!-- 常驻侧栏 -->
+    <el-aside width="224px" class="cf-aside">
+      <NavPanel />
     </el-aside>
-
-    <!-- 手机端：同一套导航收进左侧抽屉，点汉堡展开；选完自动收起 -->
-    <el-drawer
-      v-if="isMobile"
-      v-model="navOpen"
-      direction="ltr"
-      size="278px"
-      :with-header="false"
-      class="cf-nav-drawer"
-      :show-close="false"
-    >
-      <NavPanel
-        variant="drawer"
-        @navigate="navOpen = false"
-        @close="navOpen = false"
-        @logout="onLogout"
-      />
-    </el-drawer>
 
     <el-container>
       <el-header class="cf-header">
-        <button
-          v-if="isMobile"
-          type="button"
-          class="cf-burger"
-          aria-label="打开导航"
-          @click="navOpen = true"
-        >
-          <el-icon><Fold /></el-icon>
-        </button>
-
         <div class="cf-header__title">
           <span class="cf-title">{{ pageTitle }}</span>
-          <span v-if="!isMobile" class="cf-subtitle">CaseFlow</span>
+          <span class="cf-subtitle">CaseFlow</span>
         </div>
 
         <div class="cf-header__right">
@@ -48,17 +20,7 @@
             {{ userStore.userInfo?.displayName || '' }}
             <span v-if="userStore.roleName" class="cf-header__role">{{ userStore.roleName }}</span>
           </span>
-          <!-- 版式标识：一眼看出系统把当前设备识别成了什么，点一下可手动切换 -->
-          <button
-            v-if="showDeviceChip"
-            type="button"
-            class="cf-device-chip"
-            @click="toggleLayout"
-          >
-            <el-icon><component :is="isMobile ? Cellphone : Monitor" /></el-icon>
-            {{ isMobile ? '手机版' : '电脑版' }}
-          </button>
-          <el-button v-if="!isMobile" link type="primary" class="cf-header__logout" @click="onLogout">退出</el-button>
+          <el-button link type="primary" class="cf-header__logout" @click="onLogout">退出</el-button>
         </div>
       </el-header>
 
@@ -101,13 +63,12 @@
 <script setup>
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Fold, Cellphone, Monitor, Filter } from '@element-plus/icons-vue'
+import { Filter } from '@element-plus/icons-vue'
 import { useUserStore } from '../store/user'
 import { usePendingStore } from '../store/pending'
 import { useEventStore } from '../store/events'
 import { useCaseTypeStore } from '../store/caseType'
 import { useMyTodoStore } from '../store/myTodo'
-import { useDevice } from '../utils/device'
 import NavPanel from './NavPanel.vue'
 import WelcomeDialog from '../components/WelcomeDialog.vue'
 import OpinionInboxDialog from '../components/OpinionInboxDialog.vue'
@@ -116,16 +77,6 @@ import NotificationBell from '../components/NotificationBell.vue'
 const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
-
-// 手机端抽屉开关；切到电脑端时顺手关掉，避免抽屉在桌面布局里残留
-const navOpen = ref(false)
-const { isMobile, mode, setDeviceMode, deviceKindLabel } = useDevice()
-watch(isMobile, (v) => { if (!v) navOpen.value = false })
-watch(() => route.path, () => { navOpen.value = false })
-
-// 电脑端且未手动指定版式时不显示标识，保持顶栏干净
-const showDeviceChip = computed(() => isMobile.value || mode.value !== 'auto')
-const toggleLayout = () => setDeviceMode(isMobile.value ? 'desktop' : 'mobile')
 
 // 待审核注册申请数：作为「账号管理」上的红点，所长/法制员一进系统就能看到有人等审核。
 // 放在 store 里而不是局部 ref —— 审批动作发生在账号管理页，两处必须读同一份数据，
@@ -191,7 +142,6 @@ const today = computed(() => {
 })
 
 const onLogout = async () => {
-  navOpen.value = false
   await userStore.logout()
   pendingStore.reset()
   myTodoStore.reset()

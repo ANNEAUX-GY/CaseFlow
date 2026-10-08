@@ -30,7 +30,7 @@
           <el-button @click="load">查询</el-button>
         </div>
 
-        <el-table v-if="!isMobile" :data="rows" v-loading="loading" stripe>
+        <el-table :data="rows" v-loading="loading" stripe>
           <el-table-column prop="username" label="登录名" width="140" />
           <el-table-column prop="displayName" label="姓名" width="110" />
           <el-table-column label="角色" width="120">
@@ -92,59 +92,12 @@
             <span class="cf-muted">{{ tab === 'pending' ? '没有待审核的注册申请' : '暂无账号' }}</span>
           </template>
         </el-table>
-
-        <!-- 手机端：账号卡片。八列信息在 375px 宽下没法看，拆成「标题行 + 信息行 + 操作行」 -->
-        <div v-else v-loading="loading" class="cf-ucards">
-          <div v-for="row in rows" :key="row.id" class="cf-ucard">
-            <div class="cf-ucard__top">
-              <span class="cf-ucard__name">{{ row.displayName || row.username }}</span>
-              <el-tag v-if="row.auditStatus === 0" type="warning" size="small">
-                申请：{{ row.applyRoleName || '—' }}
-              </el-tag>
-              <el-tag v-else :type="row.fullAccess ? 'danger' : 'info'" size="small">
-                {{ row.roleName }}
-              </el-tag>
-              <el-tag v-if="row.auditStatus === 0" type="warning" size="small">待审核</el-tag>
-              <el-tag v-else-if="row.auditStatus === 2" type="info" size="small">已驳回</el-tag>
-              <el-tag v-else-if="row.status === 1" type="success" size="small">正常</el-tag>
-              <el-tag v-else type="danger" size="small">已停用</el-tag>
-            </div>
-            <div class="cf-ucard__meta">
-              <span>登录名 <b>{{ row.username }}</b></span>
-              <span v-if="row.phone">手机 <b>{{ row.phone }}</b></span>
-              <span v-if="row.dept">{{ row.dept }}</span>
-              <span v-if="row.employeeName">
-                关联 {{ row.employeeName }}
-                <el-tag v-if="row.employeeOrigin === 'SELF_REGISTER'" type="warning" size="small" effect="plain">自建</el-tag>
-              </span>
-              <el-tag v-else type="danger" size="small" effect="plain">未关联员工</el-tag>
-              <span>{{ row.createdAt }}</span>
-            </div>
-            <div class="cf-ucard__ops">
-              <template v-if="row.auditStatus === 0">
-                <el-button size="small" type="primary" @click="openApprove(row)">通过</el-button>
-                <el-button size="small" type="danger" plain @click="openReject(row)">驳回</el-button>
-              </template>
-              <template v-else>
-                <el-button size="small" @click="openEdit(row)">编辑</el-button>
-                <el-button size="small" @click="openReset(row)">重置密码</el-button>
-                <el-button size="small" @click="toggleStatus(row)">
-                  {{ row.status === 1 ? '停用' : '启用' }}
-                </el-button>
-                <el-button size="small" type="danger" plain @click="remove(row)">删除</el-button>
-              </template>
-            </div>
-          </div>
-          <div v-if="!rows.length && !loading" class="cf-ccards__empty">
-            {{ tab === 'pending' ? '没有待审核的注册申请' : '暂无账号' }}
-          </div>
-        </div>
       </div>
     </div>
 
     <!-- 审核通过 / 编辑 / 新建 共用一个表单弹窗 -->
-    <el-dialog v-model="dlg.visible" :title="dlg.title" :width="isMobile ? '94%' : '480px'" :fullscreen="isMobile">
-      <el-form :model="dlg.form" :label-width="isMobile ? '84px' : '90px'">
+    <el-dialog v-model="dlg.visible" :title="dlg.title" width="480px">
+      <el-form :model="dlg.form" label-width="90px">
         <el-form-item v-if="dlg.mode === 'create'" label="登录名" required>
           <el-input v-model="dlg.form.username" placeholder="至少 3 个字符" />
         </el-form-item>
@@ -308,7 +261,7 @@
     </el-dialog>
 
     <!-- 驳回 -->
-    <el-dialog v-model="rejectDlg.visible" title="驳回注册申请" :width="isMobile ? '94%' : '440px'">
+    <el-dialog v-model="rejectDlg.visible" title="驳回注册申请" width="440px">
       <el-form label-width="90px">
         <el-form-item label="申请人">
           <span>{{ rejectDlg.row.displayName }}（{{ rejectDlg.row.username }}）</span>
@@ -324,7 +277,7 @@
     </el-dialog>
 
     <!-- 重置密码 -->
-    <el-dialog v-model="resetDlg.visible" title="重置密码" :width="isMobile ? '94%' : '440px'">
+    <el-dialog v-model="resetDlg.visible" title="重置密码" width="440px">
       <el-form label-width="90px">
         <el-form-item label="账号">
           <span>{{ resetDlg.row.displayName }}（{{ resetDlg.row.username }}）</span>
@@ -347,11 +300,9 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { authApi, userApi, employeeApi } from '../api'
 import { useUserStore } from '../store/user'
 import { usePendingStore } from '../store/pending'
-import { useDevice } from '../utils/device'
 
 const userStore = useUserStore()
 // 手机端：账号表格改卡片、弹窗全屏
-const { isMobile } = useDevice()
 
 // 待审核数与侧栏红点共用同一份状态：这里审批完，侧栏红点会一起消失
 const pendingStore = usePendingStore()

@@ -60,7 +60,7 @@
       <CaseTable
         :rows="rows"
         :loading="loading"
-        :min-body="isMobile ? 0 : 360"
+        :min-body="360"
         show-case-no
         @open="openDetail"
       />
@@ -89,11 +89,9 @@ import { caseApi } from '../api'
 import CaseTable from '../components/CaseTable.vue'
 import CaseDetailDrawer from '../components/CaseDetailDrawer.vue'
 import PageFooter from '../components/PageFooter.vue'
-import { useDevice } from '../utils/device'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '../store/user'
 
-const { isMobile } = useDevice()
 const userStore = useUserStore()
 
 /** 是否已绑定员工档案：绑定后按「本人经办」取案件，未绑定只能退回「本人录入」 */

@@ -231,10 +231,4 @@ defineExpose({ open })
 .cf-inbox__fade-leave-active { transition: all .35s ease }
 .cf-inbox__fade-leave-to { opacity: 0; transform: translateX(24px) }
 .cf-inbox__fade-move { transition: transform .35s ease }
-
-@media (max-width: 768px) {
-  .cf-inbox__casename { display: none }
-  .cf-inbox__content { margin-left: 0 }
-  .cf-inbox__meta { margin-left: 0 }
-}
 </style>

@@ -2,13 +2,10 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <!-- viewport-fit=cover：让页面延伸到刘海屏边缘，再用 env(safe-area-inset-*) 把内容让开。
-       不禁用缩放：使用者可能老花，允许双指放大是必要的无障碍能力。 -->
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="format-detection" content="telephone=no" />
-  <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <!-- 纯桌面端内网应用（2026-10-08 起不做移动端）：
+       viewport 锁最小宽度，窗口拖窄时浏览器不再自动放大把版面撑变形。
+       不用 user-scalable=no —— 使用者可能老花，允许放大是无障碍必需。 -->
+  <meta name="viewport" content="width=1280" />
   <meta name="theme-color" content="#12294a" />
   <title>案件指派系统</title>
   <link

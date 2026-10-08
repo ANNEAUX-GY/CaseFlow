@@ -2,7 +2,7 @@
   <el-dialog
     v-model="visible"
     :title="title"
-    :width="isMobile ? '96%' : '560px'"
+    width="560px"
     append-to-body
     destroy-on-close
   >
@@ -73,7 +73,6 @@
  */
 import { computed, reactive, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { useDevice } from '../utils/device'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -93,7 +92,6 @@ const props = defineProps({
 })
 const emit = defineEmits(['update:modelValue', 'submit'])
 
-const { isMobile } = useDevice()
 
 const COMMON_PLATFORMS = ['一体化办案平台', '全国公安信息平台', '电子卷宗系统', '执法办案系统']
 

@@ -2,7 +2,7 @@
   <el-dialog
     v-model="visible"
     :title="`欢迎回来，${userName}`"
-    :width="isMobile ? '94%' : '520px'"
+    width="520px"
     align-center
     append-to-body
     :close-on-click-modal="false"
@@ -48,7 +48,6 @@ import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useMyTodoStore } from '../store/myTodo'
 import { useUserStore } from '../store/user'
-import { useDevice } from '../utils/device'
 
 /**
  * 登录欢迎弹窗（普通民警端）。
@@ -71,7 +70,6 @@ const emit = defineEmits(['update:modelValue', 'closed', 'open-inbox'])
 const router = useRouter()
 const userStore = useUserStore()
 const myTodoStore = useMyTodoStore()
-const { isMobile } = useDevice()
 
 const visible = ref(props.modelValue)
 const summary = ref({
@@ -211,9 +209,4 @@ defineExpose({ show, loadSummary })
 }
 .cf-welcome__empty-title { font-size: 14px; color: #3d4654; margin-bottom: 4px }
 .cf-welcome__tip { font-size: 12px; margin-right: 10px }
-
-@media (max-width: 768px) {
-  .cf-welcome__grid { grid-template-columns: 1fr 1fr; gap: 8px }
-  .cf-welcome__num { font-size: 22px }
-}
 </style>

@@ -18,7 +18,7 @@
               <el-option label="折线图" value="line" />
             </el-select>
           </template>
-          <EChart :option="ageOption" :height="isMobile ? 170 : 200" @click="onAgeClick" />
+          <EChart :option="ageOption" :height="200" @click="onAgeClick" />
         </ChartPanel>
       </el-col>
       <el-col :span="14" :xs="24">
@@ -30,7 +30,7 @@
             </el-select>
             <el-button size="small" @click="loadStats">刷新</el-button>
           </template>
-          <EChart :option="upcomingOption" :height="isMobile ? 170 : 200" @click="onUpcomingClick" />
+          <EChart :option="upcomingOption" :height="200" @click="onUpcomingClick" />
         </ChartPanel>
       </el-col>
     </el-row>
@@ -39,7 +39,7 @@
       <CaseTable
         :rows="rows"
         :loading="loading"
-        :min-body="isMobile ? 0 : 300"
+        :min-body="300"
         show-case-no
         @open="openDetail"
         @assign="openAssign"
@@ -75,11 +75,9 @@ import CaseDetailDrawer from '../components/CaseDetailDrawer.vue'
 import ChartPanel from '../components/ChartPanel.vue'
 import EChart from '../components/EChart.vue'
 import { CHART, lineOption, barOption } from '../utils/chart'
-import { useDevice } from '../utils/device'
 import PageFooter from '../components/PageFooter.vue'
 
 const route = useRoute()
-const { isMobile } = useDevice()
 const bucket = ref('OVERDUE')
 const rows = ref([])
 const assignVisible = ref(false)
@@ -115,8 +113,8 @@ const ageOption = computed(() => {
   const cats = ageData.value.map((d) => d.name)
   const series = [{ name: '案件数', data: ageData.value.map((d) => d.value) }]
   return ageType.value === 'line'
-    ? lineOption({ categories: cats, series, narrow: isMobile.value })
-    : barOption({ categories: cats, series, colors: [AGE_COLOR], narrow: isMobile.value })
+    ? lineOption({ categories: cats, series, narrow: false })
+    : barOption({ categories: cats, series, colors: [AGE_COLOR], narrow: false })
 })
 
 const upcomingOption = computed(() => {
@@ -127,9 +125,9 @@ const upcomingOption = computed(() => {
         categories: cats,
         series,
         colors: [upcomingData.value.map((p) => (p.date === '已逾期' ? CHART.danger : CHART.primary))],
-        narrow: isMobile.value
+        narrow: false
       })
-    : lineOption({ categories: cats, series, area: true, narrow: isMobile.value })
+    : lineOption({ categories: cats, series, area: true, narrow: false })
 })
 
 // 点账龄柱体 -> 切到「已逾期」清单；点未来日期 -> 切到对应分桶

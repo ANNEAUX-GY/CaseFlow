@@ -3,30 +3,29 @@
   <el-dialog
     v-model="visible"
     :title="`指派：${caseName}`"
-    :width="isMobile ? '96%' : '900px'"
-    :fullscreen="isMobile"
+    width="900px"
     destroy-on-close
     class="cf-dialog"
   >
-    <el-form :label-width="isMobile ? '72px' : '80px'">
+    <el-form label-width="80px">
       <el-form-item label="截止期限">
         <el-date-picker
           v-model="deadline"
           type="datetime"
           value-format="YYYY-MM-DD HH:mm:ss"
           placeholder="设置办理期限（不改则留空保持原值）"
-          :style="{ width: isMobile ? '100%' : '240px' }"
+          style="width: 240px"
         />
-        <el-button-group :style="isMobile ? { marginLeft: 0, marginTop: '6px' } : { marginLeft: '8px' }">
+        <el-button-group style="margin-left: '8px'">
           <el-button size="small" @click="quickDeadline(1)">+1天</el-button>
           <el-button size="small" @click="quickDeadline(3)">+3天</el-button>
           <el-button size="small" @click="quickDeadline(7)">+7天</el-button>
           <el-button size="small" @click="deadline = null">清除</el-button>
         </el-button-group>
-        <span class="cf-muted" :style="isMobile ? { marginLeft: 0, display: 'block' } : { marginLeft: '8px' }" v-if="originDeadline">
+        <span class="cf-muted" style="margin-left: '8px'" v-if="originDeadline">
           原期限 {{ originDeadline }}
         </span>
-        <span class="cf-muted" :style="isMobile ? { marginLeft: 0, display: 'block' } : { marginLeft: '8px' }" v-else>当前未设期限</span>
+        <span class="cf-muted" style="margin-left: '8px'" v-else>当前未设期限</span>
       </el-form-item>
       <el-form-item label="指派要求">
         <el-input v-model="note" type="textarea" :rows="2" placeholder="办理要求 / 注意事项（选填）" />
@@ -70,9 +69,7 @@ import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import EmployeePicker from './EmployeePicker.vue'
 import { caseApi, todoApi } from '../api'
-import { useDevice } from '../utils/device'
 
-const { isMobile } = useDevice()
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },

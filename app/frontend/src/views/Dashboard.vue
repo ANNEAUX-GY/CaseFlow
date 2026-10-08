@@ -137,7 +137,7 @@
               <el-option label="折线图" value="line" />
             </el-select>
           </template>
-          <EChart :option="statusOption" :height="isMobile ? 180 : 220" @click="onStatusClick" />
+          <EChart :option="statusOption" :height="220" @click="onStatusClick" />
         </ChartPanel>
       </el-col>
       <el-col :span="12" :xs="24">
@@ -168,8 +168,8 @@
           </div>
           <CaseTable
             :rows="data.overdueList || []"
-            :height="isMobile ? undefined : 270"
-            :min-body="isMobile ? 0 : 300"
+            :height="270"
+            :min-body="300"
             :loading="loading"
             @open="openDetail"
             @assign="openAssign"
@@ -184,8 +184,8 @@
           </div>
           <CaseTable
             :rows="data.pendingList || []"
-            :height="isMobile ? undefined : 270"
-            :min-body="isMobile ? 0 : 300"
+            :height="270"
+            :min-body="300"
             :loading="loading"
             @open="openDetail"
             @assign="openAssign"
@@ -204,8 +204,8 @@
           </div>
           <CaseTable
             :rows="data.dueSoonList || []"
-            :height="isMobile ? undefined : 300"
-            :min-body="isMobile ? 0 : 300"
+            :height="300"
+            :min-body="300"
             compact
             :loading="loading"
             @open="openDetail"
@@ -306,13 +306,10 @@ import ChartPanel from '../components/ChartPanel.vue'
 import EChart from '../components/EChart.vue'
 import OperationLogDrawer from '../components/OperationLogDrawer.vue'
 import { CHART, lineOption, barOption, CASE_TYPE_COLORS, caseTypeColor } from '../utils/chart'
-import { useDevice } from '../utils/device'
 import PageFooter from '../components/PageFooter.vue'
 
 const router = useRouter()
 const userStore = useUserStore()
-// 手机端：栅格单列、图表降高、图表内部留白收紧，全由 isMobile 驱动
-const { isMobile } = useDevice()
 const data = ref({})
 const stats = ref({})
 
@@ -491,7 +488,7 @@ const typeTrendOption = computed(() => {
     series,
     stack: true,
     colors: active.map((t) => t.color),
-    narrow: isMobile.value
+    narrow: false
   })
 })
 
@@ -505,7 +502,7 @@ const dueByTypeOption = computed(() => {
     borderColor: t.border
   }))
   const colors = CASE_TYPE_COLORS.filter((t) => isTypeOn(t.code)).map((t) => t.color)
-  return barOption({ categories: cats, series, stack: true, colors, narrow: isMobile.value })
+  return barOption({ categories: cats, series, stack: true, colors, narrow: false })
 })
 
 const onPieClick = (p) => {
@@ -533,8 +530,8 @@ const statusOption = computed(() => {
   const series = [{ name: '案件数', data: statusData.value.map((d) => d.value) }]
   const colors = [statusData.value.map((d) => STATUS_COLOR[d.code] || CHART.primary)]
   return statusType.value === 'line'
-    ? lineOption({ categories: cats, series, narrow: isMobile.value })
-    : barOption({ categories: cats, series, colors, narrow: isMobile.value })
+    ? lineOption({ categories: cats, series, narrow: false })
+    : barOption({ categories: cats, series, colors, narrow: false })
 })
 
 const ownerOption = computed(() => {
@@ -556,7 +553,7 @@ const ownerOption = computed(() => {
     horizontal: true,
     stack: loadMetric.value === 'both',
     colors: [CHART.primary, CHART.danger],
-    narrow: isMobile.value
+    narrow: false
   })
 })
 
@@ -570,7 +567,7 @@ const OWNER_CHART_PAD = 34  // 网格上下留白（chart.js 里 top 28 + bottom
 const OWNER_SCROLL_AT = 8   // 超过这个条数才提示「可上下滑动」
 
 /** 视口高度：维持原样，页面外观不变 */
-const ownerViewport = computed(() => (isMobile.value ? 180 : 220))
+const ownerViewport = computed(() => 220)
 /** 画布高度：够放就等于视口（不出现滚动条），不够就按人数长高 */
 const ownerChartHeight = computed(() => {
   const need = OWNER_CHART_PAD + ownerData.value.length * OWNER_ROW_H

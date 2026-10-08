@@ -1,5 +1,5 @@
 <template>
-  <el-drawer v-model="visible" :size="isMobile ? '100%' : '520px'" :with-header="false" destroy-on-close>
+  <el-drawer v-model="visible" size="520px" :with-header="false" destroy-on-close>
     <div v-if="detail.id" class="cf-logd">
       <!-- 概览 -->
       <div class="cf-logd__top">
@@ -80,9 +80,6 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { RefreshLeft } from '@element-plus/icons-vue'
 import { logApi } from '../api'
 import { useUserStore } from '../store/user'
-import { useDevice } from '../utils/device'
-
-const { isMobile } = useDevice()
 
 const userStore = useUserStore()
 
@@ -238,13 +235,4 @@ const doUndo = async () => {
 
 /* 手机端：抽屉已占满整屏，把内边距和字号收一档，
    变更明细那张三列表格才不至于挤成竖条 */
-@media (max-width: 768px) {
-  .cf-logd { gap: 10px; }
-  .cf-logd__content { padding: 8px 10px; font-size: 14px; }
-  .cf-logd__desc :deep(.el-descriptions__label) { width: 72px; }
-  .cf-logd__diff { font-size: 12px; }
-  .cf-logd__diff th,
-  .cf-logd__diff td { padding: 6px; }
-  .cf-logd__foot { position: sticky; bottom: 0; background: #fff; padding-top: 8px; }
-}
 </style>

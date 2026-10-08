@@ -12,37 +12,26 @@
         >
           <template #prefix><el-icon><Search /></el-icon></template>
         </el-input>
-        <div v-if="isMobile" class="cf-tscroll-hint" style="text-align: right; margin-top: 4px">
-          表格可左右滑动查看
-        </div>
-
-        <!-- 手机上表格列宽仍是桌面的（合计 570px），外面套一层可横滑的容器，
-             否则只能看到前三列，而「主办 / 协办」两个关键按钮恰好被挤到屏幕外 -->
         <div class="cf-tscroll">
-          <el-table :data="results" size="small" :height="isMobile ? 240 : 280" style="margin-top: 8px" v-loading="loading">
-            <!-- 手机端把「部门/职务」并进姓名单元格，「归属链路 / 在手」这两列先收起来：
-                 选人时真正要点的只有「主办 / 协办」，列挤到看不着按钮才是真麻烦 -->
-            <el-table-column :label="isMobile ? '姓名 / 部门' : '姓名'" :width="isMobile ? 118 : 90">
+          <el-table :data="results" size="small" :height="280" style="margin-top: 8px" v-loading="loading">
+            <el-table-column label="姓名" :width="90">
               <template #default="{ row }">
                 <div>{{ row.name }}</div>
-                <div v-if="isMobile" class="cf-muted" style="font-size: 11px; line-height: 1.3">
-                  {{ row.dept || '-' }}
-                </div>
               </template>
             </el-table-column>
-            <el-table-column v-if="!isMobile" label="部门 / 职务" min-width="140">
+            <el-table-column label="部门 / 职务" min-width="140">
               <template #default="{ row }">
                 <span>{{ row.dept || '-' }}</span>
                 <span class="cf-muted"> · {{ row.title || '-' }}</span>
               </template>
             </el-table-column>
-            <el-table-column v-if="!isMobile" prop="pathName" label="归属链路" min-width="160" />
-            <el-table-column v-if="!isMobile" label="在手" width="60" align="center">
+            <el-table-column prop="pathName" label="归属链路" min-width="160" />
+            <el-table-column label="在手" width="60" align="center">
               <template #default="{ row }">
                 <span :class="row.activeCaseCount > 0 ? 'cf-warn' : 'cf-muted'">{{ row.activeCaseCount }}</span>
               </template>
             </el-table-column>
-            <el-table-column label="操作" :width="isMobile ? 108 : 120" align="right">
+            <el-table-column label="操作" :width="120" align="right">
               <template #default="{ row }">
                 <el-button link type="primary" @click="setOwner(row)">主办</el-button>
                 <el-button link @click="toggleMember(row)">协办</el-button>
@@ -103,10 +92,8 @@ import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { Search } from '@element-plus/icons-vue'
 import { employeeApi } from '../api'
 import { POLICE_GROUP_META, policeGroupLabel } from '../utils/format'
-import { useDevice } from '../utils/device'
 
 // 手机端：精简列 + 降高，保证「主办 / 协办」按钮始终在屏内
-const { isMobile } = useDevice()
 
 const props = defineProps({
   ownerId: { type: [Number, null], default: null },

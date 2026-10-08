@@ -22,8 +22,8 @@
       <el-form
         :model="form"
         size="large"
-        :label-width="isMobile ? 'auto' : '96px'"
-        :label-position="isMobile ? 'top' : 'left'"
+        label-width="96px"
+        label-position="left"
       >
         <el-form-item label="手机号" required>
           <el-input v-model="form.phone" placeholder="11 位手机号，可用来登录" maxlength="11" />
@@ -148,8 +148,7 @@
     <el-dialog
       v-model="empDlg.visible"
       title="新建员工档案"
-      :width="isMobile ? '94%' : '480px'"
-      :fullscreen="isMobile"
+      width="480px"
       append-to-body
       class="cf-bind-dlg"
     >
@@ -226,9 +225,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { authApi } from '../api'
 import { FOOTER_BRAND } from '../config/slogans'
-import { useDevice } from '../utils/device'
 
-const { isMobile } = useDevice()
 const router = useRouter()
 const loading = ref(false)
 const roles = ref({})

@@ -2,7 +2,7 @@
   <el-dialog
     v-model="visible"
     :title="data?.name ? `${data.name} · 承办负荷` : '承办负荷'"
-    :width="isMobile ? '96%' : '720px'"
+    width="720px"
     append-to-body
     class="cf-wl-dialog"
     @closed="onClosed"
@@ -114,7 +114,6 @@
 <script setup>
 import { ref, watch } from 'vue'
 import { caseApi } from '../api'
-import { useDevice } from '../utils/device'
 import CaseDetailDrawer from './CaseDetailDrawer.vue'
 
 /**
@@ -134,7 +133,6 @@ const props = defineProps({
 })
 const emit = defineEmits(['update:modelValue', 'closed'])
 
-const { isMobile } = useDevice()
 const visible = ref(props.modelValue)
 const loading = ref(false)
 const data = ref(null)
@@ -231,9 +229,4 @@ defineExpose({ show })
 .cf-wl-dialog tbody .el-table__row { cursor: pointer }
 .cf-wl-dialog tbody .el-table__row:hover > td { background: #eef3fa !important }
 .cf-wl__empty { padding: 30px 0; text-align: center; color: #8a929e; font-size: 13px }
-
-@media (max-width: 768px) {
-  .cf-wl__stats { flex-wrap: wrap }
-  .cf-wl__stat { min-width: 28%; }
-}
 </style>

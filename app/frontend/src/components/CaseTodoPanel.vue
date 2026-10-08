@@ -70,7 +70,7 @@
           ]">
           <div class="cf-todo__card-main">
             <!-- 拖拽把手：仅管理层、桌面端；手机端用「管理 ▾」里的上移/下移 -->
-            <span v-if="isAdmin && !isMobile" class="cf-todo__drag">⋮⋮</span>
+            <span v-if="isAdmin" class="cf-todo__drag">⋮⋮</span>
             <!-- 勾选框：完成的主开关。
                  「为什么勾不动」不用悬浮提示（会挡住旁边的操作按钮，用户明确要求去掉），
                  改成紧跟在卡片里的内联文字——一直可见，不挡任何东西。 -->
@@ -264,11 +264,11 @@
     <el-dialog
       v-model="editVisible"
       :title="form.id ? '编辑待办' : '添加待办'"
-      :width="isMobile ? '92%' : '460px'"
+      width="460px"
       append-to-body
       destroy-on-close
     >
-      <el-form :label-width="isMobile ? '64px' : '72px'">
+      <el-form label-width="72px">
         <el-form-item label="内容" required>
           <el-input
             v-model="form.content"
@@ -322,7 +322,6 @@ import Sortable from 'sortablejs'
 import { todoApi, watchApi } from '../api'
 import { useUserStore } from '../store/user'
 import { useEventStore } from '../store/events'
-import { useDevice } from '../utils/device'
 import {
   FEEDBACK_STATUS_META as FEEDBACK_META,
   IMPORTANCE_META,
@@ -345,7 +344,6 @@ const props = defineProps({
 })
 const emit = defineEmits(['changed'])
 
-const { isMobile } = useDevice()
 const userStore = useUserStore()
 const isAdmin = computed(() => userStore.isFullAccess)
 
@@ -460,7 +458,7 @@ const dragId = ref(null)
 const setupSortable = () => {
   sortable?.destroy()
   sortable = null
-  if (!isAdmin.value || isMobile.value || !listEl.value) return
+  if (!isAdmin.value || !listEl.value) return
   if (!listEl.value.children.length) return
   sortable = Sortable.create(listEl.value, {
     handle: '.cf-todo__drag',
@@ -487,7 +485,7 @@ const setupSortable = () => {
   })
 }
 onBeforeUnmount(() => sortable?.destroy())
-watch([isAdmin, isMobile], () => nextTick(setupSortable))
+watch(isAdmin, () => nextTick(setupSortable))
 
 /* ============ 提交工作反馈（纯手动，2026-10-04） ============ */
 /**
@@ -984,12 +982,4 @@ onBeforeUnmount(() => {
 
 .cf-fade-enter-active, .cf-fade-leave-active { transition: opacity .25s }
 .cf-fade-enter-from, .cf-fade-leave-to { opacity: 0 }
-
-@media (max-width: 768px) {
-  .cf-todo__draft { flex-wrap: wrap }
-  .cf-todo__card-actions { flex-direction: row; align-items: center; width: 100% }
-  .cf-todo__act { width: auto; flex: 1 }
-  .cf-todo__card-main { flex-wrap: wrap }
-  .cf-todo__card-body { width: 100%; order: 3; flex-basis: 100% }
-}
 </style>

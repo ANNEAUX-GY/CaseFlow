@@ -81,7 +81,7 @@
             </el-select>
             <el-button size="small" @click="loadStats">刷新</el-button>
           </template>
-          <EChart :option="trendOption" :height="isMobile ? 170 : 200" />
+          <EChart :option="trendOption" :height="200" />
         </ChartPanel>
       </el-col>
       <el-col :span="10" :xs="24">
@@ -99,7 +99,7 @@
               <el-option label="折线图" value="line" />
             </el-select>
           </template>
-          <EChart :option="distOption" :height="isMobile ? 170 : 200" @click="onDistClick" />
+          <EChart :option="distOption" :height="200" @click="onDistClick" />
         </ChartPanel>
       </el-col>
     </el-row>
@@ -108,7 +108,7 @@
       <CaseTable
         :rows="rows"
         :loading="loading"
-        :min-body="isMobile ? 0 : 360"
+        :min-body="360"
         show-case-no
         @open="openDetail"
         @assign="openAssign"
@@ -156,14 +156,12 @@ import CaseDetailDrawer from '../components/CaseDetailDrawer.vue'
 import ChartPanel from '../components/ChartPanel.vue'
 import EChart from '../components/EChart.vue'
 import { CHART, lineOption, barOption } from '../utils/chart'
-import { useDevice } from '../utils/device'
 import { useCategoryStore } from '../store/category'
 import { withCaseType, useCaseTypeStore } from '../store/caseType'
 import PageFooter from '../components/PageFooter.vue'
 
 const route = useRoute()
 const router = useRouter()
-const { isMobile } = useDevice()
 const categoryStore = useCategoryStore()
 const caseTypeStore = useCaseTypeStore()
 const rows = ref([])
@@ -272,8 +270,8 @@ const trendOption = computed(() => {
     { name: '办结', data: trendData.value.map((p) => p.done), color: CHART.gold }
   ]
   return trendType.value === 'bar'
-    ? barOption({ categories: cats, series, narrow: isMobile.value })
-    : lineOption({ categories: cats, series, area: true, narrow: isMobile.value })
+    ? barOption({ categories: cats, series, narrow: false })
+    : lineOption({ categories: cats, series, area: true, narrow: false })
 })
 
 const DIST_COLOR = {
@@ -300,8 +298,8 @@ const distOption = computed(() => {
   const series = [{ name: '案件数', data: distData.value.map((d) => d.value) }]
   const colors = [distData.value.map((d) => DIST_COLOR[d.code] || CHART.primary)]
   return distType.value === 'line'
-    ? lineOption({ categories: cats, series, narrow: isMobile.value })
-    : barOption({ categories: cats, series, colors, narrow: isMobile.value })
+    ? lineOption({ categories: cats, series, narrow: false })
+    : barOption({ categories: cats, series, colors, narrow: false })
 })
 
 // 点柱体 -> 直接把该值填进上方筛选条件并刷新列表

@@ -46,8 +46,7 @@
           <el-button size="small" @click="load">刷新</el-button>
         </div>
 
-        <!-- 桌面：表格 -->
-        <div v-if="!isMobile" class="cf-tscroll">
+        <div class="cf-tscroll">
           <el-table :data="filtered" v-loading="loading" size="small" row-key="id">
             <el-table-column label="案件" min-width="220">
               <template #default="{ row }">
@@ -85,32 +84,6 @@
             </el-table-column>
           </el-table>
         </div>
-
-        <!-- 移动端：卡片列表，避免横向滚动 -->
-        <div v-else class="cf-card-list" v-loading="loading">
-          <div v-for="row in filtered" :key="row.id" class="cf-todo-card">
-            <div class="cf-todo-card__head">
-              <span class="cf-cell-strong">{{ row.caseName || '-' }}</span>
-              <el-tag :type="row.status === 'DONE' ? 'success' : 'warning'" size="small" effect="plain">
-                {{ row.statusName }}
-              </el-tag>
-            </div>
-            <div class="cf-todo-card__content">{{ row.content }}</div>
-            <div class="cf-todo-card__meta">
-              <span class="cf-muted">{{ row.caseNo || '-' }}</span>
-              <span v-if="row.status === 'DONE'" class="cf-muted">{{ row.doneByName }} · {{ fmtTime(row.doneAt) }}</span>
-            </div>
-            <div class="cf-todo-card__files">
-              <template v-if="row.evidence && row.evidence.length">
-                <a v-for="f in row.evidence" :key="f.id" class="cf-evidence-item__name" @click="download(f)">
-                  {{ f.fileName }}
-                </a>
-              </template>
-              <span v-else class="cf-danger">无佐证材料</span>
-            </div>
-          </div>
-          <el-empty v-if="!filtered.length" :image-size="60" description="暂无待办" />
-        </div>
       </div>
     </div>
   </div>
@@ -121,9 +94,7 @@ import { computed, onMounted, ref } from 'vue'
 import { Search } from '@element-plus/icons-vue'
 import { fileApi, todoApi } from '../api'
 import { withCaseType } from '../store/caseType'
-import { useDevice } from '../utils/device'
 
-const { isMobile } = useDevice()
 
 const list = ref([])
 const summary = ref({})

@@ -142,12 +142,4 @@ defineExpose({ loadCounts })
   border-top: 1px dashed #e4e8ee; font-weight: 600;
 }
 .cf-picker__foot { text-align: center; font-size: 13px; margin-top: 24px }
-
-@media (max-width: 768px) {
-  .cf-picker { padding: 18px 12px }
-  .cf-picker__cards { grid-template-columns: 1fr; gap: 12px }
-  .cf-picker__title { font-size: 19px }
-  .cf-picker__card { padding: 18px 16px }
-  .cf-picker__desc { flex: 0 }
-}
 </style>

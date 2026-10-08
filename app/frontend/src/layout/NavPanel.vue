@@ -1,5 +1,5 @@
 <template>
-  <div class="cf-nav" :class="{ 'cf-nav--drawer': variant === 'drawer' }">
+  <div class="cf-nav">
     <div class="cf-logo">
       <svg viewBox="0 0 24 24" width="30" height="30" aria-hidden="true">
         <path d="M12 2l8 3v7c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V5l8-3z" fill="#1b4a8c" stroke="#c8a45c" stroke-width="1.4" />
@@ -9,9 +9,6 @@
         案件指派系统
         <span class="cf-logo__sub">POLICE CASE FLOW</span>
       </span>
-      <button v-if="variant === 'drawer'" type="button" class="cf-nav__close" aria-label="关闭导航" @click="emit('close')">
-        <el-icon><Close /></el-icon>
-      </button>
     </div>
 
     <el-menu :default-active="activePath" router :collapse="false" class="cf-nav__menu" @select="onSelect">
@@ -71,30 +68,7 @@
       </template>
     </el-menu>
 
-    <!-- 手机抽屉：把桌面顶栏里的用户信息、退出、版式切换都收到这里，
-         顶栏才能瘦下来给内容让宽度 -->
-    <div v-if="variant === 'drawer'" class="cf-nav__user">
-      <div class="cf-nav__user-row">
-        <span class="cf-nav__uname">{{ userStore.userInfo?.displayName || userStore.userInfo?.username || '' }}</span>
-        <span v-if="userStore.roleName" class="cf-nav__urole">{{ userStore.roleName }}</span>
-      </div>
-      <div class="cf-nav__udate">{{ today }}</div>
-      <button type="button" class="cf-nav__logout" @click="emit('logout')">退出登录</button>
-
-      <div class="cf-nav__device">
-        <div class="cf-nav__device-head">
-          <span>当前版式：{{ layoutLabel }}</span>
-          <span class="cf-nav__device-kind">识别为{{ deviceKindLabel }}网页</span>
-        </div>
-        <div class="cf-nav__modes">
-          <button type="button" :class="{ 'is-active': mode !== 'desktop' }" @click="setDeviceMode('mobile')">手机版</button>
-          <button type="button" :class="{ 'is-active': mode === 'desktop' }" @click="setDeviceMode('desktop')">电脑版</button>
-        </div>
-        <button v-if="mode !== 'auto'" type="button" class="cf-nav__auto" @click="setDeviceMode('auto')">恢复自动识别</button>
-      </div>
-    </div>
-
-    <div v-else class="cf-aside__foot">
+    <div class="cf-aside__foot">
       <span>CaseFlow v1.0</span>
       <span>案件管理中心</span>
     </div>
@@ -104,18 +78,11 @@
 <script setup>
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Odometer, Tickets, AlarmClock, Connection, View, UserFilled, Collection, Close, List, Folder } from '@element-plus/icons-vue'
+import { Odometer, Tickets, AlarmClock, Connection, View, UserFilled, Collection, List, Folder } from '@element-plus/icons-vue'
 import { useUserStore } from '../store/user'
 import { usePendingStore } from '../store/pending'
 import { useCaseTypeStore } from '../store/caseType'
 import { useMyTodoStore } from '../store/myTodo'
-import { useDevice } from '../utils/device'
-
-const props = defineProps({
-  /** aside = 桌面侧栏；drawer = 手机抽屉 */
-  variant: { type: String, default: 'aside' }
-})
-const emit = defineEmits(['navigate', 'close', 'logout'])
 
 const route = useRoute()
 const router = useRouter()
@@ -124,15 +91,12 @@ const pendingStore = usePendingStore()
 const myTodoStore = useMyTodoStore()
 const pendingTodoCount = computed(() => myTodoStore.count)
 const caseTypeStore = useCaseTypeStore()
-const { mode, setDeviceMode, layoutLabel, deviceKindLabel } = useDevice()
 
 const pendingCount = computed(() => pendingStore.count)
 const activePath = computed(() => '/' + (route.path.split('/')[1] || 'dashboard'))
 
 /**
- * 手机上点完导航要把抽屉收起来，否则挡住整屏。
- *
- * <p>同时承担「案件类型门控」的拦截：el-menu 开了 router 属性会**自动跳转**，
+ * 「案件类型门控」的拦截：el-menu 开了 router 属性会**自动跳转**，
  * 这里在跳转发生前先判断路径是否受门控：
  * <ul>
  *   <li>已选过类型 → 正常进入（切栏目不重置选择，符合需求4）；</li>
@@ -142,20 +106,10 @@ const activePath = computed(() => '/' + (route.path.split('/')[1] || 'dashboard'
  * 守卫里也有一道（防手敲地址刷新），这里是第一道，能避免"先闪一下再被弹回"。
  */
 const onSelect = (indexPath) => {
-  if (caseTypeStore.isGated(indexPath)) {
-    caseTypeStore.rememberPath(indexPath)
-    if (!caseTypeStore.selected) {
-      router.push({ path: '/case-type', query: { from: indexPath } })
-      if (props.variant === 'drawer') emit('navigate')
-      return
-    }
+  if (!caseTypeStore.isGated(indexPath)) return
+  caseTypeStore.rememberPath(indexPath)
+  if (!caseTypeStore.selected) {
+    router.push({ path: '/case-type', query: { from: indexPath } })
   }
-  if (props.variant === 'drawer') emit('navigate')
 }
-
-const today = computed(() => {
-  const d = new Date()
-  const week = '日一二三四五六'[d.getDay()]
-  return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日 星期${week}`
-})
 </script>

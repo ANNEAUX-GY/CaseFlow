@@ -3,13 +3,13 @@
   <el-drawer
     v-model="visible"
     :title="`案件详情 · ${detail.caseNo || ''}`"
-    :size="isMobile ? '100%' : '46%'"
+    size="46%"
     destroy-on-close
   >
     <template v-if="detail.id">
       <!-- 手机上两列描述会挤成竖排的碎字，直接改单列 -->
-      <el-descriptions :column="isMobile ? 1 : 2" border size="small">
-        <el-descriptions-item label="案件名称" :span="isMobile ? 1 : 2">{{ detail.name }}</el-descriptions-item>
+      <el-descriptions :column="2" border size="small">
+        <el-descriptions-item label="案件名称" :span="2">{{ detail.name }}</el-descriptions-item>
         <el-descriptions-item label="状态">
           <el-tag :type="statusMeta.type" size="small">{{ statusMeta.label }}</el-tag>
         </el-descriptions-item>
@@ -40,7 +40,7 @@
         </el-descriptions-item>
         <el-descriptions-item label="创建人">{{ detail.createdByName || '-' }}</el-descriptions-item>
         <el-descriptions-item label="创建时间">{{ detail.createdAt || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="备注" :span="isMobile ? 1 : 2">{{ detail.description || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="备注" :span="2">{{ detail.description || '-' }}</el-descriptions-item>
       </el-descriptions>
 
       <!-- 案件待办（含领导意见）：提意见/定级/落实反馈都在这一个面板，避免同一事项两处展示 -->
@@ -49,7 +49,6 @@
       <div class="cf-panel" style="margin-top: 12px">
         <div class="cf-panel__head">
           <span>嫌疑人（{{ detail.suspects?.length || 0 }} 人）</span>
-          <span v-if="isMobile" class="cf-tscroll-hint">左右滑动查看</span>
           <el-button link type="primary" @click="openSuspect()">新增嫌疑人</el-button>
         </div>
         <div class="cf-tscroll">
@@ -74,7 +73,6 @@
       <div class="cf-panel" style="margin-top: 12px">
         <div class="cf-panel__head">
           <span>现任承办人</span>
-          <span v-if="isMobile" class="cf-tscroll-hint">左右滑动查看</span>
         </div>
         <div class="cf-tscroll">
           <el-table :data="currentAssignees" size="small">
@@ -95,7 +93,6 @@
       <div class="cf-panel" style="margin-top: 12px">
         <div class="cf-panel__head">
           <span>指派历史（改派留痕）</span>
-          <span v-if="isMobile" class="cf-tscroll-hint">左右滑动查看</span>
           <span class="cf-muted">共 {{ detail.assignHistory?.length || 0 }} 条</span>
         </div>
         <div class="cf-tscroll">
@@ -202,12 +199,11 @@
   <el-dialog
     v-model="suspectVisible"
     title="新增嫌疑人"
-    :width="isMobile ? '96%' : '520px'"
-    :fullscreen="isMobile"
+    width="520px"
     destroy-on-close
     class="cf-dialog"
   >
-    <el-form :model="suspectForm" :label-width="isMobile ? '84px' : '92px'">
+    <el-form :model="suspectForm" label-width="92px">
       <el-form-item label="姓名" required>
         <el-input v-model="suspectForm.name" placeholder="必填" maxlength="64" />
       </el-form-item>
@@ -252,9 +248,7 @@ import CaseTodoPanel from './CaseTodoPanel.vue'
 import { STATUS_META, PRIORITY_META, SOURCE_META, DUE_META, CASE_TYPE_META, dueText } from '../utils/format'
 import { useUserStore } from '../store/user'
 import { useEventStore } from '../store/events'
-import { useDevice } from '../utils/device'
 
-const { isMobile } = useDevice()
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },

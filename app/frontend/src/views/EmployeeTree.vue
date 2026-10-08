@@ -54,9 +54,9 @@
                   <i class="cf-org__dot" :style="{ background: nodeColor(data) }" />
                   <span class="cf-org__name">{{ data.name }}</span>
                   <span class="cf-muted">{{ data.rankLabel || data.title || '' }}</span>
-                  <span v-if="!isMobile" class="cf-muted">{{ data.dept || '' }}</span>
+                  <span class="cf-muted">{{ data.dept || '' }}</span>
                   <span v-if="data.deptAnomaly" class="cf-org__flag">
-                    {{ isMobile ? deptAnomalyTextShort(data) : deptAnomalyText(data) }}
+                    {{ deptAnomalyText(data) }}
                   </span>
                   <span v-if="data.activeCaseCount > 0" class="cf-org__load">在手 {{ data.activeCaseCount }}</span>
                 </span>
@@ -199,7 +199,7 @@
               <el-option label="折线图" value="line" />
             </el-select>
           </template>
-          <EChart :option="deptOption" :height="isMobile ? 200 : 260" @click="onDeptClick" />
+          <EChart :option="deptOption" :height="260" @click="onDeptClick" />
         </ChartPanel>
       </el-col>
       <el-col :span="12" :xs="24">
@@ -238,7 +238,6 @@ import { CHART, lineOption, barOption } from '../utils/chart'
 import {
   RANK, RANK_COLORS, DEPT_ANOMALY_COLOR, rankLabel, rankOf, nodeColor, deptAnomalyText, deptAnomalyTextShort
 } from '../utils/org'
-import { useDevice } from '../utils/device'
 import PageFooter from '../components/PageFooter.vue'
 import { useUserStore } from '../store/user'
 
@@ -247,7 +246,6 @@ const userStore = useUserStore()
 const canManage = computed(() => userStore.isFullAccess)
 
 // 手机端：栅格单列、图表降高、组织树标签收窄
-const { isMobile } = useDevice()
 
 const router = useRouter()
 
@@ -337,7 +335,7 @@ const viewMode = ref('list')
 // 标签定宽：所有节点用同一个宽度，文字在框内换行/居中，
 // 同级节点即便姓名很长也只会各自折行，不会横向叠字
 // 手机上画布只有 300 多像素，定宽要跟着收，否则两三个节点就铺满了
-const labelW = computed(() => (isMobile.value ? 74 : 104))
+const labelW = computed(() => (104))
 
 // 姓名色块（按层级取色）：一排节点一眼可辨层级
 // 注意：ECharts 富文本的 lineHeight 不决定背景色块高度，色块高 = 字号 + 上下 padding，
@@ -350,13 +348,13 @@ const nameRich = computed(() => {
     o[`n${r}`] = {
       width: labelW.value,
       align: 'center',
-      fontSize: isMobile.value ? 11 : 12.5,
+      fontSize: 12.5,
       fontWeight: 600,
       color: '#fff',
       backgroundColor: RANK_COLORS[r],
       borderRadius: 3,
-      lineHeight: isMobile.value ? 16 : 18,
-      padding: isMobile.value ? [3, 2] : [3, 4]
+      lineHeight: 18,
+      padding: [3, 4]
     }
   })
   // 部门待核：单独一个橙，一眼跳出来提示要补正
@@ -410,7 +408,7 @@ const treeHeight = computed(() => {
   const d = maxDepth(treeData.value) || 3
   const base = 118 * d + 90
   // 手机端每层给的绝对高度小一些：一行标签本来就窄，给太多只是留白
-  return isMobile.value ? Math.max(340, Math.min(620, base - 60)) : Math.max(430, Math.min(760, base))
+  return Math.max(430, Math.min(760, base))
 })
 
 // 组织规模（全部由树上数据推导，口径不会飘）
@@ -473,9 +471,9 @@ const orgTreeOption = computed(() => ({
         },
         rich: Object.assign(
           {
-            meta: { width: labelW.value, align: 'center', fontSize: isMobile.value ? 9 : 10, color: CHART.text3, lineHeight: 15, overflow: 'break' },
-            load: { width: labelW.value, align: 'center', fontSize: isMobile.value ? 9.5 : 10.5, fontWeight: 600, color: CHART.warn, lineHeight: 15 },
-            idle: { width: labelW.value, align: 'center', fontSize: isMobile.value ? 9.5 : 10.5, color: CHART.text3, lineHeight: 15 }
+            meta: { width: labelW.value, align: 'center', fontSize: 10, color: CHART.text3, lineHeight: 15, overflow: 'break' },
+            load: { width: labelW.value, align: 'center', fontSize: 10.5, fontWeight: 600, color: CHART.warn, lineHeight: 15 },
+            idle: { width: labelW.value, align: 'center', fontSize: 10.5, color: CHART.text3, lineHeight: 15 }
           },
           nameRich.value
         )
@@ -506,8 +504,8 @@ const deptOption = computed(() => {
   const cats = deptData.value.map((d) => d.name)
   const series = [{ name: '在手案件', data: deptData.value.map((d) => d.value) }]
   return deptType.value === 'line'
-    ? lineOption({ categories: cats, series, narrow: isMobile.value })
-    : barOption({ categories: cats, series, colors: [[CHART.primary]], narrow: isMobile.value })
+    ? lineOption({ categories: cats, series, narrow: false })
+    : barOption({ categories: cats, series, colors: [[CHART.primary]], narrow: false })
 })
 
 const ownerOption = computed(() => {
@@ -529,7 +527,7 @@ const ownerOption = computed(() => {
     horizontal: true,
     stack: ownerMetric.value === 'both',
     colors: [CHART.primary, CHART.danger],
-    narrow: isMobile.value
+    narrow: false
   })
 })
 
@@ -541,7 +539,7 @@ const OWNER_ROW_H = 20      // 每人一条的高度
 const OWNER_CHART_PAD = 34  // 网格上下留白（chart.js 里 top 28 + bottom 6）
 const OWNER_SCROLL_AT = 8   // 超过这个条数才提示「可上下滑动」
 
-const ownerViewport = computed(() => (isMobile.value ? 200 : 260))
+const ownerViewport = computed(() => 260)
 const ownerChartHeight = computed(() => {
   const need = OWNER_CHART_PAD + ownerData.value.length * OWNER_ROW_H
   return Math.max(ownerViewport.value, need)

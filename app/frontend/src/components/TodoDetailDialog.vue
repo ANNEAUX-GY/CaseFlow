@@ -2,7 +2,7 @@
   <el-dialog
     v-model="visible"
     :title="title"
-    :width="isMobile ? '94%' : '640px'"
+    width="640px"
     append-to-body
     destroy-on-close
     @closed="onClosed"
@@ -297,13 +297,11 @@
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { todoApi, questionApi } from '../api'
-import { useDevice } from '../utils/device'
 import { useUserStore } from '../store/user'
 import FeedbackDialog from './FeedbackDialog.vue'
 
 const emit = defineEmits(['changed'])
 
-const { isMobile } = useDevice()
 const userStore = useUserStore()
 const isAdmin = computed(() => userStore.isFullAccess)
 
