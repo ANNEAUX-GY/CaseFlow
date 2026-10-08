@@ -77,7 +77,7 @@
       </div>
     </div>
 
-    <CaseDetailDrawer v-model="detailVisible" :case-id="currentId" @done="refreshAll" />
+    <CaseDetailDrawer v-model="detailVisible" :case-id="currentId" :anchor="locateAnchor" @done="refreshAll" />
 
     <PageFooter />
   </div>
@@ -178,13 +178,29 @@ const router = useRouter()
  * 2. 打开后把 caseId 从地址栏抹掉——否则刷新会重复打开，
  *    而且用户手动点别的案件时地址栏还残留着旧 id 会引发误判。
  */
+/** 信箱跳转的定位锚点；null=无定位（普通打开案件详情） */
+const locateAnchor = ref(null)
+
+/**
+ * 信箱跳转的定位锚点（2026-10-08）。
+ * 路由 query：?caseId=12&todoId=34&questionId=8
+ * 锚点用完即从地址栏抹掉（与 caseId 同一约定），否则刷新会重复定位。
+ */
 const consumeOpenCase = () => {
-  const cid = route.query.caseId
+  const q0 = route.query || {}
+  const cid = q0.caseId
   if (!cid) return
   currentId.value = Number(cid)
+  const anchor = {
+    todoId: q0.todoId ? Number(q0.todoId) : null,
+    questionId: q0.questionId ? Number(q0.questionId) : null,
+    subtaskId: q0.subtaskId ? Number(q0.subtaskId) : null
+  }
+  locateAnchor.value = anchor.todoId || anchor.questionId || anchor.subtaskId ? anchor : null
   detailVisible.value = true
-  const q = { ...route.query }
-  delete q.caseId
+  // 抹掉定位参数（caseId 一并抹，避免刷新重复弹抽屉）
+  const q = { ...q0 }
+  delete q.caseId; delete q.todoId; delete q.questionId; delete q.subtaskId
   router.replace({ path: '/my-cases', query: q })
 }
 

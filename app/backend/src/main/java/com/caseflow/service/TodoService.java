@@ -311,8 +311,9 @@ public class TodoService {
         todoMapper.insert(t);
         touchCase(c);
 
-        logService.log("CASE", "TODO_ADD", "CASE", caseId,
-                "新增待办：" + abbrev(t.getContent()), before, snapshotService.capture(caseId));
+        logService.logAnchored("CASE", "TODO_ADD", "CASE", caseId,
+                "新增待办：" + abbrev(t.getContent()), before, snapshotService.capture(caseId),
+                LogService.Anchor.ofTodo(t.getId()));
         return toVO(t, true);
     }
 
@@ -369,9 +370,11 @@ public class TodoService {
         removeAllOfTodo(todoId);
         touchCase(c);
 
-        logService.log("CASE", "TODO_DELETE", "CASE", t.getCaseId(),
+        logService.logAnchored("CASE", "TODO_DELETE", "CASE", t.getCaseId(),
                 (t.getParentId() == null ? "删除待办：" : "删除子任务：") + abbrev(t.getContent()),
-                before, snapshotService.capture(t.getCaseId()));
+                before, snapshotService.capture(t.getCaseId()),
+                t.getParentId() == null ? LogService.Anchor.ofTodo(t.getId())
+                        : LogService.Anchor.ofSubtask(t.getParentId(), t.getId()));
     }
 
     /** 删除任务及其子任务与全部反馈记录（级联清理，防孤儿数据） */
@@ -500,8 +503,10 @@ public class TodoService {
         syncOpinion(t);
         touchCase(c);
 
-        logService.log("CASE", "TODO_DONE", "CASE", t.getCaseId(),
-                "完成待办：" + abbrev(t.getContent()), before, snapshotService.capture(t.getCaseId()));
+        logService.logAnchored("CASE", "TODO_DONE", "CASE", t.getCaseId(),
+                "完成待办：" + abbrev(t.getContent()), before, snapshotService.capture(t.getCaseId()),
+                t.getParentId() == null ? LogService.Anchor.ofTodo(t.getId())
+                        : LogService.Anchor.ofSubtask(t.getParentId(), t.getId()));
         return toVO(t, true);
     }
 
@@ -727,8 +732,9 @@ public class TodoService {
         todoMapper.insert(s);
         touchCase(c);
 
-        logService.log("CASE", "TODO_SUBTASK_ADD", "CASE", parent.getCaseId(),
-                "为待办「" + abbrev(parent.getContent()) + "」添加子任务：" + abbrev(s.getContent()));
+        logService.logAnchored("CASE", "TODO_SUBTASK_ADD", "CASE", parent.getCaseId(),
+                "为待办「" + abbrev(parent.getContent()) + "」添加子任务：" + abbrev(s.getContent()),
+                null, null, LogService.Anchor.ofSubtask(parent.getId(), s.getId()));
         return toVO(s, false);
     }
 
@@ -754,8 +760,11 @@ public class TodoService {
         syncOpinion(t);
         touchCase(c);
 
-        logService.log("CASE", "TODO_FEEDBACK", "CASE", t.getCaseId(),
-                "待办反馈：" + abbrev(t.getContent()) + " → " + abbrev(content));
+        logService.logAnchored("CASE", "TODO_FEEDBACK", "CASE", t.getCaseId(),
+                "待办反馈：" + abbrev(t.getContent()) + " → " + abbrev(content),
+                null, null,
+                t.getParentId() == null ? LogService.Anchor.ofTodo(t.getId())
+                        : LogService.Anchor.ofSubtask(t.getParentId(), t.getId()));
         return detail(todoId);
     }
 

@@ -99,8 +99,15 @@ public class NotificationService {
     /**
      * 由 LogService 在日志落库后调用（唯一埋点）。
      * 幂等：logId 相同不会重复派生（用 log_id 去重）。
+     *
+     * @param anchor 定位锚点（可空）：让点通知能直达待办详情/某条疑问，
+     *               而不只跳到案件详情页。为空则降级为案件级定位。
      */
     public void onLog(OperationLog log) {
+        onLog(log, null);
+    }
+
+    public void onLog(OperationLog log, com.caseflow.support.LogService.Anchor anchor) {
         if (log == null) {
             return;
         }
@@ -130,6 +137,12 @@ public class NotificationService {
             n.setUserId(uid);
             n.setCaseId(log.getTargetId());
             n.setLogId(log.getId());
+            // 定位锚点：业务侧告知目标对象ID，使点通知能直达具体内容
+            if (anchor != null) {
+                n.setAnchorTodoId(anchor.todoId);
+                n.setAnchorQuestionId(anchor.questionId);
+                n.setAnchorSubtaskId(anchor.subtaskId);
+            }
             n.setType(type);
             n.setTitle(title);
             n.setContent(log.getContent());
@@ -324,6 +337,10 @@ public class NotificationService {
         event.put("userId", userId);
         event.put("id", n.getId());
         event.put("caseId", n.getCaseId());
+        // 定位锚点一并下发：实时到达的通知也能直达具体内容
+        event.put("anchorTodoId", n.getAnchorTodoId());
+        event.put("anchorQuestionId", n.getAnchorQuestionId());
+        event.put("anchorSubtaskId", n.getAnchorSubtaskId());
         event.put("type", n.getType());
         event.put("title", n.getTitle());
         event.put("content", n.getContent());

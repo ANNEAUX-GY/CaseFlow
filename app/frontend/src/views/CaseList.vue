@@ -138,7 +138,7 @@
       @done="load"
       :case-measure="currentMeasure"
     />
-    <CaseDetailDrawer v-model="detailVisible" :case-id="currentId" @done="load" />
+    <CaseDetailDrawer v-model="detailVisible" :case-id="currentId" :anchor="locateAnchor" @done="load" />
 
     <PageFooter />
   </div>
@@ -226,6 +226,8 @@ const assignVisible = ref(false)
 const detailVisible = ref(false)
 const editId = ref(null)
 const currentId = ref(null)
+/** 信箱跳转的定位锚点（todoId/questionId/subtaskId）；null=无定位 */
+const locateAnchor = ref(null)
 const currentName = ref('')
 // 本案强制措施：指派弹窗据此推导要求的办案组别（刑拘在办→清案组）
 const currentMeasure = ref('')
@@ -379,13 +381,19 @@ watch(() => route.query, (q) => {
     if (q.employeeName) employeeOptions.value = [{ id, name: q.employeeName }]
     load()
   }
-  // 信箱点信件跳过来：直接打开对应案件的详情抽屉。
-  // 打开后立刻把 caseId 从地址栏抹掉，否则刷新会重复打开（与 MyCases 同一约定）。
+  // 信箱点信件跳过来：直接打开对应案件的详情抽屉；若带了定位锚点则继续下钻到具体内容。
+  // 打开后立刻把定位参数从地址栏抹掉，否则刷新会重复打开（与 MyCases 同一约定）。
   if (q.caseId) {
     currentId.value = Number(q.caseId)
+    const anchor = {
+      todoId: q.todoId ? Number(q.todoId) : null,
+      questionId: q.questionId ? Number(q.questionId) : null,
+      subtaskId: q.subtaskId ? Number(q.subtaskId) : null
+    }
+    locateAnchor.value = anchor.todoId || anchor.questionId || anchor.subtaskId ? anchor : null
     detailVisible.value = true
     const rest = { ...q }
-    delete rest.caseId
+    delete rest.caseId; delete rest.todoId; delete rest.questionId; delete rest.subtaskId
     router.replace({ path: '/cases', query: rest })
   }
 }, { immediate: true })

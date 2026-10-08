@@ -104,6 +104,12 @@ public class SchemaMigration implements ApplicationRunner {
             {"case_question", "answer_edited_by", "BIGINT NULL"},
             {"case_question", "answer_edited_by_name", "VARCHAR(64) NULL"},
             {"case_question", "answer_edited_at", "DATETIME NULL"},
+            // 通知定位锚点（2026-10-08）：业务侧埋点时告知目标对象ID，
+            // 点通知可直达待办详情/某条疑问，而不只跳案件详情页。
+            // 存量通知三列皆 NULL = 降级为案件级定位，行为不变。
+            {"case_notification", "anchor_todo_id", "BIGINT NULL"},
+            {"case_notification", "anchor_question_id", "BIGINT NULL"},
+            {"case_notification", "anchor_subtask_id", "BIGINT NULL"},
             // 办案组别（2026-10-04）：初查组/清案组/不限。
             // org_employee 是指派校验的**权威来源**（账号可没绑员工档案）；
             // sys_user.police_group 是注册时自报 + 审核时确认的组别，

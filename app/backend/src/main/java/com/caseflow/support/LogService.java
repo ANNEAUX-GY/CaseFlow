@@ -34,6 +34,44 @@ public class LogService {
     private com.caseflow.service.NotificationService notificationService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    /**
+     * 定位锚点（2026-10-08）：让「点通知直达具体内容」而非只到案件级。
+     *
+     * <p><b>为什么必须由业务侧告知</b>：operation_log 的 targetId 统一是 caseId，
+     * 日志本身不记录 todoId/questionId，无法事后反查（正文是拼接文本，不可解析）。
+     * 所以埋点时由知道目标对象的业务方法显式传下来。
+     */
+    public static final class Anchor {
+        public final Long todoId;
+        public final Long questionId;
+        public final Long subtaskId;
+
+        private Anchor(Long todoId, Long questionId, Long subtaskId) {
+            this.todoId = todoId;
+            this.questionId = questionId;
+            this.subtaskId = subtaskId;
+        }
+
+        /** 锚定到某个待办（任务详情浮窗） */
+        public static Anchor ofTodo(Long todoId) {
+            return new Anchor(todoId, null, null);
+        }
+
+        /** 锚定到某条疑问/回答（任务详情浮窗内的该条疑问） */
+        public static Anchor ofQuestion(Long todoId, Long questionId) {
+            return new Anchor(todoId, questionId, null);
+        }
+
+        /** 锚定到某个子任务 */
+        public static Anchor ofSubtask(Long todoId, Long subtaskId) {
+            return new Anchor(todoId, null, subtaskId);
+        }
+
+        public boolean isEmpty() {
+            return todoId == null && questionId == null && subtaskId == null;
+        }
+    }
+
     /** 普通日志：不带快照，因而不支持撤回（登录、导入等） */
     public OperationLog log(String module, String action, String targetType, Long targetId, String content) {
         return log(module, action, targetType, targetId, content, null, null, null);
@@ -45,8 +83,27 @@ public class LogService {
         return log(module, action, targetType, targetId, content, snapshotBefore, snapshotAfter, null);
     }
 
+    /**
+     * 带定位锚点的日志：让点通知能直达待办详情/某条疑问，而不只是案件详情页。
+     * 无锚点时传 {@code null}，行为与原重载完全一致。
+     */
+    public OperationLog logAnchored(String module, String action, String targetType, Long targetId,
+                                    String content, String snapshotBefore, String snapshotAfter,
+                                    Anchor anchor) {
+        OperationLog log = write(module, action, targetType, targetId, content,
+                snapshotBefore, snapshotAfter, null, anchor);
+        return log;
+    }
+
     public OperationLog log(String module, String action, String targetType, Long targetId, String content,
                            String snapshotBefore, String snapshotAfter, Long undoOf) {
+        return write(module, action, targetType, targetId, content,
+                snapshotBefore, snapshotAfter, undoOf, null);
+    }
+
+    /** 实际落库 + 广播 + 派生通知的公共出口（锚点可选） */
+    private OperationLog write(String module, String action, String targetType, Long targetId, String content,
+                               String snapshotBefore, String snapshotAfter, Long undoOf, Anchor anchor) {
         OperationLog log = new OperationLog();
         log.setModule(module);
         log.setAction(action);
@@ -64,7 +121,7 @@ public class LogService {
         broadcast(log);
         // 派生信箱通知（唯一埋点：全站写操作在此进信箱）。失败绝不影响主流程。
         try {
-            notificationService.onLog(log);
+            notificationService.onLog(log, anchor);
         } catch (Exception e) {
             org.slf4j.LoggerFactory.getLogger(LogService.class)
                     .warn("[LogService] 信箱通知派生失败（不影响业务）：{}", e.getMessage());

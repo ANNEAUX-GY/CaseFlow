@@ -44,7 +44,7 @@
       </el-descriptions>
 
       <!-- 案件待办（含领导意见）：提意见/定级/落实反馈都在这一个面板，避免同一事项两处展示 -->
-      <CaseTodoPanel :case-id="detail.id" style="margin-top: 12px" @changed="reload" />
+      <CaseTodoPanel :case-id="detail.id" :anchor="anchor" style="margin-top: 12px" @changed="reload" />
 
       <div class="cf-panel" style="margin-top: 12px">
         <div class="cf-panel__head">
@@ -258,7 +258,12 @@ const { isMobile } = useDevice()
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
-  caseId: { type: [Number, null], default: null }
+  caseId: { type: [Number, null], default: null },
+  /**
+   * 定位锚点（2026-10-08 信箱「查看案件」用）。
+   * { todoId, questionId, subtaskId }——由路由 query 透传，逐层下传到待办面板去定位高亮。
+   */
+  anchor: { type: Object, default: null }
 })
 const emit = defineEmits(['update:modelValue', 'done'])
 

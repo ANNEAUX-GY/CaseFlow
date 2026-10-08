@@ -304,11 +304,16 @@ CREATE TABLE IF NOT EXISTS case_leader_opinion (
 --   每收件人一条（read_at 落行上，无需第二张已读表）。
 --   分发口径：普通用户=本人承办案件相关；管理层=全站所有用户的操作（除自己触发）。
 --   不设外键：log/case 删除后通知留档无害。
+--   anchor_* 为「定位锚点」：业务侧在埋点时告知目标对象ID，使点通知能直达具体内容
+--   （待办详情/某条疑问）而不只是案件详情页；三者皆 NULL = 只能定位到案件级。
 CREATE TABLE IF NOT EXISTS case_notification (
     id         BIGINT       AUTO_INCREMENT PRIMARY KEY COMMENT '主键',
     user_id    BIGINT       NOT NULL COMMENT '收件人（sys_user.id）',
     case_id    BIGINT       DEFAULT NULL COMMENT '关联案件（可空，非案件类操作）',
     log_id     BIGINT       DEFAULT NULL COMMENT '来源操作日志 ID（可空）',
+    anchor_todo_id     BIGINT  DEFAULT NULL COMMENT '定位锚点-待办 ID（可空）：点通知直达该任务详情',
+    anchor_question_id BIGINT  DEFAULT NULL COMMENT '定位锚点-疑问 ID（可空）：点通知直达该条疑问/回答',
+    anchor_subtask_id  BIGINT  DEFAULT NULL COMMENT '定位锚点-子任务 ID（可空）：点通知直达该子任务',
     type       VARCHAR(32)  DEFAULT NULL COMMENT '通知类型：OPINION/ASSIGN/STATUS/TODO/FILE/OTHER',
     title      VARCHAR(128) DEFAULT NULL COMMENT '摘要标题',
     content    VARCHAR(512) DEFAULT NULL COMMENT '正文',

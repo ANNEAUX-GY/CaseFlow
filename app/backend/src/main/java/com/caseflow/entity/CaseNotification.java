@@ -34,6 +34,17 @@ public class CaseNotification implements Serializable {
     private Long caseId;
     /** 来源操作日志 ID（可空） */
     private Long logId;
+    /**
+     * 定位锚点-待办 ID（2026-10-08）。
+     *
+     * <p>让「点通知直达具体内容」：不再只跳案件详情页，而是打开对应任务的详情浮窗。
+     * 三者皆 NULL 时降级为案件级定位（存量通知即如此）。
+     */
+    private Long anchorTodoId;
+    /** 定位锚点-疑问 ID：进一步定位到任务详情浮窗内的某条疑问/回答 */
+    private Long anchorQuestionId;
+    /** 定位锚点-子任务 ID：定位到任务详情浮窗内的某个子任务 */
+    private Long anchorSubtaskId;
     /** 通知类型：OPINION/ASSIGN/STATUS/TODO/FILE/OTHER */
     private String type;
     /** 摘要标题 */

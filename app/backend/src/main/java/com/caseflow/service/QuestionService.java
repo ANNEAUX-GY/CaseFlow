@@ -77,8 +77,11 @@ public class QuestionService {
         q.setCreatedAt(LocalDateTime.now());
         questionMapper.insert(q);
 
-        logService.log("CASE", "QUESTION_ASK", "CASE", caseId,
-                "提出疑问：" + abbrev(content));
+        // 锚点带上 todoId+questionId：点通知直达该条疑问，
+        // 落地时由前端打开任务详情浮窗并滚动定位到这一条
+        logService.logAnchored("CASE", "QUESTION_ASK", "CASE", caseId,
+                "提出疑问：" + abbrev(content), null, null,
+                LogService.Anchor.ofQuestion(todoId, q.getId()));
         return q;
     }
 
@@ -106,8 +109,9 @@ public class QuestionService {
         q.setAnsweredAt(LocalDateTime.now());
         questionMapper.updateById(q);
 
-        logService.log("CASE", "QUESTION_ANSWER", "CASE", q.getCaseId(),
-                "回答疑问：" + abbrev(q.getContent()) + " → " + abbrev(content), before, snapshot(q));
+        logService.logAnchored("CASE", "QUESTION_ANSWER", "CASE", q.getCaseId(),
+                "回答疑问：" + abbrev(q.getContent()) + " → " + abbrev(content), before, snapshot(q),
+                LogService.Anchor.ofQuestion(q.getTodoId(), q.getId()));
         return q;
     }
 
@@ -151,10 +155,11 @@ public class QuestionService {
         questionMapper.updateById(q);
 
         // 摘要里用 oldText（setAnswer 之前的值），否则新旧对照会都显示新内容
-        logService.log("CASE", "QUESTION_ANSWER_UPDATE", "CASE", q.getCaseId(),
+        logService.logAnchored("CASE", "QUESTION_ANSWER_UPDATE", "CASE", q.getCaseId(),
                 "修订回答：" + abbrev(q.getContent())
                         + "（原「" + abbrev(oldText) + "」→「" + abbrev(newText) + "」）",
-                before, snapshot(q));
+                before, snapshot(q),
+                LogService.Anchor.ofQuestion(q.getTodoId(), q.getId()));
         return q;
     }
 
@@ -171,8 +176,9 @@ public class QuestionService {
         requireOwnerOrManager(q);
         q.setContent(content.trim());
         questionMapper.updateById(q);
-        logService.log("CASE", "QUESTION_UPDATE", "CASE", q.getCaseId(),
-                "编辑疑问：" + abbrev(content));
+        logService.logAnchored("CASE", "QUESTION_UPDATE", "CASE", q.getCaseId(),
+                "编辑疑问：" + abbrev(content), null, null,
+                LogService.Anchor.ofQuestion(q.getTodoId(), q.getId()));
         return q;
     }
 
@@ -185,8 +191,9 @@ public class QuestionService {
         }
         requireOwnerOrManager(q);
         questionMapper.deleteById(questionId);
-        logService.log("CASE", "QUESTION_DELETE", "CASE", q.getCaseId(),
-                "删除疑问：" + abbrev(q.getContent()));
+        logService.logAnchored("CASE", "QUESTION_DELETE", "CASE", q.getCaseId(),
+                "删除疑问：" + abbrev(q.getContent()), null, null,
+                LogService.Anchor.ofQuestion(q.getTodoId(), q.getId()));
     }
 
     /** 是否提问人本人或管理层 */

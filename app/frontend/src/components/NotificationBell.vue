@@ -143,12 +143,31 @@ const read = async (n) => {
     readList.value = [{ ...n, readAt: now }, ...readList.value.filter((x) => x.id !== n.id)]
     unreadCount.value = Math.max(0, unreadCount.value - 1)
   }
-  if (n.caseId) {
-    // 关面板再跳转：el-popover 的 hide()，别手动置 v-model（trigger=click 模式没有它）
-    popRef.value?.hide()
-    const path = userStore.isFullAccess ? '/cases' : '/my-cases'
-    router.push({ path, query: { caseId: n.caseId } })
-  }
+  /**
+ * 点击信件 → 跳到**具体内容**而不只是案件列表（2026-10-08）。
+ *
+ * <p>路由参数（全部可空，前端只带有的）：
+ * <ul>
+ *   <li>{@code caseId} —— 必带，落点案件；</li>
+ *   <li>{@code todoId} —— 待办锚点，落点任务详情浮窗；</li>
+ *   <li>{@code questionId} —— 疑问锚点，落点该条疑问/回答并高亮；</li>
+ *   <li>{@code subtaskId} —— 子任务锚点，落点该子任务并高亮。</li>
+ * </ul>
+ *
+ * <p><b>降级</b>：后端对老数据/无锚点通知不填这些参数，此时退化为
+ * "打开案件详情"；目标已被删除时由落地页（CaseTodoPanel/TodoDetailDialog）
+ * 判定并静默降级，不会白屏或报错。
+ */
+if (n.caseId) {
+  // 关面板再跳转：el-popover 的 hide()，别手动置 v-model（trigger=click 模式没有它）
+  popRef.value?.hide()
+  const path = userStore.isFullAccess ? '/cases' : '/my-cases'
+  const query = { caseId: n.caseId }
+  if (n.anchorTodoId) query.todoId = n.anchorTodoId
+  if (n.anchorQuestionId) query.questionId = n.anchorQuestionId
+  if (n.anchorSubtaskId) query.subtaskId = n.anchorSubtaskId
+  router.push({ path, query })
+}
 }
 
 const markAll = async () => {
@@ -176,6 +195,10 @@ const onEvent = (e) => {
   // 直接插到未读页签头（当前在已读页签也能看到未读数在涨）
   unreadList.value = [{
     id: e.id, caseId: e.caseId, type: e.type,
+    // 定位锚点一并带上：实时到达的通知也能直达具体内容
+    anchorTodoId: e.anchorTodoId,
+    anchorQuestionId: e.anchorQuestionId,
+    anchorSubtaskId: e.anchorSubtaskId,
     title: e.title, content: e.content, createdAt: e.createdAt
   }, ...unreadList.value.filter((x) => x.id !== e.id)]
 }

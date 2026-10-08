@@ -331,7 +331,13 @@ import TodoDetailDialog from './TodoDetailDialog.vue'
 import FeedbackDialog from './FeedbackDialog.vue'
 
 const props = defineProps({
-  caseId: { type: [Number, String], required: true }
+  caseId: { type: [Number, String], required: true },
+  /**
+   * 定位锚点（2026-10-08 信箱「查看案件」用）。
+   * 由路由 query 透传下来：{ todoId, questionId, subtaskId }。
+   * 挂载后自动打开对应任务的详情浮窗并高亮目标；目标已删除则静默降级（仅开案件详情）。
+   */
+  anchor: { type: Object, default: null }
 })
 const emit = defineEmits(['changed'])
 
@@ -414,8 +420,33 @@ const load = async () => {
   nextTick(setupSortable)
 }
 
-onMounted(load)
+onMounted(async () => {
+  await load()
+  await consumeAnchor()
+})
 watch(() => props.caseId, load)
+
+/**
+ * 消费定位锚点：打开对应任务的详情浮窗并高亮目标（2026-10-08 信箱跳转）。
+ *
+ * <p><b>降级策略</b>（锚点里的目标可能已被删除）：
+ * <ul>
+ *   <li>无 todoId → 不做任何事（调用方已开了案件详情，抽窗本身就是落点）；</li>
+ *   <li>todoId 存在但查不到 → 提示一句「该任务已被删除」，停在案件详情；</li>
+ *   <li>questionId / subtaskId 查不到 → 浮窗照常打开，只是不高亮（TodoDetailDialog 内处理）。</li>
+ * </ul>
+ */
+const consumeAnchor = async () => {
+  const a = props.anchor
+  if (!a || !a.todoId) return
+  const hit = (todos.value || []).find((t) => String(t.id) === String(a.todoId))
+  if (!hit) {
+    ElMessage.warning('该任务已被删除，已打开案件详情')
+    return
+  }
+  await nextTick()
+  detailRef.value?.openAt(hit.id, a)
+}
 
 // ---- 拖拽排序（仅管理层、桌面端；复用原来的 sortablejs 交互） ----
 const listEl = ref(null)

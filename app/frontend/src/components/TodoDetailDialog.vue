@@ -74,7 +74,7 @@
         <template v-if="subExpanded">
         <ul v-if="subtasks.length" class="cf-td__sub-list">
           <li v-for="s in subtasks" :key="s.id" class="cf-td__sub"
-            :class="{ 'is-done': s.status === 'DONE' }">
+            :class="{ 'is-done': s.status === 'DONE' }" :data-cf-subid="s.id">
             <!-- 勾选 = 走同一个落实反馈弹窗（选「完成」才真正勾上）；
                  取消勾选 = 撤销该子任务完成（承办人本人与管理员均可） -->
             <el-checkbox
@@ -138,7 +138,7 @@
         </div>
         <template v-if="qExpanded">
         <ul v-if="questions.length" class="cf-td__q-list">
-          <li v-for="q in questions" :key="q.id" class="cf-td__q">
+          <li v-for="q in questions" :key="q.id" class="cf-td__q" :data-cf-qid="q.id">
             <div class="cf-td__fb-meta">
               <span class="cf-td__fb-time">{{ fmt(q.createdAt) }}</span>
               <span class="cf-td__fb-by">{{ q.questionByName || '-' }}</span>
@@ -262,7 +262,7 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { todoApi, questionApi } from '../api'
 import { useDevice } from '../utils/device'
@@ -468,7 +468,7 @@ const load = async () => {
   }
 }
 
-const open = async (id) => {
+const open = async (id, anchor) => {
   todoId.value = id
   newSub.value = ''
   fbExpanded.value = false
@@ -481,6 +481,35 @@ const open = async (id) => {
   editingAnswerText.value = ''
   visible.value = true
   await load()
+  // 定位到具体内容（信箱跳转用）：等下一帧让列表渲染完再滚+高亮
+  if (anchor && (anchor.questionId || anchor.subtaskId)) {
+    await locateAnchor(anchor)
+  }
+}
+
+/**
+ * 定位到指定锚点并短暂高亮（2026-10-08 信箱精确定位）。
+ *
+ * <p><b>为什么高亮而不是只滚动</b>：任务详情里反馈/子任务/疑问可能有十几条，
+ * 滚到位置只说明"大概在这"，用户还得自己找。短暂高亮一眼就能认出目标。
+ *
+ * <p><b>降级</b>：目标已被删除/查不到时什么都不做（浮窗照常打开），
+ * 由调用方决定是否提示——不在这里报错，免得打断跳转。
+ */
+const locateAnchor = async (anchor) => {
+  // 疑问区默认折叠，定位到疑问时先展开
+  if (anchor.questionId) qExpanded.value = true
+  await nextTick()
+  await new Promise((r) => setTimeout(r, 120))
+  const raw = anchor.questionId || anchor.subtaskId
+  const key = String(raw)
+  // CSS.escape：id 虽是数字，但选择器拼接仍走属性选择器更稳
+  const el = document.querySelector(`[data-cf-qid="${key}"]`) ||
+    document.querySelector(`[data-cf-subid="${key}"]`)
+  if (!el) return    // 目标已删除：静默降级
+  el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  el.classList.add('is-cf-flash')
+  setTimeout(() => el.classList.remove('is-cf-flash'), 2600)
 }
 
 /** 勾选主任务时直接打开「标记完成」的反馈弹窗（完成必须带落实状态） */
@@ -502,7 +531,10 @@ const openCompleteSub = async (parentId, subId) => {
   openFeedbackDlg({ subId, complete: true })
 }
 
-defineExpose({ open, openComplete, openCompleteSub })
+/** 带定位锚点打开（信箱「查看案件」用）：打开后滚动到目标并短暂高亮 */
+const openAt = async (id, anchor) => { await open(id, anchor) }
+
+defineExpose({ open, openAt, openComplete, openCompleteSub })
 
 // ---- 落实反馈弹窗状态 ----
 const fb = reactive({
@@ -705,6 +737,16 @@ watch(visible, (v) => { if (!v) onClosed() })
 .cf-td__fold-icon { transition: transform .15s; color: #8a929e }
 .cf-td__fold-icon.is-open { transform: rotate(90deg) }
 /* 疑问问答：列表限高滚动（项目约定：列表类容器写死高度），回答块缩进区分 */
+/* 信箱跳转定位高亮：短暂闪一下帮用户认出目标（2.6s 后由 JS 移除） */
+.is-cf-flash {
+  animation: cf-flash 2.6s ease-out;
+  border-radius: 4px;
+}
+@keyframes cf-flash {
+  0%, 12%   { background: #fff3cd; box-shadow: 0 0 0 2px #f0c36d inset; }
+  30%, 70%  { background: #fff9e6; box-shadow: 0 0 0 2px #f5d78e inset; }
+  100%      { background: transparent;   box-shadow: 0 0 0 2px transparent inset; }
+}
 .cf-td__q-list { list-style: none; margin: 0; padding: 0; max-height: 240px; overflow-y: auto }
 .cf-td__q { padding: 6px 0; border-bottom: 1px dotted #eef1f5 }
 .cf-td__q-answer {
