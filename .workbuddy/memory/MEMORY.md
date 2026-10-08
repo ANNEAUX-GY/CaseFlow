@@ -54,13 +54,13 @@
 - **同排等高**：`cf-panel--fill` + 内容自适应，**仅当父级高度已确定**时可用；
   父级高度由内容决定时用它会成 flex 循环依赖把面板顶爆（实测撑到 1289px）→ 改固定高度。
   flex 子项要固定高度用 `min-height` + `flex-shrink:0`，别写死 `height`。
-- 移动端（`utils/device.js`，`MOBILE_MAX_WIDTH=768` 必须与 `@media` 成对改）：
-  `initDevice()` 在 `createApp` 前调；侧栏一份实现 `NavPanel.vue`（`variant=aside|drawer`）；
-  列表手机端走卡片（`.cf-ccard` / `.cf-ucard`）；`.cf-panel__head` 手机端
-  `height:auto;min-height:42px;flex-wrap:wrap`；核对 `scrollWidth-innerWidth` 必须 = 0。
+- **纯桌面端内网应用（2026-10-08 起不做移动端）**：设备识别层、手机抽屉、汉堡按钮、
+  版式切换标识、手机端卡片版式、全部 `@media(max-width:768px/380px)` **均已删除**。
+  加样式前不要写窄屏 media；要适配窄窗口用桌面级断点（现存 4 条 1440/860px 只管 KPI 网格列数）。
 - 跨组件计数/状态必须放 Pinia store（`Layout.vue` 整个会话只挂载一次，局部 ref 不会重取）。
   刷新计数走后端重数，别本地 `-1`。
 - 页面/组件已有：`PageFooter.vue`、标语集中 `src/config/slogans.js`。
+- `NavPanel.vue` 只有一套侧栏（无 variant 变体）；`Layout.vue` 里侧栏常驻、无抽屉。
 - 员工图谱 Excel 列固定：姓名/工号/上级工号/部门/职务/手机/邮箱；演示账号 `boss/admin123`；
   自检账号 `e2e_staff` / `e2e_law`（`e2e123456`）。
 
@@ -177,6 +177,17 @@
 生命周期 `mysql_local.py init|start|stop|status|setup|env|reset`。
 坑：JDBC `characterEncoding` 写 UTF-8（utf8mb4 抛 Unsupported encoding）；
 `my.ini` 不能开 `skip-name-resolve`（否则 127.0.0.1 拒连）；Windows mysqld 按 GBK 解码选项文件。
+
+## 坑：批量改 CSS / Vue 模板（2026-10-08 踩过，两次）
+- **改 CSS 必校验花括号配平**：按字符串锚点逐块切，`cut` 时会把**相邻块**一起吃掉。
+  我误删过 `.cf-panel__head`（桌面通用类）；也漏过一个 `}`，导致后面 300 行
+  全被吸进某个 `@media` 里（`.cf-gatebar` 这类桌面元素竟显示在移动端块内），**肉眼完全看不出来**。
+  正解：把 CSS 剥注释后按 `{` 做括号配平、解析成「顶层块」再筛，删完再算一次深度，
+  失衡就不写盘。
+- **按行号删 Vue 模板块要核对缩进层级**：`</div>` 多删一个 → `Element is missing end tag`。
+  删完必须逐文件 `curl localhost:5173/src/xxx.vue` 验编译。
+- **heredoc 会吃掉反斜杠**：`python3 - <<'PY'` 里写 `re.compile(r'@media\s*\(max-width\)')`
+  会被吃掉一个反斜杠，报 `unbalanced parenthesis`。**要跑正则脚本就 Write 成 .py 文件再执行。**
 
 ## 用户交互偏好
 - **所有操作直接执行，不先问**（2026-10-08 明确，最高优先级）：
