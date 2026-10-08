@@ -30,6 +30,16 @@
 
           <div v-if="viewMode === 'list'" class="cf-panel__body cf-org__list">
             <el-input v-model="filterText" placeholder="过滤：姓名 / 部门 / 职务" clearable />
+            <div class="cf-org__legend">
+              <span class="cf-org__legend-t">组织层级</span>
+              <span v-for="r in RANK_ORDER" :key="r" class="cf-org__legend-i">
+                <i :style="{ background: RANK_COLORS[r] }" />{{ rankLabel(r) }}
+              </span>
+              <i class="cf-org__legend-sep" />
+              <span class="cf-org__legend-i">
+                <i :style="{ background: DEPT_ANOMALY_COLOR }" />部门待核
+              </span>
+            </div>
             <el-tree
               ref="treeRef"
               class="cf-org__tree"
@@ -41,10 +51,14 @@
             >
               <template #default="{ data }">
                 <span class="cf-org__row">
-                  <span>{{ data.name }}</span>
-                  <span class="cf-muted">{{ data.title || '' }}</span>
-                  <span class="cf-muted">{{ data.dept || '' }}</span>
-                  <span v-if="data.activeCaseCount > 0" class="cf-warn">在手 {{ data.activeCaseCount }}</span>
+                  <i class="cf-org__dot" :style="{ background: nodeColor(data) }" />
+                  <span class="cf-org__name">{{ data.name }}</span>
+                  <span class="cf-muted">{{ data.rankLabel || data.title || '' }}</span>
+                  <span v-if="!isMobile" class="cf-muted">{{ data.dept || '' }}</span>
+                  <span v-if="data.deptAnomaly" class="cf-org__flag">
+                    {{ isMobile ? deptAnomalyTextShort(data) : deptAnomalyText(data) }}
+                  </span>
+                  <span v-if="data.activeCaseCount > 0" class="cf-org__load">在手 {{ data.activeCaseCount }}</span>
                 </span>
               </template>
             </el-tree>
@@ -64,6 +78,10 @@
             <span><b>{{ orgSummary.depth }}</b> 级组织</span>
             <i />
             <span><b>{{ orgSummary.depts }}</b> 个部门</span>
+            <template v-if="orgSummary.anomaly">
+              <i />
+              <span class="cf-org__foot-warn">部门待核 <b>{{ orgSummary.anomaly }}</b> 人</span>
+            </template>
           </div>
         </div>
       </el-col>
@@ -83,12 +101,37 @@
                 <el-input v-model="form.employeeNo" placeholder="导入时的唯一标识" />
               </el-form-item>
               <el-form-item label="上级">
-                <el-select v-model="form.parentId" filterable clearable placeholder="不选则为顶层" style="width: 100%">
-                  <el-option v-for="e in flatEmployees" :key="e.id" :label="`${e.name}（${e.pathName}）`" :value="e.id" />
+                <el-select
+                  v-model="form.parentId"
+                  filterable
+                  clearable
+                  :placeholder="parentHint"
+                  style="width: 100%"
+                >
+                  <el-option
+                    v-for="e in parentCandidates"
+                    :key="e.id"
+                    :label="`${e.name}（${e.pathName || e.rankLabel || ''}）`"
+                    :value="e.id"
+                  />
                 </el-select>
+                <div class="cf-form-tip">{{ parentTip }}</div>
               </el-form-item>
               <el-form-item label="部门">
-                <el-input v-model="form.dept" />
+                <el-select
+                  v-model="form.dept"
+                  filterable
+                  allow-create
+                  clearable
+                  default-first-option
+                  placeholder="从已有部门中选择"
+                  style="width: 100%"
+                >
+                  <el-option v-for="d in deptOptions" :key="d.name" :label="`${d.name}（${d.count}人）`" :value="d.name" />
+                </el-select>
+                <div class="cf-form-tip">
+                  从下拉里选已有部门；若确实要新建部门，直接输入新名称即可。
+                </div>
               </el-form-item>
               <el-form-item label="职务">
                 <el-select v-model="form.title" filterable allow-create clearable placeholder="领导 / 副领导 / 组长 / 组员" style="width: 100%">
@@ -97,6 +140,7 @@
                   <el-option label="组长" value="组长" />
                   <el-option label="组员" value="组员" />
                 </el-select>
+                <div class="cf-form-tip">职务决定组织层级：{{ formRankLabel }}。当前上级候选：{{ parentTip }}</div>
               </el-form-item>
    <!-- 办案组别（2026-10-04）：决定他能接哪类案件，指派时按此校验 -->
               <el-form-item label="办案组别">
@@ -186,6 +230,9 @@ import { gotoGated } from '../store/caseType'
 import ChartPanel from '../components/ChartPanel.vue'
 import EChart from '../components/EChart.vue'
 import { CHART, lineOption, barOption } from '../utils/chart'
+import {
+  RANK, RANK_COLORS, DEPT_ANOMALY_COLOR, rankLabel, rankOf, nodeColor, deptAnomalyText, deptAnomalyTextShort
+} from '../utils/org'
 import { useDevice } from '../utils/device'
 import PageFooter from '../components/PageFooter.vue'
 import { useUserStore } from '../store/user'
@@ -204,10 +251,14 @@ const uploadHeaders = { 'X-Token': localStorage.getItem('cf_token') || '' }
 
 const treeData = ref([])
 const flatEmployees = ref([])
+const deptOptions = ref([])
 const filterText = ref('')
 const treeRef = ref()
 const selected = ref(null)
 const myCases = ref([])
+
+/** 层级色板与中文名（org.js 与后端 OrgRank 同一套口径） */
+const RANK_ORDER = [RANK.TOP, RANK.DEPUTY, RANK.LEADER, RANK.STAFF]
 
 const emptyForm = () => ({
   id: null,
@@ -225,6 +276,33 @@ const emptyForm = () => ({
 })
 const form = reactive(emptyForm())
 
+/** 表单里这个人属于哪一层：由职务实时推导，改职务层级说明立刻跟着变 */
+const formRank = computed(() => rankOf(form.title))
+const formRankLabel = computed(() => rankLabel(formRank.value))
+
+/**
+ * 上级候选：只给「恰好高一层」的人。
+ * 层级固定为总-副总-组长-员工，选了平级或跨级的人没有意义，
+ * 所以干脆不让他们出现在下拉里（后端也会再兜底一次）。
+ */
+const parentCandidates = computed(() => {
+  const want = formRank.value - 1
+  if (want < RANK.TOP) return []
+  return flatEmployees.value.filter((e) => rankOf(e.title) === want)
+})
+
+const parentHint = computed(() =>
+  formRank.value <= RANK.TOP ? '总/领导为最高层，无需选择上级' : '请选择上一级'
+)
+
+const parentTip = computed(() => {
+  const want = formRank.value - 1
+  if (want < RANK.TOP) return '总/领导是组织树第一层，不设上级'
+  const names = parentCandidates.value.map((e) => e.name)
+  if (!names.length) return `${rankLabel(want)}层还没有人，请先添加${rankLabel(want)}`
+  return `可选：${names.join('、')}`
+})
+
 /** 组别说明：随选择变化，让人知道这个组别能接什么 */
 const groupHint = computed(() => {
   if (form.policeGroup === 'INITIAL') return '只能承接初查任务'
@@ -236,13 +314,20 @@ const resetForm = () => Object.assign(form, emptyForm())
 const load = async () => {
   treeData.value = await employeeApi.tree({})
   flatEmployees.value = await employeeApi.search({ limit: 500 })
+  await loadDepts()
+}
+
+/** 部门下拉的选项：从已有部门里选，避免同一个部门被填成好几种写法 */
+const loadDepts = async () => {
+  try {
+    deptOptions.value = await employeeApi.depts()
+  } catch (e) {
+    deptOptions.value = []
+  }
 }
 
 // ---- 组织树呈现模式：list = 原版缩进列表，chart = 自上而下树状图 ----
 const viewMode = ref('list')
-
-// 层级配色：越靠核心越深，保证白字压在色块上仍有足够对比度
-const LEVEL_COLOR = ['#12294a', '#1b4a8c', '#2a5da6', '#4a76bd']
 
 // 标签定宽：所有节点用同一个宽度，文字在框内换行/居中，
 // 同级节点即便姓名很长也只会各自折行，不会横向叠字
@@ -252,37 +337,51 @@ const labelW = computed(() => (isMobile.value ? 74 : 104))
 // 姓名色块（按层级取色）：一排节点一眼可辨层级
 // 注意：ECharts 富文本的 lineHeight 不决定背景色块高度，色块高 = 字号 + 上下 padding，
 // 所以这里靠 padding 给文字留出上下呼吸位（12.5 + 3*2 = 18.5px 色块）
-const nameRich = computed(() =>
-  LEVEL_COLOR.reduce((acc, bg, i) => {
-    acc[`n${i}`] = {
+// 层级已由后端按职务定好（org.js 的 rankOf），这里只是把颜色按 rank 分配，
+// 不再按「在树里的第几层」猜——挂在第 0 层不代表他就是总。
+const nameRich = computed(() => {
+  const o = {}
+  RANK_ORDER.forEach((r) => {
+    o[`n${r}`] = {
       width: labelW.value,
       align: 'center',
       fontSize: isMobile.value ? 11 : 12.5,
       fontWeight: 600,
       color: '#fff',
-      backgroundColor: bg,
+      backgroundColor: RANK_COLORS[r],
       borderRadius: 3,
       lineHeight: isMobile.value ? 16 : 18,
       padding: isMobile.value ? [3, 2] : [3, 4]
     }
-    return acc
-  }, {})
-)
+  })
+  // 部门待核：单独一个橙，一眼跳出来提示要补正
+  o.nAnomaly = Object.assign({}, o.n4, { backgroundColor: DEPT_ANOMALY_COLOR })
+  return o
+})
 
-const toChartTree = (nodes, depth = 0) =>
-  (nodes || []).map((n) => ({
-    name: n.name,
-    depth,
-    node: n,
-    itemStyle: { color: LEVEL_COLOR[Math.min(depth, LEVEL_COLOR.length - 1)], borderColor: '#fff', borderWidth: 2 },
-    children: toChartTree(n.children, depth + 1)
-  }))
+const toChartTree = (nodes) =>
+  (nodes || []).map((n) => {
+    const anomaly = !!n.deptAnomaly
+    return {
+      name: n.name,
+      rank: n.rank,
+      anomaly,
+      node: n,
+      itemStyle: {
+        color: anomaly ? DEPT_ANOMALY_COLOR : (RANK_COLORS[n.rank] || RANK_COLORS[RANK.STAFF]),
+        borderColor: '#fff',
+        borderWidth: 2
+      },
+      children: toChartTree(n.children)
+    }
+  })
 
-/** 树状图数据：顶层不止一人时（所长与副职平级、新员工挂顶层），
+/** 树状图数据：顶层不止一人时（正副职各一人、单位里没设副总），
  *  ECharts 的 tree 系列只把第一棵树画进画布，其余整棵消失
  *  （2026-10-07 实测：3 个顶层只剩王总一个节点）。
- *  包一层看不见的虚拟根把森林变成一棵树；depth 传 -1，
- *  让真实顶层仍算第 0 层，层级配色与原来完全一致。 */
+ *  包一层看不见的虚拟根把森林变成一棵树。
+ *  层级配色不再依赖树里的层数（2026-10-08 改为按职务定级），
+ *  所以虚拟根的 depth 已无用途，去掉即可。 */
 const orgChartData = computed(() => {
   const wrapped = toChartTree(treeData.value)
   if (wrapped.length <= 1) {
@@ -290,7 +389,6 @@ const orgChartData = computed(() => {
   }
   return [{
     name: '__virtual__',
-    depth: -1,
     virtual: true,
     symbolSize: 0.1,
     itemStyle: { opacity: 0 },
@@ -315,16 +413,18 @@ const orgSummary = computed(() => {
   let count = 0
   let depth = 0
   const depts = new Set()
+  let anomaly = 0
   const walk = (nodes, d) => {
     ;(nodes || []).forEach((n) => {
       count += 1
       depth = Math.max(depth, d)
       if (n.dept) depts.add(n.dept)
+      if (n.deptAnomaly) anomaly += 1
       walk(n.children, d + 1)
     })
   }
   walk(treeData.value, 1)
-  return { count, depth, depts: depts.size }
+  return { count, depth, depts: depts.size, anomaly }
 })
 
 const orgTreeOption = computed(() => ({
@@ -355,12 +455,13 @@ const orgTreeOption = computed(() => ({
         distance: 9,
         formatter: (p) => {
           const n = p.data.node || {}
-          const d = Math.min(p.data.depth || 0, LEVEL_COLOR.length - 1)
-          const meta = [n.title, n.dept].filter(Boolean).join(' · ')
+          // 色块按职务层级取，部门待核的一律用橙色 nAnomaly
+          const key = p.data.anomaly ? 'nAnomaly' : `n${n.rank || RANK.STAFF}`
+          const meta = [n.rankLabel || n.title, n.dept].filter(Boolean).join(' · ')
           const cnt = n.activeCaseCount || 0
-          // 三行定宽：姓名色块 / 职务·部门 / 在手件数
+          // 三行定宽：姓名色块 / 层级·部门 / 在手件数
           return [
-            `{n${d}|${n.name}}`,
+            `{${key}|${n.name}}`,
             meta ? `{meta|${meta}}` : '',
             cnt > 0 ? `{load|在手 ${cnt}}` : `{idle|在手 0}`
           ].filter(Boolean).join('\n')
@@ -571,10 +672,74 @@ onMounted(async () => {
   min-height: 0;
   overflow: auto;
 }
+/* 图例：把「颜色 = 层级 / 橙色 = 部门待核」直接写在界面上。
+   项目禁用悬浮提示（会挡住相邻按钮），所以说明必须常驻可见。 */
+.cf-org__legend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--cf-text-3);
+}
+.cf-org__legend-t {
+  font-weight: 600;
+  color: var(--cf-navy);
+}
+.cf-org__legend-i {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.cf-org__legend-i i {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  display: inline-block;
+}
+.cf-org__legend-sep {
+  width: 1px;
+  height: 10px;
+  background: var(--cf-border);
+}
 .cf-org__row {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+}
+.cf-org__dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  display: inline-block;
+}
+.cf-org__name {
+  font-weight: 600;
+  color: var(--cf-navy);
+  flex-shrink: 0;
+}
+.cf-org__row .cf-muted {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.cf-org__load {
+  flex-shrink: 0;
+  color: var(--cf-warn);
+  font-variant-numeric: tabular-nums;
+}
+.cf-org__flag {
+  flex-shrink: 0;
+  padding: 0 5px;
+  height: 17px;
+  line-height: 17px;
+  border-radius: 2px;
+  font-size: 11px;
+  color: #fff;
+  background: #d98a0b;
 }
 .cf-org__chart {
   display: flex;
@@ -600,6 +765,10 @@ onMounted(async () => {
 .cf-org__foot b {
   color: var(--cf-navy);
   font-variant-numeric: tabular-nums;
+}
+.cf-org__foot-warn,
+.cf-org__foot-warn b {
+  color: #d98a0b;
 }
 .cf-org__foot i {
   width: 1px;

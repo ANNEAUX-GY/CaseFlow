@@ -70,6 +70,17 @@ public class AuthController {
         return Result.ok(employeeService.registerCandidates(keyword, limit));
     }
 
+    /**
+     * 注册页「部门」下拉的选项：组织架构里已存在的部门。
+     *
+     * <p>与 {@code /register/employees} 同理放在 {@code /auth/**} 下（注册页还没账号）。
+     * 只回传部门名称与人数，不含任何员工个人信息。
+     */
+    @GetMapping("/register/depts")
+    public Result<List<Map<String, Object>>> registerDepts() {
+        return Result.ok(employeeService.deptList());
+    }
+
     @PostMapping("/logout")
     public Result<Void> logout(HttpServletRequest request,
                                @RequestHeader(value = LoginInterceptor.TOKEN_HEADER, required = false) String token) {

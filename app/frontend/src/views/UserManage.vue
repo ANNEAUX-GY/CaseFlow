@@ -231,7 +231,22 @@
                   <el-input v-model="dlg.newEmp.name" placeholder="真实姓名" maxlength="64" />
                 </el-form-item>
                 <el-form-item label="部门">
-                  <el-input v-model="dlg.newEmp.dept" placeholder="如：刑侦大队一中队" maxlength="128" />
+                  <el-select
+                    v-model="dlg.newEmp.dept"
+                    filterable
+                    allow-create
+                    clearable
+                    default-first-option
+                    placeholder="从已有部门中选择"
+                    style="width: 100%"
+                  >
+                    <el-option
+                      v-for="d in deptOptions"
+                      :key="d.name"
+                      :label="`${d.name}（${d.count}人）`"
+                      :value="d.name"
+                    />
+                  </el-select>
                 </el-form-item>
                 <el-form-item label="职务">
                   <el-select v-model="dlg.newEmp.title" clearable placeholder="选填" style="width: 100%">
@@ -253,8 +268,23 @@
           <el-input v-model="dlg.form.phone" />
         </el-form-item>
         <el-form-item label="部门">
-     <el-input v-model="dlg.form.dept" />
-    </el-form-item>
+          <el-select
+            v-model="dlg.form.dept"
+            filterable
+            allow-create
+            clearable
+            default-first-option
+            placeholder="从已有部门中选择"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="d in deptOptions"
+              :key="d.name"
+              :label="`${d.name}（${d.count}人）`"
+              :value="d.name"
+            />
+          </el-select>
+        </el-form-item>
   <!-- 办案组别（2026-10-04）：只对普通民警有意义，管理层/领导不参与一线分工。
        管理员在这里可帮申请人纠正填错的组别。 -->
         <el-form-item label="办案组别" v-if="dlg.form.role === 'STAFF'">
@@ -314,7 +344,7 @@
 <script setup>
 import { computed, reactive, ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { authApi, userApi } from '../api'
+import { authApi, userApi, employeeApi } from '../api'
 import { useUserStore } from '../store/user'
 import { usePendingStore } from '../store/pending'
 import { useDevice } from '../utils/device'
@@ -333,6 +363,15 @@ const rows = ref([])
 const loading = ref(false)
 const roles = ref({})
 const employeeOptions = ref([])
+/** 已有部门（部门下拉的选项）：从已有里选，避免同部门被填成好几种写法 */
+const deptOptions = ref([])
+const loadDepts = async () => {
+  try {
+    deptOptions.value = await employeeApi.depts()
+  } catch (e) {
+    deptOptions.value = []
+  }
+}
 
 const load = async () => {
   loading.value = true
@@ -343,6 +382,8 @@ const load = async () => {
     })
     // 走后端重新计数（而不是本地 -1）：并发审批、驳回、停用等场景下本地计数会算错
     await pendingStore.refresh()
+    // 审核通过时可能刚建了员工档案，部门清单会变，跟着刷一次
+    await loadDepts()
   } finally {
     loading.value = false
   }
@@ -354,6 +395,7 @@ onMounted(async () => {
   } catch (e) {
     roles.value = { STAFF: '普通民警' }
   }
+  await loadDepts()
   await load()
 })
 

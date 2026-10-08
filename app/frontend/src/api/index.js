@@ -53,6 +53,8 @@ export const authApi = {
   roles: () => http.get('/auth/roles'),
   // 注册页还没登录，认领员工档案只能走这个公开接口（只回传姓名/部门/链路，不含联系方式）
   registerEmployees: (params) => http.get('/auth/register/employees', { params }),
+  // 注册页「部门」下拉的选项：组织架构里已存在的部门
+  registerDepts: () => http.get('/auth/register/depts'),
   info: () => http.get('/auth/info'),
   logout: () => http.post('/auth/logout'),
   dict: () => http.get('/auth/dict')
@@ -147,6 +149,8 @@ export const logApi = {
 export const employeeApi = {
   tree: (params) => http.get('/employees/tree', { params }),
   search: (params) => http.get('/employees/search', { params }),
+  /** 已有部门清单（部门下拉的选项，带人数） */
+  depts: () => http.get('/employees/depts'),
   detail: (id) => http.get(`/employees/${id}`),
   create: (data) => http.post('/employees', data),
   update: (id, data) => http.put(`/employees/${id}`, data),

@@ -22,6 +22,7 @@ import javax.annotation.Resource;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 员工图谱。
@@ -45,6 +46,17 @@ public class EmployeeController {
     public Result<List<EmployeeVO>> search(@RequestParam(required = false) String keyword,
                                            @RequestParam(required = false) Integer limit) {
         return Result.ok(employeeService.search(keyword, limit == null ? 50 : limit));
+    }
+
+    /**
+     * 已有部门清单：新建 / 编辑员工时「部门」下拉的选项。
+     *
+     * <p>让部门变成<b>从已有里选</b>而不是自由输入——随手填的「一组」「一组啊」
+     * 会让同一个人在不同页面上显示成不同部门，统计口径也就跟着散了。
+     */
+    @GetMapping("/depts")
+    public Result<List<Map<String, Object>>> depts() {
+        return Result.ok(employeeService.deptList());
     }
 
     @GetMapping("/{id}")

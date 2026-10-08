@@ -41,7 +41,22 @@
           <el-input v-model="form.username" placeholder="可留空，默认用手机号登录" maxlength="64" />
         </el-form-item>
         <el-form-item label="所属部门">
-          <el-input v-model="form.dept" placeholder="如：刑侦大队一中队（选填）" maxlength="128" />
+          <el-select
+            v-model="form.dept"
+            filterable
+            allow-create
+            clearable
+            default-first-option
+            placeholder="从已有部门中选择（选填）"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="d in deptOptions"
+              :key="d.name"
+              :label="`${d.name}（${d.count}人）`"
+              :value="d.name"
+            />
+          </el-select>
         </el-form-item>
         <el-form-item label="申请角色">
           <el-select v-model="form.applyRole" style="width: 100%" placeholder="请选择">
@@ -150,7 +165,22 @@
           <el-input v-model="empDlg.form.employeeNo" placeholder="警号 / 工号（选填）" maxlength="64" />
         </el-form-item>
         <el-form-item label="部门">
-          <el-input v-model="empDlg.form.dept" placeholder="如：刑侦大队一中队" maxlength="128" />
+          <el-select
+            v-model="empDlg.form.dept"
+            filterable
+            allow-create
+            clearable
+            default-first-option
+            placeholder="从已有部门中选择"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="d in deptOptions"
+              :key="d.name"
+              :label="`${d.name}（${d.count}人）`"
+              :value="d.name"
+            />
+          </el-select>
         </el-form-item>
         <el-form-item label="职务">
           <el-select v-model="empDlg.form.title" clearable placeholder="选填" style="width: 100%">
@@ -248,6 +278,15 @@ const empDlg = reactive({
   form: { name: '', employeeNo: '', dept: '', title: '', parentId: null, phone: '' }
 })
 const parentOptions = ref([])
+/** 已有部门（部门下拉的选项）。注册页没有令牌，走公开接口 /auth/register/depts */
+const deptOptions = ref([])
+const loadDepts = async () => {
+  try {
+    deptOptions.value = await authApi.registerDepts()
+  } catch (e) {
+    deptOptions.value = []
+  }
+}
 
 const searchParent = async (kw) => {
   parentOptions.value = await authApi.registerEmployees({ keyword: kw || undefined, limit: 20 })
@@ -294,6 +333,8 @@ onMounted(async () => {
   } catch (e) {
     roles.value = { STAFF: '普通民警' }
   }
+  // 部门下拉的选项：先拉一次，省得用户手打部门名打错字
+  await loadDepts()
   // 预读一次组织架构：既能让用户直接看到自己，也能判断系统里到底有没有员工档案
   await searchEmployee('')
 })

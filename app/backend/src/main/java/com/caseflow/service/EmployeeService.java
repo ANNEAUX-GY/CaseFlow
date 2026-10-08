@@ -27,6 +27,7 @@ import java.net.URLEncoder;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -77,59 +78,81 @@ public class EmployeeService {
         return idMap(loadAll(null));
     }
 
-    /** id -> "王总 / 李副总 / 张组长" 链路文本 */
+    /** id -> "王总 / 李副总 / 张组长" 链路文本（走的是解析后的层级，与组织树一致） */
     public Map<Long, String> pathNameMap() {
         List<OrgEmployee> all = loadAll(null);
-        Map<Long, OrgEmployee> map = idMap(all);
         Map<Long, String> cache = new HashMap<>();
         Map<Long, String> result = new HashMap<>();
         for (OrgEmployee e : all) {
-            result.put(e.getId(), buildPathName(e.getId(), map, cache));
+            result.put(e.getId(), buildPathName(e.getId(), idMap(all), resolveParents(all, rankMap(all)), cache));
         }
         return result;
     }
 
-    private String buildPathName(Long id, Map<Long, OrgEmployee> map, Map<Long, String> cache) {
+    /**
+     * 沿解析后的上级链拼出 "王总 / 李副总 / 张组长"。
+     *
+     * <p>用解析后的 parentOf 而不是库里的 parent_id：两者可能不一致
+     * （上级选错层时树上会兜底），链路文本必须和画出来的树一样，
+     * 否则会出现「树上挂在张组长下、链路却显示到王总为止」这种对不上的情况。
+     */
+    private String buildPathName(Long id, Map<Long, OrgEmployee> map, Map<Long, Long> parentOf,
+                                Map<Long, String> cache) {
         if (cache.containsKey(id)) {
             return cache.get(id);
-        }
-        OrgEmployee self = map.get(id);
-        if (self == null) {
-            return "";
         }
         List<String> chain = new ArrayList<>();
         Long cursor = id;
         Set<Long> guard = new HashSet<>();
-        while (cursor != null && cursor > 0 && map.containsKey(cursor) && !guard.contains(cursor)) {
-            guard.add(cursor);
+        while (cursor != null && cursor > 0 && map.containsKey(cursor) && guard.add(cursor)) {
             OrgEmployee cur = map.get(cursor);
             chain.add(0, cur.getName());
-            cursor = cur.getParentId();
+            cursor = parentOf.get(cursor);
         }
         String path = String.join(" / ", chain);
         cache.put(id, path);
         return path;
     }
 
-    /** 组织树；keyword 非空时只保留命中节点及其祖先链 */
+    /**
+     * 组织树；keyword 非空时只保留命中节点及其祖先链。
+     *
+     * <p><b>2026-10-08 起层级由职务决定</b>（见 {@link com.caseflow.flow.OrgRank}）：
+     * 总 → 副总 → 组长 → 员工 四层，{@code parent_id} 只决定同层里挂到谁名下。
+     * 上级选错层（选成平级或跨级）不会报错，而是自动落到同层的合理上级，
+     * 保证组织树永远是这四层——否则一人填错，整棵树就歪了。
+     */
     public List<EmployeeVO> tree(String keyword, Integer status) {
         List<OrgEmployee> all = loadAll(status);
         Map<Long, OrgEmployee> map = idMap(all);
+        Map<Long, Integer> rankMap = rankMap(all);
+        // 先算真实上级，链路文本与挂树都用它，两处必须同源
+        Map<Long, Long> effectiveParent = resolveParents(all, rankMap);
         Map<Long, String> cache = new HashMap<>();
         Map<Long, EmployeeVO> voMap = new LinkedHashMap<>();
 
         Map<Long, Integer> activeCount = activeCaseCount();
+        // 部门人数：用来判断「独立部门」（整个部门只有他一个人）
+        Map<String, Integer> deptSize = deptSizeMap(all);
 
         for (OrgEmployee e : all) {
             EmployeeVO vo = toVO(e, activeCount);
-            vo.setPathName(buildPathName(e.getId(), map, cache));
+            vo.setRank(rankMap.get(e.getId()));
+            vo.setRankLabel(com.caseflow.flow.OrgRank.label(vo.getRank()));
+            vo.setPathName(buildPathName(e.getId(), map, effectiveParent, cache));
+            // 回传解析后的上级，前端「上级」下拉回显的是树上真实挂的那个，
+            // 否则管理员点开一个孤儿节点会看到「不选则为顶层」，与画面不符
+            Long ep = effectiveParent.get(e.getId());
+            vo.setParentId(ep == null ? 0L : ep);
             voMap.put(e.getId(), vo);
         }
+        markDeptAnomaly(voMap, deptSize);
+
         List<EmployeeVO> roots = new ArrayList<>();
         for (OrgEmployee e : all) {
             EmployeeVO vo = voMap.get(e.getId());
-            Long pid = e.getParentId() == null ? 0L : e.getParentId();
-            EmployeeVO parent = voMap.get(pid);
+            Long pid = vo.getParentId();
+            EmployeeVO parent = pid == null ? null : voMap.get(pid);
             if (parent != null && !pid.equals(e.getId())) {
                 parent.getChildren().add(vo);
             } else {
@@ -144,6 +167,129 @@ public class EmployeeService {
             roots = roots.stream().filter(this::keepBranch).collect(Collectors.toList());
         }
         return roots;
+    }
+
+    /**
+     * 按「总-副总-组长-员工」解析每个人真正的上级。
+     *
+     * <p>规则：先尊重库里已填的上级，但**必须恰好高一级**（{@link com.caseflow.flow.OrgRank#isParentOf}）；
+     * 不合法（平级、跨级、上级不存在）时，退回到「本部门同层的第一个人」，
+     * 本部门没人就退到全局同层的第一个人。返回 0 表示没有上级（就是根）。
+     *
+     * <p>为什么要「兜底」而不是直接报错拒绝保存：职务是必填的层级依据，
+     * 而上级可能因为调整还没来得及选。让一个人暂时挂错层级，
+     * 比让他**保存不了**、进而建不进档案要轻得多。
+     */
+    private Map<Long, Long> resolveParents(List<OrgEmployee> all, Map<Long, Integer> rankMap) {
+        Map<Long, OrgEmployee> map = idMap(all);
+        // 每一层按 id 升序排一遍，保证「同层第一个人」这个兜底是稳定的，不随查询顺序漂移
+        Map<Integer, List<OrgEmployee>> byRank = new java.util.TreeMap<>();
+        for (OrgEmployee e : all) {
+            byRank.computeIfAbsent(rankMap.get(e.getId()), k -> new ArrayList<>()).add(e);
+        }
+        for (List<OrgEmployee> layer : byRank.values()) {
+            layer.sort(Comparator.comparing(OrgEmployee::getId));
+        }
+
+        Map<Long, Long> result = new HashMap<>();
+        for (OrgEmployee e : all) {
+            int rank = rankMap.get(e.getId());
+            // 第 1 层没有上级
+            if (rank <= com.caseflow.flow.OrgRank.TOP) {
+                result.put(e.getId(), 0L);
+                continue;
+            }
+            Long pid = e.getParentId();
+            if (pid != null && pid > 0 && !pid.equals(e.getId()) && map.containsKey(pid)
+                    && com.caseflow.flow.OrgRank.isParentOf(rankMap.get(pid), rank)) {
+                result.put(e.getId(), pid);
+                continue;
+            }
+            result.put(e.getId(), fallbackParent(rank, e, byRank));
+        }
+        return result;
+    }
+
+    /** 找不到合法上级时的兜底：同部门同层优先，其次全局同层，都没有则没有上级 */
+    private Long fallbackParent(int rank, OrgEmployee self, Map<Integer, List<OrgEmployee>> byRank) {
+        List<OrgEmployee> layer = byRank.get(rank - 1);
+        if (layer == null || layer.isEmpty()) {
+            return 0L;
+        }
+        String dept = self.getDept() == null ? "" : self.getDept().trim();
+        if (!dept.isEmpty()) {
+            for (OrgEmployee c : layer) {
+                if (dept.equals(c.getDept() == null ? "" : c.getDept().trim())) {
+                    return c.getId();
+                }
+            }
+        }
+        return layer.get(0).getId();
+    }
+
+    /** id -> 组织层级（由职务推导） */
+    private Map<Long, Integer> rankMap(List<OrgEmployee> all) {
+        Map<Long, Integer> map = new HashMap<>();
+        for (OrgEmployee e : all) {
+            map.put(e.getId(), com.caseflow.flow.OrgRank.of(e.getTitle()));
+        }
+        return map;
+    }
+
+    /** 部门 -> 该部门在职人数（空部门不计） */
+    private Map<String, Integer> deptSizeMap(List<OrgEmployee> all) {
+        Map<String, Integer> map = new HashMap<>();
+        for (OrgEmployee e : all) {
+            String d = e.getDept() == null ? "" : e.getDept().trim();
+            if (!d.isEmpty()) {
+                map.merge(d, 1, Integer::sum);
+            }
+        }
+        return map;
+    }
+
+    /**
+     * 标出「部门待核」的人：没填部门，或整个部门只有他一个人。
+     * 组织树里用另一种颜色显示，提示管理员去补正。
+     */
+    private void markDeptAnomaly(Map<Long, EmployeeVO> voMap, Map<String, Integer> deptSize) {
+        for (EmployeeVO vo : voMap.values()) {
+            String d = vo.getDept() == null ? "" : vo.getDept().trim();
+            boolean missing = d.isEmpty();
+            Integer size = missing ? null : deptSize.get(d);
+            boolean alone = size != null && size <= 1;
+            vo.setDeptMissing(missing);
+            vo.setDeptAlone(alone);
+            vo.setDeptAnomaly(missing || alone);
+        }
+    }
+
+    /**
+     * 已有部门清单（新建/编辑员工时的部门下拉用）。
+     *
+     * <p>按人数降序、同人数按名称排——人一多就排在前面，
+     * 下拉里最常见的几个部门自然排在最上面。
+     */
+    public List<Map<String, Object>> deptList() {
+        Map<String, Integer> size = new LinkedHashMap<>();
+        for (OrgEmployee e : employeeMapper.selectList(null)) {
+            String d = Validators.trim(e.getDept());
+            if (d != null && !d.isEmpty()) {
+                size.merge(d, 1, Integer::sum);
+            }
+        }
+        List<Map<String, Object>> list = new ArrayList<>();
+        for (Map.Entry<String, Integer> en : size.entrySet()) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("name", en.getKey());
+            m.put("count", en.getValue());
+            list.add(m);
+        }
+        list.sort((a, b) -> {
+            int c = Integer.compare((Integer) b.get("count"), (Integer) a.get("count"));
+            return c != 0 ? c : String.valueOf(a.get("name")).compareTo(String.valueOf(b.get("name")));
+        });
+        return list;
     }
 
     private boolean markMatched(EmployeeVO node, String kw) {
@@ -291,6 +437,9 @@ public class EmployeeService {
         vo.setParentId(e.getParentId());
         vo.setDept(e.getDept());
    vo.setTitle(e.getTitle());
+        int rank = com.caseflow.flow.OrgRank.of(e.getTitle());
+        vo.setRank(rank);
+        vo.setRankLabel(com.caseflow.flow.OrgRank.label(rank));
     String pg = com.caseflow.flow.PoliceGroup.normalize(e.getPoliceGroup());
         vo.setPoliceGroup(pg);
     vo.setPoliceGroupName(com.caseflow.flow.PoliceGroup.label(pg));
@@ -513,21 +662,27 @@ public class EmployeeService {
     }
 
     /**
-     * 重算 level_no / id_path，保证任意节点都能一次查出整棵子树。
+     * 重算 level_no / id_path，并按职务层级<b>回写 parent_id</b>。
+     *
+     * <p>2026-10-08：层级不再是「谁连谁」的自由连线，而是总-副总-组长-员工四层。
+     * 这里把解析出来的真实上级写回库，所以下一次打开组织树、导出、检索
+     * 看到的都是同一套层级，不会出现「库里一层、界面上另一层」。
      */
     private void rebuildTree() {
         List<OrgEmployee> all = employeeMapper.selectList(null);
         Map<Long, OrgEmployee> map = idMap(all);
+        Map<Long, Integer> rankMap = rankMap(all);
+        Map<Long, Long> parentOf = resolveParents(all, rankMap);
         for (OrgEmployee e : all) {
             List<Long> chain = new ArrayList<>();
             Long cursor = e.getId();
             Set<Long> guard = new HashSet<>();
-            while (cursor != null && cursor > 0 && map.containsKey(cursor) && !guard.contains(cursor)) {
+            while (cursor != null && cursor > 0 && map.containsKey(cursor) && guard.add(cursor)) {
                 guard.add(cursor);
                 chain.add(0, cursor);
-                OrgEmployee cur = map.get(cursor);
-                cursor = cur.getParentId();
+                cursor = parentOf.get(cursor);
             }
+            e.setParentId(parentOf.getOrDefault(e.getId(), 0L));
             e.setLevelNo(chain.isEmpty() ? 1 : chain.size());
             StringBuilder sb = new StringBuilder("/");
             for (Long id : chain) {
