@@ -1,5 +1,5 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
-import { isFullAccessRole } from '../store/user'
+import { isFullAccessRole, isSystemAdminRole } from '../store/user'
 import { GATED_PATHS, useCaseTypeStore } from '../store/caseType'
 
 /**
@@ -44,15 +44,18 @@ const routes = [
       // 三级浏览的第 2 级：选完大类后选小类（2026-10-09）
       { path: 'case-boards', name: 'CaseBoards', component: () => import('../views/CaseBoards.vue'), meta: { title: '选择小类', fullAccessOnly: true } },
       { path: 'reminders', name: 'Reminders', component: () => import('../views/Reminder.vue'), meta: { title: '到期提醒' } },
-      { path: 'org', name: 'Org', component: () => import('../views/EmployeeTree.vue'), meta: { title: '员工图谱' } },
+      // 员工图谱：整页级限定「系统管理员」（systemManageOnly）。
+      // 2026-10-09：业务领导侧栏不再出现该项，守卫同步兜底——否则「藏菜单」只是障眼法。
+      { path: 'org', name: 'Org', component: () => import('../views/EmployeeTree.vue'), meta: { title: '员工图谱', fullAccessOnly: true, systemManageOnly: true } },
       // 案件盯办（初查/刑拘/取保监居 三子模块 + 看板）
       { path: 'watch', name: 'Watch', component: () => import('../views/WatchView.vue'), meta: { title: '案件盯办' } },
       // 案件待办总览：管理者查看各待办完成状态与对应佐证材料
       { path: 'todos', name: 'Todos', component: () => import('../views/TodoOverview.vue'), meta: { title: '待办总览', fullAccessOnly: true } },
-      // 账号管理只对全权限角色开放；普通民警即使手敲地址，后端接口也会返回 403
-      { path: 'users', name: 'Users', component: () => import('../views/UserManage.vue'), meta: { title: '账号管理', fullAccessOnly: true } },
-      // 案件类别（小类）字典维护，管理权限专属
-      { path: 'categories', name: 'Categories', component: () => import('../views/CategoryManage.vue'), meta: { title: '类别管理', fullAccessOnly: true } },
+      // 账号管理只对全权限角色开放；普通民警即使手敲地址，后端接口也会返回 403。
+      // systemManageOnly：再收一道——业务领导（所长/副所长/法制员）也不进（侧栏已不显示该项）。
+      { path: 'users', name: 'Users', component: () => import('../views/UserManage.vue'), meta: { title: '账号管理', fullAccessOnly: true, systemManageOnly: true } },
+      // 案件类别（小类）字典维护，管理权限专属；同「账号管理」，业务领导不进
+      { path: 'categories', name: 'Categories', component: () => import('../views/CategoryManage.vue'), meta: { title: '类别管理', fullAccessOnly: true, systemManageOnly: true } },
       // 案件类型选择器（统一入口门控）：受门控的 4 个栏目在未选类型前先进这里。
       // 不是 public 页——仍需登录，只是免除 fullAccessOnly 与类型门控。
       { path: 'case-type', name: 'CaseType', component: () => import('../views/CaseTypePicker.vue'), meta: { title: '选择案件类型' } }
@@ -81,6 +84,11 @@ router.beforeEach((to) => {
   }
   // 整页级权限：普通民警手敲 /users 也不让进（后端接口另有 403 兜底）
   if (to.meta.fullAccessOnly && !isFullAccessRole(role)) {
+    return { path: homePathOf(role) }
+  }
+  // 系统管理类栏目（员工图谱 / 类别管理 / 账号管理）：只有系统管理员能进。
+  // 业务领导（所长 / 副所长 / 法制员）同样被送回落地页——与侧栏 hideMenu 保持同一判据。
+  if (to.meta.systemManageOnly && !isSystemAdminRole(role)) {
     return { path: homePathOf(role) }
   }
 

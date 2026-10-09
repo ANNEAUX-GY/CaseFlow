@@ -242,8 +242,12 @@ import PageFooter from '../components/PageFooter.vue'
 import { useUserStore } from '../store/user'
 
 const userStore = useUserStore()
-/** 员工图谱的增删改与导入属于高级功能，只有所长/副所长/法制员可用 */
-const canManage = computed(() => userStore.isFullAccess)
+/**
+ * 员工图谱的增删改与导入属于系统运维，只有系统管理员可用
+ * （2026-10-09 起本页也是系统管理员专属，路由守卫 meta.systemManageOnly 兜底；
+ *  判据与侧栏共用 userStore.canSystemManage，不再跟业务写权限 isFullAccess 挂钩）
+ */
+const canManage = computed(() => userStore.canSystemManage)
 
 // 手机端：栅格单列、图表降高、组织树标签收窄
 

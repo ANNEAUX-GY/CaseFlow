@@ -83,7 +83,7 @@ const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
 
-// 待审核注册申请数：作为「账号管理」上的红点，所长/法制员一进系统就能看到有人等审核。
+// 待审核注册申请数：作为「账号管理」上的红点，系统管理员一进系统就能看到有人等审核。
 // 放在 store 里而不是局部 ref —— 审批动作发生在账号管理页，两处必须读同一份数据，
 // 否则审批通过后侧栏红点不会消失（Layout 整个会话只挂载一次，不会重新取数）。
 const pendingStore = usePendingStore()
@@ -93,7 +93,9 @@ const caseTypeStore = useCaseTypeStore()
 const myTodoStore = useMyTodoStore()
 
 const loadPending = () => {
-  if (!userStore.isFullAccess) return
+  // 红点是给「账号管理」栏目用的，而该栏目只有系统管理员有（2026-10-09 侧栏分档）
+  // —— 领导/民警不必发这个请求，省一次无用调用。
+  if (!userStore.canSystemManage) return
   pendingStore.refresh()
 }
 
