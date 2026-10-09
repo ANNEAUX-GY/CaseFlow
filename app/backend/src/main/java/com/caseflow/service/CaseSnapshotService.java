@@ -176,6 +176,11 @@ public class CaseSnapshotService {
                 .set(CaseInfo::getDescription, i.getDescription())
                 .set(CaseInfo::getPriority, i.getPriority())
                 .set(CaseInfo::getDeadline, i.getDeadline())
+                // 期限节点 / 提前提醒 / 重点关注（2026-10-09）：
+                // 老快照里没有这三列，focus 必须兜成 0（该列 NOT NULL，写 null 会插不进去）
+                .set(CaseInfo::getDeadlineLabel, i.getDeadlineLabel())
+                .set(CaseInfo::getRemindDays, i.getRemindDays())
+                .set(CaseInfo::getFocus, i.getFocus() == null ? 0 : i.getFocus())
                 .set(CaseInfo::getStatus, i.getStatus())
                 .set(CaseInfo::getRemark, i.getRemark())
                 .set(CaseInfo::getCreatedBy, i.getCreatedBy())
@@ -317,11 +322,17 @@ public class CaseSnapshotService {
         compare(out, "name", "案件名称", bi.getName(), ai.getName());
         compare(out, "caseType", "案卷类型", dict("CASE_TYPE", bi.getCaseType()), dict("CASE_TYPE", ai.getCaseType()));
         compare(out, "category", "案件类别", bi.getCategory(), ai.getCategory());
-        compare(out, "filingNo", "立案登记表", bi.getFilingNo(), ai.getFilingNo());
+        compare(out, "filingNo", "案件编号", bi.getFilingNo(), ai.getFilingNo());
         compare(out, "mediationNo", "调解书", bi.getMediationNo(), ai.getMediationNo());
         compare(out, "description", "备注说明", bi.getDescription(), ai.getDescription());
         compare(out, "priority", "优先级", dict("PRIORITY", bi.getPriority()), dict("PRIORITY", ai.getPriority()));
         compare(out, "deadline", "截止期限", fmt(bi.getDeadline()), fmt(ai.getDeadline()));
+        // 期限节点名称 / 提前提醒 / 重点关注（2026-10-09）
+        compare(out, "deadlineLabel", "期限节点", bi.getDeadlineLabel(), ai.getDeadlineLabel());
+        compare(out, "remindDays", "提前提醒",
+                remindText(bi.getRemindDays()), remindText(ai.getRemindDays()));
+        compare(out, "focus", "重点关注",
+                focusText(bi.getFocus()), focusText(ai.getFocus()));
         compare(out, "status", "状态", dict("STATUS", bi.getStatus()), dict("STATUS", ai.getStatus()));
         compare(out, "caseMeasure", "强制措施", dict("CASE_MEASURE", bi.getCaseMeasure()), dict("CASE_MEASURE", ai.getCaseMeasure()));
         compare(out, "investigationStatus", "侦查进度", dict("INVESTIGATION_STATUS", bi.getInvestigationStatus()), dict("INVESTIGATION_STATUS", ai.getInvestigationStatus()));
@@ -344,8 +355,10 @@ public class CaseSnapshotService {
         add(out, "caseNo", "案件编号", null, i.getCaseNo(), "ADD");
         add(out, "caseType", "案卷类型", null, dict("CASE_TYPE", i.getCaseType()), "ADD");
         add(out, "category", "案件类别", null, i.getCategory(), "ADD");
-        add(out, "filingNo", "立案登记表", null, i.getFilingNo(), "ADD");
+        add(out, "filingNo", "案件编号", null, i.getFilingNo(), "ADD");
         add(out, "mediationNo", "调解书", null, i.getMediationNo(), "ADD");
+        add(out, "deadlineLabel", "期限节点", null, i.getDeadlineLabel(), "ADD");
+        add(out, "remindDays", "提前提醒", null, remindText(i.getRemindDays()), "ADD");
         add(out, "priority", "优先级", null, dict("PRIORITY", i.getPriority()), "ADD");
         add(out, "deadline", "截止期限", null, fmt(i.getDeadline()), "ADD");
         add(out, "status", "状态", null, dict("STATUS", i.getStatus()), "ADD");
@@ -428,6 +441,16 @@ public class CaseSnapshotService {
 
     private String fmt(LocalDateTime t) {
         return t == null ? null : t.format(FMT);
+    }
+
+    /** 提前提醒天数的展示：不提醒不要显示成空白，写清楚「不提醒」 */
+    private String remindText(Integer days) {
+        return days == null || days <= 0 ? "不提醒" : "提前 " + days + " 天";
+    }
+
+    /** 重点关注的展示：老快照没有该字段时按「否」 */
+    private String focusText(Integer focus) {
+        return focus != null && focus == 1 ? "是" : "否";
     }
 
     // ------------------------------------------------------------------

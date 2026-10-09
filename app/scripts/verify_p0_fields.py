@@ -2,7 +2,9 @@
 P0 改进自检：案件字段模型 / 分类体系 / 嫌疑人录入
 
 覆盖点：
-  1. 案件字段模型：案卷类型、案件类别、立案登记表编号、调解书编号能存能回显；
+  1. 案件字段模型：案卷类型、案件类别、案件编号能存能回显；
+     期限三件套（节点名称 / 按天日期 / 提前提醒）与强制措施（2026-10-09）一并验证；
+     调解书字段已下线（表单不再填写），不再断言；
   2. 分类体系：按案卷类型（大类）、案件类别（小类）筛选生效；
   3. 嫌疑人：录入、计数、按「是否有嫌疑人」筛选、删除；
   4. 撤回兼容：嫌疑人增删可撤回，删除案件后撤回能把嫌疑人一起还原。
@@ -57,10 +59,14 @@ def main():
         "caseType": "ADMINISTRATIVE",
         "category": "殴打他人",
         "filingNo": "受案字〔2026〕0001号",
-        "mediationNo": "调解字〔2026〕0001号",
         "priority": "HIGH",
         "description": "P0 自检案件",
-        "deadline": None
+        # 期限三件套（2026-10-09）：节点自己命名 + 精确到天 + 提前提醒天数
+        "deadline": "2026-12-31 23:59:59",
+        "deadlineLabel": "受案时间",
+        "remindDays": 7,
+        # 强制措施：与盯办共用 case_measure
+        "caseMeasure": "SUMMONS"
     }
     r = s.post(f"{API}/cases", json=payload).json()
     check("新建案件（带新字段）", r.get("code") == 0, r.get("msg"))
@@ -69,8 +75,14 @@ def main():
     check("案卷类型回显", case.get("caseType") == "ADMINISTRATIVE", case.get("caseType"))
     check("案卷类型中文名", case.get("caseTypeName") == "行政", case.get("caseTypeName"))
     check("案件类别回显", case.get("category") == "殴打他人", case.get("category"))
-    check("立案登记表编号", case.get("filingNo") == "受案字〔2026〕0001号", case.get("filingNo"))
-    check("调解书编号", case.get("mediationNo") == "调解字〔2026〕0001号", case.get("mediationNo"))
+    check("案件编号", case.get("filingNo") == "受案字〔2026〕0001号", case.get("filingNo"))
+    # 期限只显示到天，节点名称与提前提醒天数据实回显
+    check("期限只到日期（不带时分）", case.get("deadlineText") == "2026-12-31", case.get("deadlineText"))
+    check("期限节点名称", case.get("deadlineLabel") == "受案时间", case.get("deadlineLabel"))
+    check("提前提醒天数", case.get("remindDays") == 7, case.get("remindDays"))
+    check("强制措施", case.get("caseMeasure") == "SUMMONS", case.get("caseMeasure"))
+    check("强制措施中文名", case.get("caseMeasureName") == "拘传", case.get("caseMeasureName"))
+    check("重点关注默认否", case.get("focus") == 0, case.get("focus"))
     check("嫌疑人初始为 0", case.get("suspectCount") == 0, case.get("suspectCount"))
 
     print("\n== 2. 嫌疑人录入 ==")

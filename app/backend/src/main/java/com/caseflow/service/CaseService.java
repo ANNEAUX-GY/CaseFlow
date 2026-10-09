@@ -53,6 +53,40 @@ public class CaseService {
 
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
     private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("yyyyMMdd");
+    /** 期限按天展示用的格式（只到日期，不带时分） */
+    private static final DateTimeFormatter DAY_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+    /**
+     * 是否已进入「提前提醒期」。
+     *
+     * <p>口径：设了提前天数、且距期限不足该天数（含已逾期）即算提醒中；
+     * 没设提前天数（NULL / 0）或没设期限，一律不算——
+     * 用户没要求提醒就别打扰他。
+     */
+    private boolean isReminding(CaseInfo c, LocalDateTime now) {
+        if (c.getDeadline() == null || c.getRemindDays() == null || c.getRemindDays() <= 0) {
+            return false;
+        }
+        Integer left = DictHolder.daysLeft(c.getDeadline(), now);
+        return left != null && left <= c.getRemindDays();
+    }
+
+    /**
+     * 期限归一到「当天 23:59:59」。
+     *
+     * <p>为什么必须归一：期限现在按天选，若原样存 00:00:00，
+     * 一进当天 00:00 就小于此刻，当天整天都会被判成「已逾期」。
+     * 只动「时间正好是 00:00:00」的值——历史数据里的 18:00:00 原样保留。
+     */
+    private LocalDateTime normalizeDeadline(LocalDateTime deadline) {
+        if (deadline == null) {
+            return null;
+        }
+        if (deadline.getHour() == 0 && deadline.getMinute() == 0 && deadline.getSecond() == 0) {
+            return deadline.toLocalDate().atTime(23, 59, 59);
+        }
+        return deadline;
+    }
 
     /**
      * 只有管理层能做的状态流转：办结 DONE、撤销 CANCELLED。
@@ -183,6 +217,12 @@ public class CaseService {
         if (StringUtils.hasText(query.getSourceType())) {
             q.eq(CaseInfo::getSourceType, query.getSourceType());
         }
+        // 「只看重点」：列表页的星标筛选。
+        // focus 列带 NOT NULL DEFAULT 0，但存量行可能是 NULL，所以按「等于 1」筛，
+        // 不写成 <> 0 / isNull，免得把历史数据算进重点里。
+        if (Boolean.TRUE.equals(query.getFocusOnly())) {
+            q.eq(CaseInfo::getFocus, 1);
+        }
         if (StringUtils.hasText(query.getCategory())) {
             if ("NONE".equalsIgnoreCase(query.getCategory().trim())) {
                 // 「按类别浏览」板块页的「未分类」入口：类别为空（NULL 或空串）的案件。
@@ -215,16 +255,21 @@ public class CaseService {
         // ---- 案件盯办：子模块视图 / 侦查进度 / 嫌疑人检索 ----
         if (StringUtils.hasText(query.getModule())) {
             String m = query.getModule().trim();
-            if ("INITIAL".equals(m)) {
-                // 初查案件：未采取强制措施 + 在办（未办结/未撤销）
-                q.and(w -> w.isNull(CaseInfo::getCaseMeasure).or().eq(CaseInfo::getCaseMeasure, "NONE"))
-                        .notIn(CaseInfo::getStatus, new ArrayList<>(java.util.Arrays.asList("DONE", "CANCELLED")));
-            } else if ("DETENTION".equals(m)) {
-                q.eq(CaseInfo::getCaseMeasure, "DETENTION")
-                        .notIn(CaseInfo::getStatus, new ArrayList<>(java.util.Arrays.asList("DONE", "CANCELLED")));
-            } else if ("BAIL_RESIDENCE".equals(m)) {
-                q.in(CaseInfo::getCaseMeasure, new ArrayList<>(java.util.Arrays.asList("BAIL", "RESIDENCE")))
-                        .notIn(CaseInfo::getStatus, new ArrayList<>(java.util.Arrays.asList("DONE", "CANCELLED")));
+            // 措施 → 子模块的映射统一走 PoliceGroup.measuresOfModule：
+            // 2026-10-09 加了「拘传 / 逮捕」后，如果这里还写死 DETENTION、BAIL/RESIDENCE，
+            // 新措施会一个模块都落不进去（列表里凭空消失）。
+            List<String> measures = com.caseflow.flow.PoliceGroup.measuresOfModule(m);
+            if (!measures.isEmpty()) {
+                if ("INITIAL".equals(m)) {
+                    // 初查：无措施（含存量 NULL）+ 拘传这类"不改变在押状态"的措施 + 在办
+                    q.and(w -> w.isNull(CaseInfo::getCaseMeasure)
+                            .or().eq(CaseInfo::getCaseMeasure, "NONE")
+                            .or().in(CaseInfo::getCaseMeasure, measures))
+                            .notIn(CaseInfo::getStatus, new ArrayList<>(java.util.Arrays.asList("DONE", "CANCELLED")));
+                } else {
+                    q.in(CaseInfo::getCaseMeasure, measures)
+                            .notIn(CaseInfo::getStatus, new ArrayList<>(java.util.Arrays.asList("DONE", "CANCELLED")));
+                }
             }
         }
         if (StringUtils.hasText(query.getInvestigationStatus())) {
@@ -289,6 +334,10 @@ public class CaseService {
                     break;
             }
         }
+        // 只看重点关注（2026-10-09）：列表上的星标要能反过来把标过的案件筛出来
+        if (Boolean.TRUE.equals(query.getFocusOnly())) {
+            q.eq(CaseInfo::getFocus, 1);
+        }
 
         String field = query.getSortField() == null ? "created_at" : query.getSortField();
         boolean asc = "asc".equalsIgnoreCase(query.getSortOrder());
@@ -328,10 +377,16 @@ public class CaseService {
         vo.setPriority(c.getPriority());
         vo.setPriorityName(DictHolder.name("PRIORITY", c.getPriority()));
         vo.setDeadline(c.getDeadline());
-        vo.setDeadlineText(c.getDeadline() == null ? null : c.getDeadline().format(FMT));
+        // 期限只按天展示（2026-10-09）：时间统一归一到当天 23:59:59，再显示时分没有意义
+        vo.setDeadlineText(c.getDeadline() == null ? null : c.getDeadline().format(DAY_FMT));
         LocalDateTime now = LocalDateTime.now();
         vo.setDaysLeft(DictHolder.daysLeft(c.getDeadline(), now));
         vo.setDueLevel(DictHolder.dueLevel(c.getDeadline(), now));
+        // ---- 期限节点名称 / 提前提醒 / 重点关注（2026-10-09）----
+        vo.setDeadlineLabel(c.getDeadlineLabel());
+        vo.setRemindDays(c.getRemindDays());
+        vo.setFocus(c.getFocus() == null ? 0 : c.getFocus());
+        vo.setReminding(isReminding(c, now));
         vo.setStatus(c.getStatus());
         vo.setStatusName(DictHolder.name("STATUS", c.getStatus()));
         // ---- 盯办字段：强制措施 / 侦查进度 / 措施期限倒计时 ----
@@ -364,7 +419,13 @@ public class CaseService {
         if (full) {
             vo.setAssignHistory(all);
             vo.setFiles(fileService.filesOf(c.getId()));
-            vo.setSuspects(suspectService.listOf(c.getId()));
+            // 详情模式的嫌疑人由 suspectService 单独取（完整字段），
+            // 计数必须跟着这份列表走——上面那句是列表模式的批量查询结果，
+            // 在详情模式下 suspectMap 为 null，若不同步这里，
+            // 详情会显示「嫌疑人 0 人」却列出两条姓名，自相矛盾。
+            List<SuspectVO> fullSuspects = suspectService.listOf(c.getId());
+            vo.setSuspects(fullSuspects);
+            vo.setSuspectCount(fullSuspects == null ? 0 : fullSuspects.size());
         }
         return vo;
     }
@@ -488,10 +549,21 @@ public class CaseService {
         c.setCaseType(req.getCaseType());
         c.setCategory(req.getCategory());
         c.setFilingNo(req.getFilingNo());
-        c.setMediationNo(req.getMediationNo());
+        // 调解书（mediationNo）2026-10-09 起不再由建案表单填写：这里**干脆不写**，
+        // 免得表单一去掉该字段、保存时就把历史值抹成 null。列保留只为看得见老数据。
         c.setDescription(req.getDescription());
         c.setPriority(StringUtils.hasText(req.getPriority()) ? req.getPriority() : "NORMAL");
-        c.setDeadline(req.getDeadline());
+        c.setDeadline(normalizeDeadline(req.getDeadline()));
+        // 期限节点名称与提前提醒天数：由办案人自己填（受案时间、变更羁押期限时间…）
+        c.setDeadlineLabel(StringUtils.hasText(req.getDeadlineLabel()) ? req.getDeadlineLabel().trim() : null);
+        c.setRemindDays(req.getRemindDays() != null && req.getRemindDays() > 0 ? req.getRemindDays() : null);
+        // 强制措施：建案表单的「是否采取强制措施」。
+        // 只在前端明确传值时才写（否 = NONE → 存 null），留空表示不动——
+        // 否则编辑案件会把盯办模块登记好的措施（含期限）抹掉。
+        if (StringUtils.hasText(req.getCaseMeasure())) {
+            c.setCaseMeasure("NONE".equalsIgnoreCase(req.getCaseMeasure().trim())
+                    ? null : req.getCaseMeasure().trim().toUpperCase());
+        }
         // 状态：显式传入才生效，且只接受「待指派 / 已指派」两个起点状态。
         // 编辑时不传则沿用原状态——前端编辑表单不提交 status，若这里回落到
         // PENDING_ASSIGN，会把在办案件打回「待指派」，与仍在的承办人相矛盾。
@@ -538,6 +610,17 @@ public class CaseService {
         if (fileId != null) {
             fileService.bindToCase(fileId, c.getId());
         }
+        // 表单改回「否」（NONE）时，措施相关的三个字段要显式清空：
+        // updateById 会跳过 null 字段，不这么做库里会留着旧措施日期与届满日，
+        // 界面上却显示"无措施"，前后自相矛盾。
+        if (!isNew && existing != null && StringUtils.hasText(req.getCaseMeasure())
+                && "NONE".equalsIgnoreCase(req.getCaseMeasure().trim())) {
+            caseMapper.update(null, new LambdaUpdateWrapper<CaseInfo>()
+                    .eq(CaseInfo::getId, c.getId())
+                    .set(CaseInfo::getCaseMeasure, null)
+                    .set(CaseInfo::getMeasureDate, null)
+                    .set(CaseInfo::getDetainDeadline, null));
+        }
 
         // 创建时直接指派
         if (req.getOwnerId() != null || (req.getMemberIds() != null && !req.getMemberIds().isEmpty())) {
@@ -553,6 +636,42 @@ public class CaseService {
         logService.log("CASE", isNew ? "CREATE" : "UPDATE", "CASE", c.getId(),
                 (isNew ? "创建案件：" : "更新案件：") + c.getName(), beforeSnapshot, after);
         return detail(c.getId());
+    }
+
+    // ------------------------------------------------------------------
+    // 一键重点关注（2026-10-09）
+    // ------------------------------------------------------------------
+
+    /**
+     * 标注 / 取消「重点关注」：列表里一键切换，不必点开案件详情。
+     *
+     * <p><b>为什么不做成可撤回</b>：它是标记类操作，再点一下星就能改回来；
+     * 若写进 {@link com.caseflow.service.OperationLogService} 的 UNDOABLE 白名单，
+     * 反而会占住「案件最新一步」，把真正需要撤的指派 / 期限改动挡在外面
+     * （见 blockReason「该案件之后又有新操作」）。日志照写，只是不可撤。
+     *
+     * @param focus 1=重点关注，0=取消
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public CaseVO focus(Long id, Integer focus) {
+        CaseInfo c = caseMapper.selectById(id);
+        if (c == null) {
+            throw new BizException("案件不存在");
+        }
+        int next = focus == null || focus == 0 ? 0 : 1;
+        int prev = c.getFocus() == null ? 0 : c.getFocus();
+        if (prev == next) {
+            return detail(id);
+        }
+        String before = snapshotService.capture(id);
+        caseMapper.update(null, new LambdaUpdateWrapper<CaseInfo>()
+                .eq(CaseInfo::getId, id)
+                .set(CaseInfo::getFocus, next)
+                .set(CaseInfo::getUpdatedAt, LocalDateTime.now()));
+        logService.log("CASE", "FOCUS", "CASE", id,
+                next == 1 ? "标注为重点关注：" + c.getName() : "取消重点关注：" + c.getName(),
+                before, snapshotService.capture(id));
+        return detail(id);
     }
 
     private String generateCaseNo() {

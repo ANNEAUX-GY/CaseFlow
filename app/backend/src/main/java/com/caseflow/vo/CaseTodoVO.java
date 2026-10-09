@@ -21,6 +21,11 @@ public class CaseTodoVO implements Serializable {
     /** 冗余案件编号 / 名称：待办总览页要跨案件列出，省得前端再逐条查 */
     private String caseNo;
     private String caseName;
+    /**
+     * 所属案件是否被标为「重点关注」（2026-10-09）。
+     * 待办总览按待办列行，但星标打的是背后的案件——不带这个字段前端就得逐行再查案件。
+     */
+    private Integer caseFocus;
     private String content;
     /** PENDING / DONE */
     private String status;

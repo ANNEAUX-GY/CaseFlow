@@ -233,6 +233,8 @@ public class TodoService {
             if (c != null) {
                 vo.setCaseNo(c.getCaseNo());
                 vo.setCaseName(c.getName());
+                // 待办总览的「一键重点关注」打在案件上：把案件的星标带出来，前端不必逐行再查
+                vo.setCaseFocus(c.getFocus() == null ? 0 : c.getFocus());
             }
             vos.add(vo);
         }

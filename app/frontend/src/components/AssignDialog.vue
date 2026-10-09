@@ -8,24 +8,22 @@
     class="cf-dialog"
   >
     <el-form label-width="80px">
+      <!-- 期限按天（2026-10-09）：与建案表单同一口径。
+            原来的 +1/+3/+7 快捷键去掉——随手一点填出来的日期多半不准，
+            而且"提前多久提醒"已经是案件自己的字段了，快捷键没有存在必要。 -->
       <el-form-item label="截止期限">
         <el-date-picker
-          v-model="deadline"
-          type="datetime"
-          value-format="YYYY-MM-DD HH:mm:ss"
-          placeholder="设置办理期限（不改则留空保持原值）"
+          v-model="deadlineDay"
+          type="date"
+          value-format="YYYY-MM-DD"
+          placeholder="选择日期（不改则留空保持原值）"
           style="width: 240px"
         />
-        <el-button-group style="margin-left: '8px'">
-          <el-button size="small" @click="quickDeadline(1)">+1天</el-button>
-          <el-button size="small" @click="quickDeadline(3)">+3天</el-button>
-          <el-button size="small" @click="quickDeadline(7)">+7天</el-button>
-          <el-button size="small" @click="deadline = null">清除</el-button>
-        </el-button-group>
-        <span class="cf-muted" style="margin-left: '8px'" v-if="originDeadline">
-          原期限 {{ originDeadline }}
+        <el-button size="small" style="margin-left: 8px" @click="deadlineDay = ''">清除</el-button>
+        <span class="cf-muted" style="margin-left: 8px" v-if="originDeadline">
+          原期限 {{ String(originDeadline).slice(0, 10) }}
         </span>
-        <span class="cf-muted" style="margin-left: '8px'" v-else>当前未设期限</span>
+        <span class="cf-muted" style="margin-left: 8px" v-else>当前未设期限</span>
       </el-form-item>
       <el-form-item label="指派要求">
         <el-input v-model="note" type="textarea" :rows="2" placeholder="办理要求 / 注意事项（选填）" />
@@ -97,18 +95,12 @@ const visible = ref(false)
 const note = ref('')
 const ownerId = ref(null)
 const memberIds = ref([])
-const deadline = ref(null)
+/** 期限按天选择（提交时补 23:59:59）；原值单独存一份用来判断"有没有改过" */
+const deadlineDay = ref('')
 const originDeadline = ref(null)
 // 待办清单：打开时从后端载入既有项，管理员可在这里增删改与排序
 const todos = ref([])
 const loading = ref(false)
-
-const pad = (n) => String(n).padStart(2, '0')
-const quickDeadline = (days) => {
-  const d = new Date()
-  d.setDate(d.getDate() + days)
-  deadline.value = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} 18:00:00`
-}
 
 watch(() => props.modelValue, async (v) => {
   visible.value = v
@@ -116,7 +108,8 @@ watch(() => props.modelValue, async (v) => {
     note.value = ''
     ownerId.value = props.currentOwnerId
     memberIds.value = [...props.currentMemberIds]
-    deadline.value = props.currentDeadline || null
+    // 后端带时分，日期选择器只认日期部分（期限按天记录）
+    deadlineDay.value = (props.currentDeadline || '').slice(0, 10)
     originDeadline.value = props.currentDeadline || null
     todos.value = []
     // 载入既有待办，管理员在指派时可直接调整
@@ -159,15 +152,19 @@ const submit = async () => {
       // 整份清单提交，后端做覆盖式同步（已完成/有佐证的项会保留）
       todos: todos.value.map((t) => (t || '').trim())
     }
-    // 只有改过期限才提交，避免误清空
-    if (deadline.value !== originDeadline.value) {
-      payload.deadline = deadline.value
+    // 只有改过期限才提交，避免误清空。
+    // 比较的是「日期部分」：库里带时分，而选择框只给到天，
+    // 不切片的话每次打开都会被当成"改过了"，白白把期限重写成 23:59:59。
+    const next = deadlineDay.value ? `${deadlineDay.value} 23:59:59` : null
+    const originDay = (originDeadline.value || '').slice(0, 10)
+    if (deadlineDay.value !== originDay) {
+      payload.deadline = next
       payload.deadlineTouched = true
     }
     await caseApi.assign(props.caseId, payload)
     ElMessage.success(
       payload.deadlineTouched
-        ? `指派成功，期限${deadline.value ? '设为 ' + deadline.value : '已清除'}`
+        ? `指派成功，期限${next ? '设为 ' + deadlineDay.value : '已清除'}`
         : '指派成功'
     )
     visible.value = false

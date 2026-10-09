@@ -361,6 +361,8 @@ public class OperationLogService {
             case "CASE.PLAN_CANCEL": return "取消侦查计划";
             case "CASE.INVESTIGATION": return "侦查进度流转";
             case "CASE.MEASURE":     return "强制措施登记";
+            // 一键重点关注（2026-10-09）：写日志但不可撤回，漏映射会让界面直接显示英文 FOCUS
+            case "CASE.FOCUS":       return "重点关注";
             // 批注 / 领导意见：旁注类操作，不进快照，故不在 UNDOABLE 白名单（不可撤回）
             case "CASE.COMMENT_ADD":       return "进度批注";
             case "CASE.COMMENT_UPDATE":    return "编辑批注";

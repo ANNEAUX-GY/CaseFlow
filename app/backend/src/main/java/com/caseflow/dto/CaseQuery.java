@@ -42,6 +42,9 @@ public class CaseQuery {
     /** 到期桶：OVERDUE / TODAY / D3 / D7 / NONE */
     private String dueBucket;
 
+    /** 只看「重点关注」的案件（2026-10-09）：TRUE 时只查 focus=1 */
+    private Boolean focusOnly = false;
+
     private String sortField = "created_at";
     private String sortOrder = "desc";
 }

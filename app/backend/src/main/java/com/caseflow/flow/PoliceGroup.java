@@ -83,25 +83,68 @@ public final class PoliceGroup {
     }
 
     /**
+     * 全部强制措施取值（2026-10-09 补齐刑事强制措施的法定五种：
+     * 拘传 / 取保候审 / 监视居住 / 拘留 / 逮捕，外加「无」）。
+     *
+     * <p>维护约定：新增措施先在这里登记，{@link #moduleOfMeasure} 与
+     * {@link #measuresOfModule} 会自动带上它——列表过滤、看板分桶、承办负荷
+     * 都读这两个方法，不会出现「新措施哪张卡片都不算」的漏案。
+     */
+    public static final List<String> MEASURES = Arrays.asList(
+            "NONE", "SUMMONS", "DETENTION", "ARREST", "BAIL", "RESIDENCE");
+
+    /**
      * 强制措施 → 盯办子模块。
      *
      * <p>组别校验（{@link #requiredOf}）、案件列表的子模块过滤、承办负荷统计
      * 都依赖同一套「措施 → 模块」映射，收在这里避免各处各写一份后口径漂移。
      *
-     * @param measure 强制措施：NONE/空=初查，DETENTION=刑拘在办，BAIL/RESIDENCE=取保监居
+     * <p>归类口径（2026-10-09）：
+     * <ul>
+     *   <li>NONE / 空 / 拘传 → <b>初查</b>（拘传只是到案手段，不改变"是否在押"）；</li>
+     *   <li>拘留 / 逮捕 → <b>刑拘在办</b>（羁押类，两者阶段任务完全相同）；</li>
+     *   <li>取保候审 / 监视居住 → <b>取保及监居</b>。</li>
+     * </ul>
      */
     public static String moduleOfMeasure(String measure) {
         if (measure == null || measure.trim().isEmpty() || "NONE".equalsIgnoreCase(measure.trim())) {
             return "INITIAL";
         }
         String m = measure.trim().toUpperCase();
-        if ("DETENTION".equals(m)) {
+        if ("DETENTION".equals(m) || "ARREST".equals(m)) {
             return "DETENTION";
         }
         if ("BAIL".equals(m) || "RESIDENCE".equals(m)) {
             return "BAIL_RESIDENCE";
         }
+        // 拘传 SUMMONS、以及将来新增但未登记的措施：一律按「仍在初查/在办」处理，
+        // 兜底而不是返回 null —— 返回 null 会让这类案件在三张看板卡片里都数不到（漏案）。
         return "INITIAL";
+    }
+
+    /**
+     * 子模块 → 该模块的强制措施取值（{@link #moduleOfMeasure} 的逆查）。
+     *
+     * <p>列表过滤与看板分桶用它拼 {@code IN (...)}，
+     * 与 {@link #moduleOfMeasure} 同源，新增措施不用再改这两处。
+     *
+     * @param module INITIAL / DETENTION / BAIL_RESIDENCE
+     * @return 非空措施取值的列表（<b>不含 NONE</b>——空值由调用方另行拼 {@code IS NULL}）
+     */
+    public static List<String> measuresOfModule(String module) {
+        List<String> out = new java.util.ArrayList<>();
+        if (module == null) {
+            return out;
+        }
+        for (String m : MEASURES) {
+            if ("NONE".equals(m)) {
+                continue;
+            }
+            if (module.equals(moduleOfMeasure(m))) {
+                out.add(m);
+            }
+        }
+        return out;
     }
 
     /**

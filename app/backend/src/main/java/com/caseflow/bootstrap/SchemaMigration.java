@@ -131,7 +131,16 @@ public class SchemaMigration implements ApplicationRunner {
             {"case_todo_feedback", "upload_file", "VARCHAR(255) NULL"},
             {"case_todo_feedback", "edited_by", "BIGINT NULL"},
             {"case_todo_feedback", "edited_by_name", "VARCHAR(64) NULL"},
-            {"case_todo_feedback", "edited_at", "DATETIME NULL"}
+            {"case_todo_feedback", "edited_at", "DATETIME NULL"},
+            // 期限节点自重定义 + 一键重点关注（2026-10-09）：
+            //   deadline_label：截止期限叫什么由办案人自己填（受案时间、变更羁押期限时间…），
+            //                   不再固定叫「截止期限」；
+            //   remind_days：   该节点提前多少天提醒（NULL=不提醒）；
+            //   focus：         重点关注标记。NOT NULL DEFAULT 0 —— 存量行一律补 0，
+            //                   读取时前端按 0 处理，不额外判空。
+            {"case_info", "deadline_label", "VARCHAR(64) NULL"},
+            {"case_info", "remind_days", "INT NULL"},
+            {"case_info", "focus", "TINYINT NOT NULL DEFAULT 0"}
     };
 
     /** 旧数据回填：把历史「案件类型」自由文本里的大类词归位到 case_type（小类位清空）。

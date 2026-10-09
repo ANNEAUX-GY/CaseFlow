@@ -30,7 +30,12 @@ import java.util.List;
 @Service
 public class ApprovalService {
 
-    private static final List<String> MEASURES = Arrays.asList("NONE", "DETENTION", "BAIL", "RESIDENCE");
+    /**
+     * 可登记的强制措施：与建案表单共用 DictHolder.CASE_MEASURE 的取值。
+     * 2026-10-09 补齐拘传 / 逮捕（盯办里登记逮捕的案件同样落在「刑拘在办」子模块）。
+     */
+    private static final List<String> MEASURES = Arrays.asList("NONE", "SUMMONS", "DETENTION", "ARREST",
+            "BAIL", "RESIDENCE");
     private static final List<String> ACTIONS = Arrays.asList("START", "SUBMIT", "APPROVE", "REJECT");
 
     @Resource
@@ -166,11 +171,16 @@ public class ApprovalService {
         return c;
     }
 
-    /** 措施期限推算默认值：刑拘 +30 天（提请批捕期限），取保 +12 个月，监居 +6 个月 */
+    /**
+     * 措施期限推算默认值：刑拘 +30 天（提请批捕期限），取保 +12 个月，监居 +6 个月，
+     * 逮捕 +2 个月（侦查羁押期限）；拘传只有 12 小时、不成"期限"，故不推算。
+     */
     private LocalDateTime defaultDeadline(String measure, LocalDateTime base) {
         switch (measure) {
             case "DETENTION":
                 return base.plusDays(30);
+            case "ARREST":
+                return base.plusMonths(2);
             case "BAIL":
                 return base.plusMonths(12);
             case "RESIDENCE":

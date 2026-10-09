@@ -264,8 +264,9 @@ mvn -Dmaven.repo.local=../.tools/m2repo -Dspring-boot.run.profiles=mysql spring-
 
 | 功能 | 说明 |
 | --- | --- |
-| 案件录入 | 支持手打案件名，或上传 PDF / Word / Excel（自动识别来源类型）；设优先级、截止期限 |
-| 案件指派 | 指派抽屉内「检索」或「组织树」选人，区分主办 / 协办，可改派（旧记录留痕）；抽屉顶部可直接设定 / 调整 / 清除截止期限（+1天 / +3天 / +7天） |
+| 案件录入 | 支持手打案件名，或上传 PDF / Word / Excel（自动识别来源类型）；填案件编号、是否采取强制措施、截止期限（精确到天 + 自定节点名 + 提前几天提醒） |
+| 案件指派 | 指派抽屉内「检索」或「组织树」选人，区分主办 / 协办，可改派（旧记录留痕）；抽屉顶部可直接设定 / 调整 / 清除截止期限（日期精确到天） |
+| 一键重点关注 | 案件管理 / 案件盯办 / 待办总览 / 到期提醒 四个列表里直接点星标注，不必打开案件详情；列表支持「只看重点」筛选，重点行左侧有金色标识 |
 | 员工图谱 | Excel 导入（姓名 / 工号 / 上级工号 / 部门 / 职务），自动生成 领导-副领导-组长-组员 层级 |
 | 到期提醒 | 已逾期 / 今天到期 / 3 天内 / 7 天内 分桶，逾期行整行标红 |
 | 工作台 | 8 个关键指标一眼可见：总数、待指派、处理中、已办结、逾期、今日、3 天、7 天 |
@@ -288,6 +289,23 @@ mvn -Dmaven.repo.local=../.tools/m2repo -Dspring-boot.run.profiles=mysql spring-
 - 「待审核申请数」红点挂在账号管理上，只有系统管理员会去取这个数。
 - 回归：`node scripts/cf-e2e-nav-roles.mjs`（三档菜单逐项比对 + 三个地址的越权跳转 + 零控制台错误，测试账号跑完自动清理）。
 
+### 案件表单字段口径（2026-10-09）
+
+建案 / 编辑表单按以下口径收敛，改这块时注意 **旧数据不能被抹掉**：
+
+| 字段 | 口径 |
+| --- | --- |
+| 案件编号 | 表单标签由「立案登记表」改为**案件编号**，落库列仍是 `case_info.filing_no`（改的是叫法，不是列名） |
+| 调解书 | **表单不再出现**（`mediationNo` 列保留，历史数据仍可见、快照仍比对）；`CaseService.save` 干脆不写这一列，避免编辑老案件时把它清空 |
+| 强制措施 | 先选「是否采取强制措施」；选「是」再下拉选**拘传 / 取保候审 / 监视居住 / 拘留 / 逮捕**（字典 `CASE_MEASURE`）。`CaseSaveRequest.caseMeasure` 留空表示**不动**，防止建案/编辑把盯办里已登记的措施抹掉；选「否」才显式清空措施与届满日 |
+| 时间节点 | 自由文本（`deadline_label`），如「受案时间」「变更羁押期限时间」，超长节点名会在提醒文案里带上（"受案时间：3 天后到期"） |
+| 截止期限 | **精确到天**（表单用 `type=date`）；落库统一归一到当天 `23:59:59`，否则当天 00:00 起整天都会被判逾期 |
+| 提前提醒 | `remind_days`，下拉预设常用档位；用户上次选的档位记在 `localStorage`（`cf_remind_days_used`）作为下次的默认值。原「+1天 / +3天 / +7天 / 清空」快捷键已全部下线 |
+
+新增措施必须同步三处（都读 `flow/PoliceGroup`，是单一口径）：`PoliceGroup.MEASURES`、`measuresOfModule` / `moduleOfMeasure` 映射、`ApprovalService.defaultDeadline`（措施届满日推算）。漏一处就会出现「措施能选但盯办三个子模块都查不到」这种凭空消失。
+
+回归：`node scripts/cf-e2e-focus-form.mjs`（表单结构 + 落库数据 + 四栏目一键关注 + 逮捕归入「刑拘在办」+ 星标不挡撤回，31 项）。
+
 ### 操作追溯与撤回（Ctrl+Z）
 
 工作台的「最近操作」每条都可点击，打开抽屉看这一步到底做了什么：
@@ -309,6 +327,8 @@ mvn -Dmaven.repo.local=../.tools/m2repo -Dspring-boot.run.profiles=mysql spring-
 安全规则（宁可少撤，不可撤错）：只有案件类写操作可撤回；已被撤过的不能重复撤；**必须是该案件上最新的一条**，否则会覆盖它之后的改动——此时界面会直接写明原因（如「之后有新操作」）。
 
 > 注意：本次改造之前产生的历史记录没有状态快照，会显示为不可撤回；改造之后任何一次指派 / 改期限 / 状态流转，那一步立刻就能撤回。
+
+「一键重点关注」（`CASE.FOCUS`）与批注 / 领导意见同类：**写日志但不进撤回白名单**，属于旁注语义。它虽然在时间线上排最后，却不会占掉「最新一步」——标完重点后，上一步「修改案件」照样能撤回。
 
 ### 可视化图表（每页都有）
 
@@ -373,10 +393,11 @@ mvn -Dmaven.repo.local=../.tools/m2repo -Dspring-boot.run.profiles=mysql spring-
 | GET | `/api/employees/search` | 扁平检索（指派时选人） |
 | POST | `/api/employees/import` | Excel 导入员工图谱 |
 | GET | `/api/employees/template` | 下载导入模板 |
-| GET | `/api/cases` | 案件分页（状态/优先级/来源/承办人/到期桶/关键词） |
+| GET | `/api/cases` | 案件分页（状态/优先级/来源/承办人/到期桶/关键词/`focusOnly=true` 只看重点） |
 | POST | `/api/cases` | 新建案件（可同时指派） |
 | POST | `/api/cases/{id}/assign` | 指派 / 改派（可同时设定或清除截止期限：传 `deadline` + `deadlineTouched=true`） |
 | POST | `/api/cases/{id}/status` | 状态流转 |
+| POST | `/api/cases/{id}/focus` | 一键重点关注：`{focus:1}` 标注 / `{focus:0}` 取消（`@FullAccessOnly`） |
 | GET | `/api/cases/reminders?bucket=OVERDUE` | 到期提醒清单 |
 | GET | `/api/cases/dashboard` | 工作台聚合数据 |
 | GET | `/api/cases/stats?days=14` | 图表统计：趋势 / 状态 / 优先级 / 来源 / 到期分桶 / 逾期账龄 / 未来 7 天 / 部门负载 / 个人负载 |

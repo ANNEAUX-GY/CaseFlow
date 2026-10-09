@@ -128,11 +128,15 @@ const run = async () => {
   const readSuspectColumn = () => p.evaluate(() => {
     const heads = [...document.querySelectorAll('.el-table__header th')].map((x) => x.innerText.trim())
     const idx = heads.indexOf('嫌疑人')
-    const out = { _idx: idx, _heads: heads, rows: {} }
-    if (idx < 0) return out
+    // 案件编号所在列也要**按表头找**，不能想当然写死 tds[0]：
+    // 2026-10-09 加了「重点」星标列，它排在最前面，tds[0] 就从编号变成了星标，
+    // 用 tds[0] 取编号会一行都对不上（rows 直接空掉）。
+    const noIdx = heads.indexOf('编号')
+    const out = { _idx: idx, _noIdx: noIdx, _heads: heads, rows: {} }
+    if (idx < 0 || noIdx < 0) return out
     for (const tr of document.querySelectorAll('.el-table__row')) {
       const tds = tr.querySelectorAll('td')
-      const no = (tds[0]?.innerText || '').trim().split('\n')[0]
+      const no = (tds[noIdx]?.innerText || '').trim().split('\n')[0]
       if (no) out.rows[no] = (tds[idx]?.innerText || '').trim()
     }
     return out
@@ -176,9 +180,11 @@ const run = async () => {
     await p.mouse.move(5, 5)
     await sleep(200)
     const box = await p.evaluate((no) => {
+      const heads = [...document.querySelectorAll('.el-table__header th')].map((x) => x.innerText.trim())
+      const noIdx = heads.indexOf('编号')
       for (const tr of document.querySelectorAll('.el-table__row')) {
         const tds = [...tr.querySelectorAll('td')]
-        if (!(tds[0]?.innerText || '').trim().startsWith(no)) continue
+        if (!(tds[noIdx]?.innerText || '').trim().startsWith(no)) continue
         const span = tds.map((td) => td.querySelector('.cf-suspect')).find(Boolean)
         if (!span) return null
         const r = span.getBoundingClientRect()

@@ -25,15 +25,24 @@ public class CaseVO implements Serializable {
     private String caseTypeName;
     /** 案件类别（小类 / 案由） */
     private String category;
-    /** 立案登记表编号 */
+    /** 案件编号（立案登记表编号 / 受案号） */
     private String filingNo;
-    /** 调解书编号 */
+    /** 调解书编号（2026-10-09 起不再填写，仅历史数据可见） */
     private String mediationNo;
     private String description;
     private String priority;
     private String priorityName;
     private LocalDateTime deadline;
+    /** 只到日期（2026-10-09 起期限按天记录，不再显示时分） */
     private String deadlineText;
+    /** 期限节点名称（自己填：受案时间 / 变更羁押期限时间…）；空=默认叫「截止期限」 */
+    private String deadlineLabel;
+    /** 该节点提前多少天提醒；NULL / 0 = 不提醒 */
+    private Integer remindDays;
+    /** 是否已进入提前提醒期（后端算好，前端不用各写一遍） */
+    private Boolean reminding;
+    /** 重点关注：0否 / 1是（列表一键标注） */
+    private Integer focus;
     /** 剩余天数：负数表示已逾期 */
     private Integer daysLeft;
     /** OVERDUE / TODAY / SOON / NORMAL / NONE */

@@ -101,27 +101,73 @@ export function deadlineTextOf(deadline) {
   return String(deadline).replace('T', ' ').slice(0, 16)
 }
 
-/** 强制措施（案件盯办） */
+/**
+ * 强制措施（案件盯办 + 建案表单共用）。
+ *
+ * <p>2026-10-09 补齐刑事强制措施的法定五种：拘传 / 取保候审 / 监视居住 / 拘留 / 逮捕。
+ * 取值与后端 DictHolder.CASE_MEASURE、PoliceGroup#MEASURES 一一对应，别在这边另起一套。
+ */
 export const MEASURE_META = {
-  DETENTION: { label: '刑拘', type: 'danger' },
+  SUMMONS: { label: '拘传', type: 'info' },
+  DETENTION: { label: '拘留', type: 'danger' },
+  ARREST: { label: '逮捕', type: 'danger' },
   BAIL: { label: '取保候审', type: 'warning' },
   RESIDENCE: { label: '监视居住', type: 'warning' }
 }
 
+/** 建案表单「采取了哪种强制措施」的可选项（不含「无」——「无」由「是否采取」开关表达） */
+export const MEASURE_CHOICES = [
+  { value: 'SUMMONS', label: '拘传' },
+  { value: 'DETENTION', label: '拘留' },
+  { value: 'BAIL', label: '取保候审' },
+  { value: 'RESIDENCE', label: '监视居住' },
+  { value: 'ARREST', label: '逮捕' }
+]
+
+/**
+ * 常用「期限节点」：受案时间、变更羁押期限时间……
+ * 给表单做输入建议（el-autocomplete 的备选），也可以直接手打别的名字。
+ */
+export const DEADLINE_LABEL_PRESETS = [
+  '受案时间',
+  '立案时间',
+  '刑事拘留期限届满时间',
+  '变更羁押期限时间',
+  '取保候审期限届满时间',
+  '监视居住期限届满时间',
+  '移送起诉期限',
+  '补充侦查期限'
+]
+
+/** 常用「提前提醒天数」 */
+export const REMIND_DAY_PRESETS = [1, 2, 3, 5, 7, 15, 30]
+
+/**
+ * 截止期限单元格。
+ *
+ * <p>2026-10-09：期限一律按天记录（后端 deadlineText 只到日期），
+ * 节点名称由办案人自己填——填了就把名字带在日期前面，一眼知道到的是什么点
+ * （"受案时间 2026-10-18（剩 2 天）"），没填就只显示日期。
+ */
 export function dueText(row) {
   if (!row.deadlineText) return '未设期限'
+  const label = row.deadlineLabel ? `${row.deadlineLabel} ` : ''
   if (row.dueLevel === 'OVERDUE') {
-    return `${row.deadlineText}（逾期 ${Math.abs(row.daysLeft || 0)} 天）`
+    return `${label}${row.deadlineText}（逾期 ${Math.abs(row.daysLeft || 0)} 天）`
   }
-  if (row.dueLevel === 'TODAY') return `${row.deadlineText}（今天到期）`
-  return `${row.deadlineText}（剩 ${row.daysLeft} 天）`
+  if (row.dueLevel === 'TODAY') return `${label}${row.deadlineText}（今天到期）`
+  return `${label}${row.deadlineText}（剩 ${row.daysLeft} 天）`
 }
 
 export function rowClassOf(row) {
   const meta = DUE_META[row.dueLevel] || DUE_META.NONE
   if (['DONE', 'CANCELLED'].includes(row.status)) return ''
-  return meta.rowClass
+  // 重点关注：金色左侧条。与逾期整行标红不冲突（逾期是底色，这里是首列的边条）
+  return (row.focus === 1 ? 'cf-row--focus ' : '') + meta.rowClass
 }
+
+/** 是否重点关注（后端存 0/1，老数据可能为 null，一律按 0 处理） */
+export const isFocused = (row) => Number(row?.focus || 0) === 1
 
 // ============ 阶段→环节→任务 流程（2026-10）============
 

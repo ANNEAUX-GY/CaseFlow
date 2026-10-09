@@ -83,6 +83,8 @@ export const caseApi = {
   assign: (id, data) => http.post(`/cases/${id}/assign`, data),
   status: (id, data) => http.post(`/cases/${id}/status`, data),
   reminders: (params) => http.get('/cases/reminders', { params }),
+  /** 一键重点关注（2026-10-09）：focus=1 标注 / 0 取消，列表里直接点星，不开详情 */
+  focus: (id, focus) => http.post(`/cases/${id}/focus`, { focus: focus ? 1 : 0 }),
   stats: (params) => http.get('/cases/stats', { params }),
   dashboard: (params) => http.get('/cases/dashboard', { params }),
   /** 民警承办负荷详情（点主办人/协办人时用）；caseId 传入会标记 isCurrent */

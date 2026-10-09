@@ -100,7 +100,11 @@
           <el-button type="primary" @click="load">查询</el-button>
         </div>
 
-        <el-table :data="rows" v-loading="loading" stripe>
+        <el-table :data="rows" v-loading="loading" stripe :row-class-name="({ row }) => (row.focus === 1 ? 'cf-row--focus' : '')">
+          <!-- 一键重点关注：盯办也是"不用点开详情就能标"的四个栏目之一 -->
+          <el-table-column v-if="canFocus" label="重点" width="60" align="center">
+            <template #default="{ row }"><FocusStar :row="row" /></template>
+          </el-table-column>
           <el-table-column prop="caseNo" label="编号" width="140" />
           <el-table-column prop="name" label="案件名称" min-width="180" show-overflow-tooltip />
           <el-table-column label="类型" width="120">
@@ -197,6 +201,8 @@ import { watchApi, employeeApi } from '../api'
 import { useCategoryStore } from '../store/category'
 import { withCaseType, useCaseTypeStore } from '../store/caseType'
 import { CASE_TYPE_META, INVEST_STATUS_META, MEASURE_META, STAGE_META, stageLabel, suspectLabel, suspectNamesText } from '../utils/format'
+import { useUserStore } from '../store/user'
+import FocusStar from '../components/FocusStar.vue'
 import { CHART, barOption } from '../utils/chart'
 import WatchDrawer from '../components/WatchDrawer.vue'
 import ChartPanel from '../components/ChartPanel.vue'
@@ -205,6 +211,10 @@ import PageFooter from '../components/PageFooter.vue'
 
 const categoryStore = useCategoryStore()
 const caseTypeStore = useCaseTypeStore()
+// 标注重点是管理端能力（后端 /cases/{id}/focus 是 @FullAccessOnly），
+// 普通民警这里不渲染星标，免得点下去只拿到 403
+const userStore = useUserStore()
+const canFocus = computed(() => userStore.isFullAccess)
 const route = useRoute()
 const module = ref('INITIAL')
 const rows = ref([])

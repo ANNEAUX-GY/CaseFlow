@@ -95,11 +95,11 @@
     <el-dialog v-model="measureDlg.visible" title="登记 / 变更强制措施" width="460px" append-to-body>
       <el-form label-width="90px">
         <el-form-item label="措施类型" required>
+          <!-- 取值与建案表单一致（法定五种 + 无），别在这边另起一套：
+               两边不一样会出现"建案选了逮捕，盯办下拉里却没有逮捕可改"。 -->
           <el-select v-model="measureDlg.measure" style="width: 100%">
             <el-option label="无（回到初查）" value="NONE" />
-            <el-option label="刑拘" value="DETENTION" />
-            <el-option label="取保候审" value="BAIL" />
-            <el-option label="监视居住" value="RESIDENCE" />
+            <el-option v-for="m in MEASURE_CHOICES" :key="m.value" :label="m.label" :value="m.value" />
           </el-select>
         </el-form-item>
         <el-form-item label="措施日期">
@@ -108,7 +108,7 @@
         </el-form-item>
         <el-form-item label="期限届满">
           <el-date-picker v-model="measureDlg.detainDeadline" type="datetime" value-format="YYYY-MM-DD HH:mm:ss"
-            :disabled="measureDlg.measure === 'NONE'" placeholder="留空按默认推算（刑拘+30天/取保+12月/监居+6月）"
+            :disabled="measureDlg.measure === 'NONE'" placeholder="留空按默认推算（拘留+30天/逮捕+2月/取保+12月/监居+6月）"
             style="width: 100%" />
         </el-form-item>
         <el-form-item label="备注">
@@ -130,7 +130,7 @@ import { caseApi, watchApi } from '../api'
 import CaseTodoPanel from './CaseTodoPanel.vue'
 import StaffWorkloadDialog from './StaffWorkloadDialog.vue'
 import { useUserStore } from '../store/user'
-import { INVEST_STATUS_META, MEASURE_META, POLICE_GROUP_META, policeGroupLabel } from '../utils/format'
+import { INVEST_STATUS_META, MEASURE_META, MEASURE_CHOICES, POLICE_GROUP_META, policeGroupLabel } from '../utils/format'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },

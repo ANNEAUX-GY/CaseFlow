@@ -5,6 +5,7 @@ import com.caseflow.common.Result;
 import com.caseflow.dto.AssignRequest;
 import com.caseflow.dto.CaseQuery;
 import com.caseflow.dto.CaseSaveRequest;
+import com.caseflow.dto.FocusRequest;
 import com.caseflow.dto.StatusRequest;
 import com.caseflow.dto.SuspectSaveRequest;
 import com.caseflow.security.AuthContext;
@@ -74,6 +75,10 @@ public class CaseController {
                                            @RequestParam(required = false) String hasSuspect,
                                            @RequestParam(required = false) Long employeeId,
                                            @RequestParam(required = false) Boolean onlyMine,
+                                           // 列表页「只看重点」开关。
+                                           // 注意：这里是逐字段手工搬进 CaseQuery 的（不是 @ModelAttribute），
+                                           // 往 CaseQuery 里加字段却忘了在这儿接一下，查询条件会被静默丢掉。
+                                           @RequestParam(required = false) Boolean focusOnly,
                                            @RequestParam(required = false) String dueBucket,
                                            @RequestParam(required = false) String module,
                                            @RequestParam(required = false) String investigationStatus,
@@ -93,6 +98,7 @@ public class CaseController {
         q.setHasSuspect(hasSuspect);
         q.setEmployeeId(employeeId);
         q.setOnlyMine(onlyMine != null && onlyMine);
+        q.setFocusOnly(focusOnly != null && focusOnly);
         q.setDueBucket(dueBucket);
         q.setModule(module);
         q.setInvestigationStatus(investigationStatus);
@@ -138,6 +144,19 @@ public class CaseController {
     @PostMapping("/{id}/status")
     public Result<CaseVO> changeStatus(@PathVariable Long id, @RequestBody StatusRequest req) {
         return Result.ok(caseService.changeStatus(id, req));
+    }
+
+    /**
+     * 一键重点关注（2026-10-09）：列表里直接标注 / 取消，不必点开案件详情。
+     *
+     * <p>只给管理层：这是打在案件上的<b>全局</b>标记，领导一眼要看到，
+     * 不该由普通民警随手改（普通民警本来也进不了案件管理 / 盯办 / 待办总览）。
+     */
+    @PostMapping("/{id}/focus")
+    @FullAccessOnly("标注重点关注")
+    public Result<CaseVO> focus(@PathVariable Long id, @RequestBody(required = false) FocusRequest req) {
+        int focus = req == null || req.getFocus() == null || req.getFocus() == 0 ? 0 : 1;
+        return Result.ok(caseService.focus(id, focus));
     }
 
     // ------------------------------------------------------------------

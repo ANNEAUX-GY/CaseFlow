@@ -9,6 +9,14 @@
       style="width: 100%"
       @row-dblclick="(row) => emit('open', row)"
     >
+      <!-- 一键重点关注（2026-10-09）：列表里直接点星标注，不用打开案件详情。
+           星标打在案件上是全局的（领导一眼要看到），所以只给管理层，
+           普通民警这里不显示（后端 /cases/{id}/focus 也是 @FullAccessOnly）。 -->
+      <el-table-column v-if="canManage" label="重点" width="60" align="center">
+        <template #default="{ row }">
+          <FocusStar :row="row" @changed="(p) => emit('focus', p)" />
+        </template>
+      </el-table-column>
       <el-table-column v-if="showCaseNo && !compact" prop="caseNo" label="编号" width="150" />
       <el-table-column label="案件名称" :min-width="compact ? 170 : 220" show-overflow-tooltip>
         <template #default="{ row }">
@@ -75,6 +83,7 @@
 import { computed } from 'vue'
 import { DUE_META, STATUS_META, PRIORITY_META, SOURCE_META, CASE_TYPE_META, dueText, rowClassOf, suspectLabel, suspectNamesText } from '../utils/format'
 import { useUserStore } from '../store/user'
+import FocusStar from './FocusStar.vue'
 
 const userStore = useUserStore()
 /** 指派与删除属于高级功能，只有所长/副所长/法制员可见（后端同样有拦截，这里只是不给误点） */
@@ -97,7 +106,7 @@ const props = defineProps({
   minBody: { type: Number, default: 300 },
   loading: { type: Boolean, default: false }
 })
-const emit = defineEmits(['open', 'assign', 'remove'])
+const emit = defineEmits(['open', 'assign', 'remove', 'focus'])
 
 // 传了固定 height 时表格自身已锁定高度，不再额外撑最小高度
 const wrapMin = computed(() => (props.height ? 0 : props.minBody))

@@ -47,7 +47,15 @@
         </div>
 
         <div class="cf-tscroll">
-          <el-table :data="filtered" v-loading="loading" size="small" row-key="id">
+          <el-table :data="filtered" v-loading="loading" size="small" row-key="id"
+            :row-class-name="({ row }) => (row.caseFocus === 1 ? 'cf-row--focus' : '')">
+            <!-- 一键重点关注：待办总览按待办列行，星标打的是背后的案件
+                 （FocusStar 的 idProp/focusProp 指到 caseId / caseFocus） -->
+            <el-table-column v-if="canFocus" label="重点" width="60" align="center">
+              <template #default="{ row }">
+                <FocusStar :row="row" id-prop="caseId" focus-prop="caseFocus" />
+              </template>
+            </el-table-column>
             <el-table-column label="案件" min-width="220">
               <template #default="{ row }">
                 <div class="cf-cell-strong">{{ row.caseName || '-' }}</div>
@@ -94,6 +102,12 @@ import { computed, onMounted, ref } from 'vue'
 import { Search } from '@element-plus/icons-vue'
 import { fileApi, todoApi } from '../api'
 import { withCaseType } from '../store/caseType'
+import { useUserStore } from '../store/user'
+import FocusStar from '../components/FocusStar.vue'
+
+// 与盯办一致：标注重点是管理端能力，普通民警不渲染星标
+const userStore = useUserStore()
+const canFocus = computed(() => userStore.isFullAccess)
 
 
 const list = ref([])

@@ -212,6 +212,18 @@ body {
 .cf-row--overdue > td { background: #fbeded !important; }
 .cf-row--soon > td { background: #fff6e6 !important; }
 
+/* 重点关注（2026-10-09）：首列一条金色竖条——逾期行是整行底色，
+   两者不打架，重点案件哪怕同时逾期也能看出"这条被盯上了" */
+.el-table__row.cf-row--focus > td:first-child { box-shadow: inset 3px 0 0 #c8a45c; }
+
+/* 列表里的一键星标：未标注时是灰星，鼠标悬停变金、点亮后常驻金色 */
+.cf-star { color: #b9c0cb !important; }
+.cf-star:hover { color: #c8a45c !important; }
+.cf-star.is-on { color: #c8a45c !important; }
+
+/* 详情抽屉标题行：案件编号 + 重点星标并排（2026-10-09） */
+.cf-drawer__head { display: flex; align-items: center; gap: 8px; }
+
 /* 紧凑表格 */
 .el-table { font-size: 13px; }
 .el-table th {

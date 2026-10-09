@@ -15,9 +15,11 @@ public interface CaseInfoMapper extends BaseMapper<CaseInfo> {
      */
     @Insert("INSERT INTO case_info (id, case_no, name, source_type, source_file_id, case_type, category, "
             + "filing_no, mediation_no, case_measure, measure_date, detain_deadline, investigation_status, "
-            + "description, priority, deadline, status, remark, created_by, created_at, updated_at) VALUES "
+            + "description, priority, deadline, deadline_label, remind_days, focus, "
+            + "status, remark, created_by, created_at, updated_at) VALUES "
             + "(#{id}, #{caseNo}, #{name}, #{sourceType}, #{sourceFileId}, #{caseType}, #{category}, "
             + "#{filingNo}, #{mediationNo}, #{caseMeasure}, #{measureDate}, #{detainDeadline}, #{investigationStatus}, "
-            + "#{description}, #{priority}, #{deadline}, #{status}, #{remark}, #{createdBy}, #{createdAt}, #{updatedAt})")
+            + "#{description}, #{priority}, #{deadline}, #{deadlineLabel}, #{remindDays}, #{focus}, "
+            + "#{status}, #{remark}, #{createdBy}, #{createdAt}, #{updatedAt})")
     int insertWithId(CaseInfo entity);
 }

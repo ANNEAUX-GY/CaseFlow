@@ -27,9 +27,10 @@ public class DictHolder {
         // 侦查进度（案件盯办模块）
         DICT.put("INVESTIGATION_STATUS", map("PENDING_INITIAL", "待初查", "INVESTIGATING", "侦查中",
                 "PENDING_APPROVAL", "待审批", "INVESTIGATION_DONE", "侦查终结"));
-        // 强制措施（案件盯办模块）
-        DICT.put("CASE_MEASURE", map("NONE", "无", "DETENTION", "刑拘",
-                "BAIL", "取保候审", "RESIDENCE", "监视居住"));
+        // 强制措施（案件盯办模块；2026-10-09 补齐法定五种：拘传 / 取保候审 / 监视居住 / 拘留 / 逮捕）
+        // 归类见 PoliceGroup#moduleOfMeasure：拘传→初查；拘留、逮捕→刑拘在办；取保、监居→取保及监居。
+        DICT.put("CASE_MEASURE", map("NONE", "无", "SUMMONS", "拘传", "DETENTION", "拘留",
+                "ARREST", "逮捕", "BAIL", "取保候审", "RESIDENCE", "监视居住"));
         DICT.put("GENDER", map("MALE", "男", "FEMALE", "女"));
         DICT.put("STATUS", map("PENDING_ASSIGN", "待指派", "ASSIGNED", "已指派", "IN_PROGRESS", "处理中",
                 "DONE", "已办结", "CANCELLED", "已撤销"));

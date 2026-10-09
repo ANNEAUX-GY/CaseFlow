@@ -116,18 +116,25 @@ public class WatchService {
 
         List<CaseInfo> open = scoped.stream().filter(c -> !CLOSED.contains(c.getStatus())).collect(Collectors.toList());
 
-        // 初查：无强制措施 + 在办
+        // 三张卡片的分桶口径统一走 PoliceGroup：哪条措施归哪个子模块只有那一处定义。
+        // 2026-10-09 新增「拘传 / 逮捕」后，写死 DETENTION / BAIL / RESIDENCE 会让新措施三张卡片都数不到。
+        String initialModule = com.caseflow.flow.PoliceGroup.moduleOfMeasure(null);
+        List<String> detentionMeasures = com.caseflow.flow.PoliceGroup.measuresOfModule("DETENTION");
+        List<String> bailMeasures = com.caseflow.flow.PoliceGroup.measuresOfModule("BAIL_RESIDENCE");
+
+        // 初查：无强制措施（含拘传这类不改变在押状态的）+ 在办
         List<CaseInfo> initial = open.stream()
-                .filter(c -> c.getCaseMeasure() == null || "NONE".equals(c.getCaseMeasure()))
+                .filter(c -> initialModule.equals(com.caseflow.flow.PoliceGroup.moduleOfMeasure(c.getCaseMeasure())))
                 .collect(Collectors.toList());
         vo.setInitialTotal(initial.size());
         vo.setInitialWithSuspect(countWithSuspect(initial.stream().map(CaseInfo::getId).collect(Collectors.toList())));
 
-        // 刑拘在办 / 取保监居
+        // 刑拘在办（拘留 / 逮捕）/ 取保监居
         List<CaseInfo> detention = open.stream()
-                .filter(c -> "DETENTION".equals(c.getCaseMeasure())).collect(Collectors.toList());
+                .filter(c -> c.getCaseMeasure() != null && detentionMeasures.contains(c.getCaseMeasure()))
+                .collect(Collectors.toList());
         List<CaseInfo> bail = open.stream()
-                .filter(c -> "BAIL".equals(c.getCaseMeasure()) || "RESIDENCE".equals(c.getCaseMeasure()))
+                .filter(c -> c.getCaseMeasure() != null && bailMeasures.contains(c.getCaseMeasure()))
                 .collect(Collectors.toList());
         vo.setDetentionTotal(detention.size());
         vo.setBailTotal(bail.size());

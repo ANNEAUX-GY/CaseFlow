@@ -2,10 +2,21 @@
   <!-- 手机端占满整屏：46% 的宽度在手机上只剩一百多像素 -->
   <el-drawer
     v-model="visible"
-    :title="`案件详情 · ${detail.caseNo || ''}`"
     size="46%"
     destroy-on-close
   >
+    <template #header>
+      <div class="cf-drawer__head">
+        <span>案件详情 · {{ detail.caseNo || '' }}</span>
+        <!-- 重点关注：列表是主入口，但详情里也要能改（否则得退出去再点星）。
+             星标是打在案件上的全局标记，只给管理层。 -->
+        <template v-if="canManage && detail.id">
+          <FocusStar :row="detail" />
+          <span class="cf-muted" style="font-size: 12px">{{ detail.focus === 1 ? '重点关注中' : '未关注' }}</span>
+        </template>
+      </div>
+    </template>
+
     <template v-if="detail.id">
       <!-- 手机上两列描述会挤成竖排的碎字，直接改单列 -->
       <el-descriptions :column="2" border size="small">
@@ -24,10 +35,25 @@
           <span v-else class="cf-muted">未分类</span>
         </el-descriptions-item>
         <el-descriptions-item label="来源">{{ sourceLabel }}</el-descriptions-item>
-        <el-descriptions-item label="立案登记表">{{ detail.filingNo || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="调解书">{{ detail.mediationNo || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="截止">
+        <el-descriptions-item label="案件编号">{{ detail.filingNo || '-' }}</el-descriptions-item>
+        <!-- 强制措施（2026-10-09）：建案表单与盯办共用同一个字段，这里如实显示 -->
+        <el-descriptions-item label="强制措施">
+          <el-tag v-if="detail.caseMeasure && detail.caseMeasure !== 'NONE'" size="small"
+            :type="(MEASURE_META[detail.caseMeasure] || {}).type || 'info'" effect="plain">
+            {{ (MEASURE_META[detail.caseMeasure] || {}).label || detail.caseMeasure }}
+          </el-tag>
+          <span v-else class="cf-muted">未采取</span>
+        </el-descriptions-item>
+        <!-- 期限：节点叫什么 + 哪天 + 提前多久提醒 -->
+        <el-descriptions-item :label="detail.deadlineLabel || '截止期限'">
           <span :class="dueClass">{{ dueText(detail) }}</span>
+          <el-tag v-if="detail.reminding" type="warning" size="small" effect="dark" style="margin-left: 6px">
+            提醒中
+          </el-tag>
+        </el-descriptions-item>
+        <el-descriptions-item label="提前提醒">
+          <span v-if="detail.remindDays">提前 {{ detail.remindDays }} 天</span>
+          <span v-else class="cf-muted">不提醒</span>
         </el-descriptions-item>
         <el-descriptions-item label="嫌疑人">
           <b>{{ detail.suspects?.length || 0 }}</b> 人
@@ -245,7 +271,8 @@ import { ElCollapseTransition } from 'element-plus'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { caseApi, fileApi, suspectApi, logApi, watchApi } from '../api'
 import CaseTodoPanel from './CaseTodoPanel.vue'
-import { STATUS_META, PRIORITY_META, SOURCE_META, DUE_META, CASE_TYPE_META, dueText } from '../utils/format'
+import FocusStar from './FocusStar.vue'
+import { STATUS_META, PRIORITY_META, SOURCE_META, DUE_META, CASE_TYPE_META, MEASURE_META, dueText } from '../utils/format'
 import { useUserStore } from '../store/user'
 import { useEventStore } from '../store/events'
 

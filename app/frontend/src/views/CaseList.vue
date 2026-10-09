@@ -71,6 +71,8 @@
         <el-option label="7天内" value="D7" />
         <el-option label="未设期限" value="NONE" />
       </el-select>
+      <!-- 只看重点关注：列表上的星标要能反过来把标过的案件筛出来（2026-10-09） -->
+      <el-checkbox v-model="query.focusOnly" style="margin: 0 2px" @change="load">只看重点</el-checkbox>
       <el-button @click="reset">重置</el-button>
       <span class="cf-spacer" />
       <el-button type="primary" @click="onCreate">新建案件</el-button>
@@ -183,7 +185,8 @@ const query = reactive({
   category: '',
   hasSuspect: '',
   employeeId: null,
-  dueBucket: ''
+  dueBucket: '',
+  focusOnly: false
 })
 
 // 经办人姓名远程搜索：从员工图谱按姓名联想，选中即过滤该民警经办的案件
@@ -374,7 +377,8 @@ const reset = () => {
     category: '',
     hasSuspect: '',
     employeeId: null,
-    dueBucket: ''
+    dueBucket: '',
+    focusOnly: false
   })
   cascadeFilter.value = []
   load()
