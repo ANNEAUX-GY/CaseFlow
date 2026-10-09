@@ -30,9 +30,12 @@
           <div v-if="row.category" class="cf-muted" style="font-size: 12px">{{ row.category }}</div>
         </template>
       </el-table-column>
-      <el-table-column v-if="!compact" label="嫌疑人" width="70" align="center">
+      <el-table-column v-if="!compact" label="嫌疑人" width="140">
         <template #default="{ row }">
-          <span v-if="row.suspectCount" style="font-weight: 600">{{ row.suspectCount }}</span>
+          <el-tooltip v-if="suspectLabel(row)" :content="suspectNamesText(row)"
+            placement="top" :disabled="!suspectNamesText(row)">
+            <span class="cf-suspect">{{ suspectLabel(row) }}</span>
+          </el-tooltip>
           <span v-else class="cf-muted">—</span>
         </template>
       </el-table-column>
@@ -70,7 +73,7 @@
 
 <script setup>
 import { computed } from 'vue'
-import { DUE_META, STATUS_META, PRIORITY_META, SOURCE_META, CASE_TYPE_META, dueText, rowClassOf } from '../utils/format'
+import { DUE_META, STATUS_META, PRIORITY_META, SOURCE_META, CASE_TYPE_META, dueText, rowClassOf, suspectLabel, suspectNamesText } from '../utils/format'
 import { useUserStore } from '../store/user'
 
 const userStore = useUserStore()

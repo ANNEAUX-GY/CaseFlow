@@ -927,6 +927,19 @@ html { scrollbar-gutter: stable; }
 .cf-muted { color: var(--cf-text-3); }
 .cf-cell-strong { font-weight: 600; color: var(--cf-text); }
 
+/* 列表里的嫌疑人摘要（2026-10-09）：1 人显示姓名，多人显示「张三等N人」，
+   悬停出全名单。超长姓名用省略号，不撑破列。 */
+.cf-suspect {
+  font-weight: 600;
+  color: var(--cf-text);
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
 /* ---- 按钮：统一高度与圆角，链接按钮在表格里对齐基线 ---- */
 .el-button {
   font-weight: 500;

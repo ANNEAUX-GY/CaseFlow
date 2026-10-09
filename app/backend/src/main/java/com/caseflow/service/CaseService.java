@@ -26,6 +26,7 @@ import com.caseflow.support.LogService;
 import com.caseflow.vo.AssigneeVO;
 import com.caseflow.vo.CaseVO;
 import com.caseflow.vo.DashboardVO;
+import com.caseflow.vo.SuspectVO;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -110,11 +111,11 @@ public class CaseService {
         IPage<CaseInfo> p = new Page<>(page, size);
         IPage<CaseInfo> result = caseMapper.selectPage(p, q);
 
-        // 嫌疑人数量一次批量算完，避免列表里逐行查库
-        Map<Long, Integer> suspectCounts = suspectCounts(result.getRecords().stream()
+        // 嫌疑人一次批量取完（含姓名），避免列表里逐行查库
+        Map<Long, List<CaseSuspect>> suspects = suspectsOf(result.getRecords().stream()
                 .map(CaseInfo::getId).collect(Collectors.toList()));
         List<CaseVO> list = result.getRecords().stream()
-                .map(c -> toVO(c, false, empMap, pathMap, suspectCounts))
+                .map(c -> toVO(c, false, empMap, pathMap, suspects))
                 .collect(Collectors.toList());
         return new PageResult<>(list, result.getTotal(), result.getCurrent(), result.getSize());
     }
@@ -310,7 +311,7 @@ public class CaseService {
     }
 
     private CaseVO toVO(CaseInfo c, boolean full, Map<Long, OrgEmployee> empMap, Map<Long, String> pathMap,
-                        Map<Long, Integer> suspectCounts) {
+                        Map<Long, List<CaseSuspect>> suspectMap) {
         CaseVO vo = new CaseVO();
         vo.setId(c.getId());
         vo.setCaseNo(c.getCaseNo());
@@ -347,8 +348,13 @@ public class CaseService {
         vo.setCreatedAt(c.getCreatedAt());
         vo.setUpdatedAt(c.getUpdatedAt());
 
-        Integer count = suspectCounts == null ? null : suspectCounts.get(c.getId());
-        vo.setSuspectCount(count == null ? 0 : count);
+        List<CaseSuspect> sp = suspectMap == null ? null : suspectMap.get(c.getId());
+        vo.setSuspectCount(sp == null ? 0 : sp.size());
+        // 列表模式也带上嫌疑人姓名——否则列表只能显示人数，看不出是谁（2026-10-09）。
+        // 只回 id / 姓名 / 性别：列表用不到身份证号、手机号，不送到前端（最小暴露）；
+        // full=true（详情）时下面会用完整 VO 覆盖掉。
+        vo.setSuspects(sp == null ? new ArrayList<>() : sp.stream()
+                .map(this::toBriefSuspect).collect(Collectors.toList()));
 
         List<AssigneeVO> all = assigneesOf(c.getId(), empMap, pathMap);
         vo.setOwner(all.stream().filter(a -> "OWNER".equals(a.getAssignRole()) && "ACTIVE".equals(a.getStatus()))
@@ -364,22 +370,38 @@ public class CaseService {
     }
 
     private CaseVO toVO(CaseInfo c, boolean full, Map<Long, OrgEmployee> empMap, Map<Long, String> pathMap) {
-        Map<Long, Integer> counts = full
-                ? suspectCounts(java.util.Collections.singletonList(c.getId()))
-                : null;
-        return toVO(c, full, empMap, pathMap, counts);
+        // full=true 时嫌疑人由 suspectService.listOf 单独取（完整字段），这里不必再查一次
+        Map<Long, List<CaseSuspect>> suspects = full
+                ? null
+                : suspectsOf(java.util.Collections.singletonList(c.getId()));
+        return toVO(c, full, empMap, pathMap, suspects);
     }
 
-    /** 批量统计各案件的嫌疑人数（一次 group by，避免 N+1） */
-    private Map<Long, Integer> suspectCounts(List<Long> caseIds) {
-        Map<Long, Integer> map = new HashMap<>();
+    /** 列表行上的嫌疑人：只带列表要用的字段，不带身份证号/手机号 */
+    private SuspectVO toBriefSuspect(CaseSuspect s) {
+        SuspectVO vo = new SuspectVO();
+        vo.setId(s.getId());
+        vo.setCaseId(s.getCaseId());
+        vo.setName(s.getName());
+        vo.setGender(s.getGender());
+        vo.setGenderName(DictHolder.name("GENDER", s.getGender()));
+        return vo;
+    }
+
+    /**
+     * 批量取各案件的嫌疑人（一次 IN 查询，避免 N+1）。
+     * 按 id 升序，保证「首个嫌疑人」稳定 = 最先录入的那个，列表上的「张三等N人」不会每次刷新换人。
+     */
+    private Map<Long, List<CaseSuspect>> suspectsOf(List<Long> caseIds) {
+        Map<Long, List<CaseSuspect>> map = new HashMap<>();
         if (caseIds == null || caseIds.isEmpty()) {
             return map;
         }
         List<CaseSuspect> list = suspectMapper.selectList(new LambdaQueryWrapper<CaseSuspect>()
-                .in(CaseSuspect::getCaseId, caseIds));
+                .in(CaseSuspect::getCaseId, caseIds)
+                .orderByAsc(CaseSuspect::getId));
         for (CaseSuspect s : list) {
-            map.merge(s.getCaseId(), 1, Integer::sum);
+            map.computeIfAbsent(s.getCaseId(), k -> new ArrayList<>()).add(s);
         }
         return map;
     }

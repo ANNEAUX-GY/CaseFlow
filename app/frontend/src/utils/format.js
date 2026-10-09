@@ -216,6 +216,34 @@ export function todoDueTextOf(row) {
   return { text: dt, cls: '', overdue: false }
 }
 
+// ============ 嫌疑人展示（2026-10-09） ============
+// 列表接口的 row.suspects 由后端批量填充，只含 id / 姓名 / 性别（不含身份证、手机号）。
+// 展示口径：1 人显示姓名，多人显示「张三等N人」（N = 总人数，含张三本人），
+// 这样与列/卡片上的「嫌疑人数」永远对得上，不会出现「显示 2 人实际 3 人」。
+
+/**
+ * 列表里的嫌疑人摘要。
+ * @returns {string} 无嫌疑人返回空串，由调用方决定占位（各列表统一用「—」）
+ */
+export function suspectLabel(row) {
+  const list = row?.suspects || []
+  if (list.length) {
+    const first = String(list[0]?.name || '').trim()
+    if (list.length === 1) return first || '1 人'
+    return (first || '未具名') + '等' + list.length + '人'
+  }
+  // 兜底：老接口只给计数（没有姓名列表）时，至少别显示成「—」
+  const n = row?.suspectCount || 0
+  return n > 0 ? n + ' 人' : ''
+}
+
+/** 完整名单（「、」分隔），给列表列挂 tooltip 用；单人或无嫌疑人返回空串 */
+export function suspectNamesText(row) {
+  const list = row?.suspects || []
+  if (list.length < 2) return ''
+  return list.map((s) => String(s?.name || '').trim()).filter(Boolean).join('、')
+}
+
 // ============ 办案组别（2026-10-04） ============
 export const POLICE_GROUP_META = {
   INITIAL: { label: '初查组', type: 'primary', color: '#1b4a8c' },

@@ -82,9 +82,12 @@
               <div v-if="row.category" class="cf-muted" style="font-size: 12px">{{ row.category }}</div>
             </template>
           </el-table-column>
-          <el-table-column label="嫌疑人" width="70" align="center">
+          <el-table-column label="嫌疑人" width="140">
             <template #default="{ row }">
-              <span v-if="row.suspectCount" style="font-weight: 600">{{ row.suspectCount }}</span>
+              <el-tooltip v-if="suspectLabel(row)" :content="suspectNamesText(row)"
+                placement="top" :disabled="!suspectNamesText(row)">
+                <span class="cf-suspect">{{ suspectLabel(row) }}</span>
+              </el-tooltip>
               <span v-else class="cf-muted">—</span>
             </template>
           </el-table-column>
@@ -164,7 +167,7 @@ import { useRoute } from 'vue-router'
 import { watchApi, employeeApi } from '../api'
 import { useCategoryStore } from '../store/category'
 import { withCaseType, useCaseTypeStore } from '../store/caseType'
-import { CASE_TYPE_META, INVEST_STATUS_META, MEASURE_META, STAGE_META, stageLabel } from '../utils/format'
+import { CASE_TYPE_META, INVEST_STATUS_META, MEASURE_META, STAGE_META, stageLabel, suspectLabel, suspectNamesText } from '../utils/format'
 import WatchDrawer from '../components/WatchDrawer.vue'
 import PageFooter from '../components/PageFooter.vue'
 
