@@ -395,6 +395,8 @@ body {
 .cf-ctypebar__tag.is-info { background: #5a6472; }
 /* 提示语在窄屏可先隐藏，类型标签与退出按钮必须保留 */
 .cf-ctypebar__tip { color: var(--cf-text-3); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* 大类 / 小类 之间的分隔符（三级浏览，2026-10-09） */
+.cf-ctypebar__sep { color: #b7c0cc; font-size: 13px; }
 .cf-ctypebar__exit { font-size: 13px !important; font-weight: 600; white-space: nowrap; }
 
 /* 顶栏角色标签：让人一眼确认自己是以什么身份在操作 */

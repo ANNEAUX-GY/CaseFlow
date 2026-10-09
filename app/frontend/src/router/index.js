@@ -41,8 +41,8 @@ const routes = [
       { path: 'my-todos', name: 'MyTodos', component: () => import('../views/MyTodos.vue'), meta: { title: '我的待办' } },
       { path: 'dashboard', name: 'Dashboard', component: () => import('../views/Dashboard.vue'), meta: { title: '工作台' } },
       { path: 'cases', name: 'Cases', component: () => import('../views/CaseList.vue'), meta: { title: '案件管理' } },
-      // 按类别浏览（板块页）：选完案件类型先进这里，按类别分卡片下钻到案件列表
-      { path: 'case-boards', name: 'CaseBoards', component: () => import('../views/CaseBoards.vue'), meta: { title: '按类别浏览', fullAccessOnly: true } },
+      // 三级浏览的第 2 级：选完大类后选小类（2026-10-09）
+      { path: 'case-boards', name: 'CaseBoards', component: () => import('../views/CaseBoards.vue'), meta: { title: '选择小类', fullAccessOnly: true } },
       { path: 'reminders', name: 'Reminders', component: () => import('../views/Reminder.vue'), meta: { title: '到期提醒' } },
       { path: 'org', name: 'Org', component: () => import('../views/EmployeeTree.vue'), meta: { title: '员工图谱' } },
       // 案件盯办（初查/刑拘/取保监居 三子模块 + 看板）

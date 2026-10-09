@@ -5,7 +5,7 @@
       <span class="cf-gatebar__tag">{{ caseTypeStore.currentOption?.label || '未选择' }}</span>
       <span>当前只看这一类案件；看板计数、页签列表与检索均限定在此类型内</span>
       <span class="cf-spacer"></span>
-      <span class="cf-gatebar__tip">需更换类型请用顶部类型条的「退出类型」</span>
+      <span class="cf-gatebar__tip">退回上一级或换类型，请用顶部类型条右侧的按钮</span>
     </div>
 
     <!-- 盯办看板：三大子模块 + 待审批，点击卡片跳对应页签 -->
@@ -160,6 +160,7 @@
 
 <script setup>
 import { computed, reactive, ref, watch, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { watchApi, employeeApi } from '../api'
 import { useCategoryStore } from '../store/category'
 import { withCaseType, useCaseTypeStore } from '../store/caseType'
@@ -169,6 +170,7 @@ import PageFooter from '../components/PageFooter.vue'
 
 const categoryStore = useCategoryStore()
 const caseTypeStore = useCaseTypeStore()
+const route = useRoute()
 const module = ref('INITIAL')
 const rows = ref([])
 const total = ref(0)
@@ -183,9 +185,35 @@ const query = reactive({
 })
 const cascadeFilter = ref([])
 watch(cascadeFilter, (val) => {
+  // 「未分类」(NONE) 不在级联树里，反投影后级联必为空——
+  // 照常清掉 query.category 会让「未分类」卡片进来当场失效（2026-10-09 三级浏览修复）
+  if (!val?.length && query.category === 'NONE') {
+    query.page = 1
+    return
+  }
   query.caseType = val?.[0] || ''
   query.category = val?.[1] || ''
 })
+
+/**
+ * 从地址栏同步小类筛选（2026-10-09 三级浏览）：
+ * 小类卡片页选完会带 ?category=xxx 落到本栏目，而本页原本只认页内级联控件，
+ * 不读地址栏就会"跳过来了却没筛"。NONE=未分类，不在级联树里，只设筛选值不显示级联。
+ */
+const syncCategoryFromRoute = () => {
+  const cat = String(route.query.category || '')
+  if (!cat) return false
+  query.category = cat
+  query.page = 1
+  if (cat === 'NONE') cascadeFilter.value = []
+  else {
+    const t = categoryStore.typeOfCategory(cat)
+    cascadeFilter.value = t ? [t, cat] : []
+    // 级联反查不到时上面那句会把 category 清空，这里补回，保证筛选不丢
+    query.category = cat
+  }
+  return true
+}
 
 const employeeOptions = ref([])
 const empLoading = ref(false)
@@ -280,8 +308,15 @@ const deadlineText = (row) => {
 
 onMounted(async () => {
   await categoryStore.load()
+  // 三级浏览：小类卡片页跳过来会带 category，先灌进筛选再取数，避免"跳到了却没筛"
+  syncCategoryFromRoute()
   await load()
   await loadBoard()
+})
+
+// 已在本栏目时再次从小类页选另一个小类过来：地址栏 category 变了要跟着重取
+watch(() => route.query.category, () => {
+  if (syncCategoryFromRoute()) { load() }
 })
 </script>
 

@@ -2,9 +2,16 @@
   <div class="cf-boards">
     <!-- 头部：与类型选择器同一套版式（cf-picker__head 是全局样式） -->
     <div class="cf-picker__head">
-      <div class="cf-picker__title">{{ opt ? opt.label : '' }} · 按类别浏览</div>
+      <div class="cf-picker__title">{{ opt ? opt.label : '' }} · 选择小类</div>
       <div class="cf-picker__sub">
-        当前类型下的案件按类别分成板块，点击类别卡片即可查看该类案件的汇总列表
+        <template v-if="categoryAware">
+          当前大类下的案件按小类分成卡片，点击卡片即可查看该小类的案件
+        </template>
+        <template v-else>
+          该栏目没有小类维度，直接进入即可；案件列表与案件盯办才支持按小类筛选
+        </template>
+        <br />
+        退回上一级（重选大类）请点顶部类型条右侧的按钮
       </div>
     </div>
 
@@ -22,7 +29,7 @@
           <el-icon class="cf-boards__arrow"><ArrowRight /></el-icon>
         </div>
         <div class="cf-boards__desc">{{ b.desc }}</div>
-        <div class="cf-picker__count">共 {{ b.count }} 件</div>
+        <div v-if="b.count != null" class="cf-picker__count">共 {{ b.count }} 件</div>
       </div>
     </div>
 
@@ -31,41 +38,49 @@
     </div>
 
     <div class="cf-picker__foot cf-muted">
-      提示：进入类别后如需返回，可点案件列表上方类型条里的「按类别浏览」
+      提示：进入小类后如需退回本页或重选大类，请用顶部类型条右侧的按钮
     </div>
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ArrowRight } from '@element-plus/icons-vue'
 import { caseApi } from '../api'
 import { useCategoryStore } from '../store/category'
-import { useCaseTypeStore, withCaseType } from '../store/caseType'
+import { CATEGORY_AWARE_PATHS, parseLevel3, useCaseTypeStore, withCaseType } from '../store/caseType'
 
 /**
- * 「按类别浏览」板块页（2026-10-08）。
+ * 第 2 级「选小类」页（小类卡片页，2026-10-09 三级浏览改造）。
  *
- * <p>类型选择器选完类型后先进这里：把当前类型下的案件按类别（case_category 字典小类）
- * 分成板块卡片，每张卡显示该类案件数；点击卡片 → 案件管理列表并自动带上类别筛选。
- * 卡片样式复用类型选择器的 cf-picker 系列（其 style 非 scoped，全局生效）。
+ * <p>流程：大类卡片页选完大类 → 进本页选小类 → 落到第 3 级的栏目页。
+ * 落点由大类页用 to 参数带过来（如 `/cases?status=IN_PROGRESS`、`/todos`），
+ * 本页只负责往上加一个小类筛选，**不改变原栏目与原有筛选**。
  *
  * <p>口径约定：
  * <ul>
  *   <li>各类别案件数用 page 接口 size=1 取 total——与列表页完全同一套筛选链路，
- *       不会出现"板块上写 5 件、点进去 4 件"的口径错位（类型选择器数数也是这个先例）；</li>
+ *       不会出现"卡片上写 5 件、点进去 4 件"的口径错位（类型选择器数数也是这个先例）；</li>
  *   <li>「未分类」= category 为空（NULL/空串），走后端 category=NONE 特殊值；</li>
- *   <li>「其他案件」类型没有字典小类（未立案不设小类），退化为单张「全部案件」卡。</li>
+ *   <li>「其他案件」类型没有字典小类（未立案不设小类），退化为单张「全部」卡；</li>
+ *   <li>待办总览 / 到期提醒没有小类维度（见 CATEGORY_AWARE_PATHS），
+ *       也只给一张「全部」卡——流程照样走两级，但不假装能筛。</li>
  * </ul>
  */
 const router = useRouter()
+const route = useRoute()
 const categoryStore = useCategoryStore()
 const caseTypeStore = useCaseTypeStore()
 
 const opt = computed(() => caseTypeStore.currentOption)
 const loading = ref(false)
 const boards = ref([])
+
+/** 最终落点栏目（大类页用 to 带过来；非法值 parseLevel3 会退回案件管理） */
+const target = computed(() => parseLevel3(String(route.query.to || '/cases')))
+/** 落点栏目是否支持小类筛选 */
+const categoryAware = computed(() => CATEGORY_AWARE_PATHS.includes(target.value.path))
 
 /**
  * 门控类型（store scope）→ 类别字典树节点 value。
@@ -101,7 +116,16 @@ const load = async () => {
     const subs = ((node && node.children) || []).slice()
       .sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0))
 
-    if (o.key === 'OTHER' || !subs.length) {
+    if (!categoryAware.value) {
+      // 落点栏目本身没有小类维度（待办总览 / 到期提醒）：只给一张「全部」卡，
+      // 保证三级流程一致，同时不假装这里有筛选能力。
+      // noCount：这张卡通往的是待办/提醒，不是案件列表——
+      // 挂个"共 N 件案件"会让人以为是待办条数，含义对不上，索性不显示数字。
+      out.push({
+        key: '__all__', name: '全部', tone: o.type, category: '', noCount: true,
+        desc: '该栏目不按小类划分，直接进入'
+      })
+    } else if (o.key === 'OTHER' || !subs.length) {
       // 其他类型 / 尚未配置小类：只给「全部案件」一张卡，避免空板块页
       out.push({
         key: '__all__', name: '全部案件', tone: 'info', category: '',
@@ -120,8 +144,8 @@ const load = async () => {
       })
     }
 
-    // 并发统计各类数量
-    const counts = await Promise.all(out.map((b) => countOf(b.category)))
+    // 并发统计各类数量（标了 noCount 的卡不算——它指向的不是案件列表）
+    const counts = await Promise.all(out.map((b) => (b.noCount ? null : countOf(b.category))))
     out.forEach((b, i) => { b.count = counts[i] })
     boards.value = out
   } finally {
@@ -129,14 +153,19 @@ const load = async () => {
   }
 }
 
-/** 点击板块 → 案件管理列表（带类别筛选；全部案件不带） */
+/** 点击卡片 → 落点栏目（带上小类筛选；「全部」则不带，并清掉旧的小类） */
 const go = (b) => {
-  const query = b.category ? { category: b.category } : {}
-  router.push({ path: '/cases', query })
+  const t = target.value
+  const query = { ...t.query }
+  // 换小类等于重新筛选，分页必须归 1，否则会停在上一次的页码上出现空页
+  delete query.page
+  if (b.category) query.category = b.category
+  else delete query.category
+  router.push({ path: t.path, query })
 }
 
-// 类型被切换/退出后重进本页时重新统计（正常流程不会发生，兜底）
-watch(() => caseTypeStore.current, () => load())
+// 类型被切换/退出、或落点栏目变了（不同栏目有无小类维度不同）都要重算卡片
+watch(() => [caseTypeStore.current, route.query.to], () => load())
 
 onMounted(async () => {
   await categoryStore.load()

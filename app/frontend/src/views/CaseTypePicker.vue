@@ -3,8 +3,8 @@
     <div class="cf-picker__head">
       <div class="cf-picker__title">请选择案件类型</div>
       <div class="cf-picker__sub">
-        选择后，本次浏览的案件列表、看板与统计都只显示该类案件；
-        选定后顶部会出现类型条，需要换类型时点那条上的「退出类型」
+        选定大类后进入该类的小类卡片页，再选小类进入具体栏目；
+        本次浏览的案件列表、看板与统计都只显示该类案件
       </div>
     </div>
 
@@ -28,7 +28,7 @@
     </div>
 
     <div class="cf-picker__foot cf-muted">
-      提示：切换侧边栏栏目不会丢失当前选择，只有主动「退出类型」才会重置
+      提示：切换侧边栏栏目不会丢失当前选择；退回上一级或重选类型，请用顶部类型条右侧的按钮
     </div>
   </div>
 </template>
@@ -37,7 +37,7 @@
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { CASE_TYPE_OPTIONS, GATED_PATHS, useCaseTypeStore } from '../store/caseType'
+import { CASE_TYPE_OPTIONS, GATED_PATHS, boardsUrl, useCaseTypeStore } from '../store/caseType'
 import { caseApi } from '../api'
 
 const props = defineProps({
@@ -53,7 +53,7 @@ const options = CASE_TYPE_OPTIONS
 const current = ref('')
 const counts = ref({})
 
-/** 选中类型：写状态 → 跳目标栏目 */
+/** 选中类型：写状态 → 进小类卡片页（第 2 级） */
 const choose = async (o) => {
   if (!store.select(o.key)) {
     ElMessage.error('类型参数不合法')
@@ -65,13 +65,14 @@ const choose = async (o) => {
   // from 可能是纯路径（'/cases'），也可能是带 query 的完整地址
   // （'/cases?status=IN_PROGRESS&employeeId=3'）——后者来自工作台/员工图谱的跨栏目跳转
   const target = resolveFrom()
-  // 按类别浏览（2026-10-08）：选完类型先进板块页按类别下钻；
-  // 但跨栏目跳转带了明确筛选（status/employeeId 等）的仍直达列表，不截胡
-  if (target.path === '/cases' && !target.query) {
-    target.path = '/case-boards'
-  }
   store.rememberPath(target.path)
-  router.push(target.query ? { path: target.path, query: target.query } : { path: target.path })
+
+  // 三级浏览（2026-10-09）：选完大类**一律**先过小类卡片这一级，
+  // 不再区分目标栏目；最终落点（含原有筛选）用 to 带过去，选完小类再落位。
+  // 对应地，退出时也逐级退回：栏目页 → 小类页 → 大类页。
+  const qs = target.query ? new URLSearchParams(target.query).toString() : ''
+  const full = qs ? target.path + '?' + qs : target.path
+  router.push(boardsUrl(full))
 }
 
 /** 解析 from 参数：还原成 { path, query }，非法值回退到 store 记住的栏目 */

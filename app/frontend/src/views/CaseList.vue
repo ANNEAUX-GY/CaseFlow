@@ -11,8 +11,8 @@
         <el-button link size="small" @click="clearCategory">清除</el-button>
       </template>
       <span class="cf-spacer"></span>
-      <el-button link type="primary" @click="router.push('/case-boards')">按类别浏览</el-button>
-      <span class="cf-gatebar__tip">需更换类型请用顶部类型条的「退出类型」</span>
+      <el-button link type="primary" @click="gotoBoards">选择小类</el-button>
+      <span class="cf-gatebar__tip">退回上一级或换类型，请用顶部类型条右侧的按钮</span>
     </div>
 
     <div class="cf-toolbar">
@@ -163,7 +163,7 @@ import ChartPanel from '../components/ChartPanel.vue'
 import EChart from '../components/EChart.vue'
 import { CHART, lineOption, barOption } from '../utils/chart'
 import { useCategoryStore } from '../store/category'
-import { withCaseType, useCaseTypeStore } from '../store/caseType'
+import { withCaseType, useCaseTypeStore, boardsUrl } from '../store/caseType'
 import PageFooter from '../components/PageFooter.vue'
 
 const route = useRoute()
@@ -210,6 +210,14 @@ const onEmployeePick = (id) => {
 // 案件分类级联（大类 -> 小类逐层选择）；query.caseType/category 由级联路径拆出
 const cascadeFilter = ref([])
 watch(cascadeFilter, (val) => {
+  // 「未分类」(NONE) 不在级联树里，反投影后级联路径必然为空。
+  // 此时若照常把 query.category 一起清掉，点「未分类」卡片进来会当场丢失筛选
+  // （表现为：类型条显示"未分类"，列表却是全部案件）。2026-10-09 三级浏览修复。
+  if (!val?.length && query.category === 'NONE') {
+    query.page = 1
+    load()
+    return
+  }
   query.caseType = val?.[0] || ''
   query.category = val?.[1] || ''
   query.page = 1
@@ -237,6 +245,19 @@ const clearCategory = () => {
   query.page = 1
   cascadeFilter.value = []
   load()
+}
+
+/**
+ * 回小类卡片页（第 2 级）重新选小类。
+ * 地址栏里已有的其它条件（如上一轮带的 status）保留，只剥掉小类与分页，
+ * 选完回来还落在案件管理，不会把人甩到别的栏目。
+ */
+const gotoBoards = () => {
+  const q = { ...route.query }
+  delete q.category
+  delete q.page
+  const qs = new URLSearchParams(q).toString()
+  router.push(boardsUrl(qs ? `/cases?${qs}` : '/cases'))
 }
 
 const formVisible = ref(false)

@@ -27,17 +27,22 @@
       <!-- 当前案件类型条（统一入口门控，2026-10-04）：
            独立成第二行，不与顶栏的「退出」登录挤在一行——
            两个按钮都叫「退出」放同一行，45岁以上的用户极易误点。
-           这里显示"正在看哪一类案件"，右侧给出换类型的出口。 -->
+           2026-10-09 三级浏览：条上同时显示所在层级，右侧按钮逐级退回
+           （栏目页「返回类别」→ 小类页「返回大类」→ 大类页「退出类型」）。 -->
       <div v-if="caseTypeStore.selected" class="cf-ctypebar">
         <el-icon class="cf-ctypebar__icon"><Filter /></el-icon>
-        <span class="cf-ctypebar__label">当前案件类型</span>
+        <span class="cf-ctypebar__label">{{ levelLabel }}</span>
         <span class="cf-ctypebar__tag" :class="'is-' + (caseTypeStore.currentOption?.type || 'info')">
           {{ caseTypeStore.currentOption?.label }}
         </span>
+        <template v-if="currentCategory">
+          <span class="cf-ctypebar__sep">/</span>
+          <span class="cf-ctypebar__tag is-info">{{ currentCategory }}</span>
+        </template>
         <span class="cf-ctypebar__tip">筛选与统计均限定在此类型内</span>
         <span class="cf-spacer"></span>
-        <el-button link type="warning" class="cf-ctypebar__exit" @click="onExitCaseType">
-          退出类型
+        <el-button link type="warning" class="cf-ctypebar__exit" @click="onBackLevel">
+          {{ backCtx.label }}
         </el-button>
       </div>
 
@@ -67,7 +72,7 @@ import { Filter } from '@element-plus/icons-vue'
 import { useUserStore } from '../store/user'
 import { usePendingStore } from '../store/pending'
 import { useEventStore } from '../store/events'
-import { useCaseTypeStore } from '../store/caseType'
+import { useCaseTypeStore, boardsUrl, levelOf, PICKER_PATH } from '../store/caseType'
 import { useMyTodoStore } from '../store/myTodo'
 import NavPanel from './NavPanel.vue'
 import WelcomeDialog from '../components/WelcomeDialog.vue'
@@ -159,5 +164,57 @@ const onExitCaseType = () => {
   const back = caseTypeStore.lastGatedPath || '/cases'
   caseTypeStore.exit()
   router.push({ path: '/case-type', query: { from: back } })
+}
+
+// ---- 三级浏览的逐级退回（2026-10-09）----
+// 层级：1=大类卡片页，2=小类卡片页，3=栏目页。按钮语义随所在层级自动变，
+// 点一次退一级，正好对应"先退小类再退大类"。
+const level = computed(() => levelOf(route.path))
+
+/** 类型条左侧的层级提示语 */
+const levelLabel = computed(() => {
+  if (level.value === 1) return '选择案件大类'
+  if (level.value === 2) return '选择小类'
+  return '当前案件类型'
+})
+
+/** 栏目页若带了小类筛选，条上把它一并显示出来（否则用户不知道now在看哪一小类） */
+const currentCategory = computed(() => {
+  const c = String(route.query.category || '')
+  if (!c) return ''
+  return c === 'NONE' ? '未分类' : c
+})
+
+/** 返回按钮文案：按层级决定 */
+const backCtx = computed(() => {
+  if (level.value === 1) return { label: '退出类型', kind: 'exit' }
+  if (level.value === 2) return { label: '返回大类', kind: 'upType' }
+  return { label: '返回类别', kind: 'upCategory' }
+})
+
+/**
+ * 逐级退回。
+ *
+ * <p>关键点：往上一级退时要把「当前栏目」作为落点带走——
+ * 在第 2 级重新选完小类后，用户应该回到原来的栏目（如案件盯办），
+ * 而不是被一律送回案件管理。所以上退时把 route 剥掉 category 再包成 to。
+ */
+const onBackLevel = () => {
+  const kind = backCtx.value.kind
+  if (kind === 'exit') {
+    onExitCaseType()
+    return
+  }
+  if (kind === 'upType') {
+    // 回大类页：带上 from，选完大类后能回到原来那个栏目
+    router.push({ path: PICKER_PATH, query: { from: caseTypeStore.lastGatedPath || '/cases' } })
+    return
+  }
+  // upCategory：栏目页 → 小类页。剥掉小类筛选与分页，避免把旧筛选带进新一次选择
+  const q = { ...route.query }
+  delete q.category
+  delete q.page
+  const qs = new URLSearchParams(q).toString()
+  router.push(boardsUrl(qs ? `${route.path}?${qs}` : route.path))
 }
 </script>

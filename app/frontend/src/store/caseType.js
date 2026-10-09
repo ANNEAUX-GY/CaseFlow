@@ -51,6 +51,28 @@ export const CASE_TYPE_OPTIONS = [
 /** 受门控的栏目：进入前必须先选类型 */
 export const GATED_PATHS = ['/watch', '/todos', '/cases', '/reminders', '/case-boards']
 
+/**
+ * 三级浏览（2026-10-09）：大类 → 小类 → 案件列表。
+ *
+ * <p>第 1 级 = 大类卡片页（/case-type），第 2 级 = 小类卡片页（/case-boards），
+ * 第 3 级 = 真正干活的栏目页（下面的 LEVEL3_PATHS）。
+ * 选完大类不再直达第 3 级，一律先过第 2 级；退出时反过来逐级退回。
+ */
+/** 第 3 级：真正干活的栏目页 */
+export const LEVEL3_PATHS = ['/watch', '/todos', '/cases', '/reminders']
+/**
+ * 第 3 级里**支持按小类过滤**的栏目。
+ *
+ * <p>待办总览与到期提醒没有「小类」这个维度（后端接口只吃 caseType），
+ * 硬塞一个小类筛选只会给人「选了却不生效」的错觉——
+ * 所以这两个栏目在小类页只给一张「全部」卡，流程照样走两级，但不假装能筛。
+ */
+export const CATEGORY_AWARE_PATHS = ['/cases', '/watch']
+/** 第 2 级：小类卡片页 */
+export const BOARDS_PATH = '/case-boards'
+/** 第 1 级：大类卡片页 */
+export const PICKER_PATH = '/case-type'
+
 /** 本地已保存的原始值 → 选项 key */
 function readStored() {
   try {
@@ -172,4 +194,52 @@ export function gotoGated(router, path, query) {
   const qs = query ? new URLSearchParams(query).toString() : ''
   const full = qs ? path + '?' + qs : path
   router.push({ path: '/case-type', query: { from: full } })
+}
+
+/**
+ * 把「最终落点栏目地址」解析成 { path, query }，并做站内白名单校验。
+ *
+ * <p>to 是 URL 参数，可以被人手改成任意字符串，所以只接受 LEVEL3_PATHS 里的路径；
+ * 非法值一律退回案件管理，不给构造跳转到任意路由的机会（与 resolveFrom 同一套思路）。
+ *
+ * @param {string} raw 形如 '/cases?status=IN_PROGRESS' 的完整地址
+ * @returns {{path: string, query: Object}}
+ */
+export function parseLevel3(raw) {
+  const s = String(raw || '')
+  const [p, qs] = s.split('?')
+  if (!LEVEL3_PATHS.includes(p)) return { path: '/cases', query: {} }
+  const query = {}
+  if (qs) for (const [k, v] of new URLSearchParams(qs).entries()) query[k] = v
+  return { path: p, query }
+}
+
+/**
+ * 由「最终落点栏目地址」拼出小类卡片页的地址。
+ *
+ * <p>为什么必须把落点带过去：从「待办总览」进来的用户选完小类后
+ * 应该回待办总览，而不是被一律送回案件管理——少了这个 to 就会串栏目。
+ *
+ * @param {string} full 落点完整地址，如 '/watch?keyword=张'
+ */
+export function boardsUrl(full) {
+  const { path, query } = parseLevel3(full)
+  const qs = new URLSearchParams(query).toString()
+  return { path: BOARDS_PATH, query: { to: qs ? path + '?' + qs : path } }
+}
+
+/**
+ * 反查当前所在层级，供顶栏「返回」按钮决定语义（逐级退回）。
+ *
+ * <p>level: 1=大类卡片页，2=小类卡片页，3=栏目页。
+ * 注意第 1 级也可能带 from（从栏目页退上来时），所以按路径判断而不是按有无参数。
+ *
+ * @param {string} path 当前路由 path
+ * @returns {1|2|3}
+ */
+export function levelOf(path) {
+  const p = String(path || '')
+  if (p.startsWith(PICKER_PATH)) return 1
+  if (p.startsWith(BOARDS_PATH)) return 2
+  return 3
 }
