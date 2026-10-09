@@ -84,10 +84,11 @@ public class WatchController {
         return Result.ok(watchService.page(q));
     }
 
-    /** 盯办看板四组计数 */
+    /** 盯办看板四组计数 + 图表数据；category 与列表同口径，保证「卡片数字 = 列表条数」 */
     @GetMapping("/board")
-    public Result<WatchBoardVO> board(@RequestParam(required = false) String caseType) {
-        return Result.ok(watchService.board(caseType));
+    public Result<WatchBoardVO> board(@RequestParam(required = false) String caseType,
+                                      @RequestParam(required = false) String category) {
+        return Result.ok(watchService.board(caseType, category));
     }
 
     // ---------------- 侦查计划 ----------------

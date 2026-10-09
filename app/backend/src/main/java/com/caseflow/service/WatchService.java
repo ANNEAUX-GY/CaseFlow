@@ -8,12 +8,15 @@ import com.caseflow.entity.CasePlan;
 import com.caseflow.mapper.CaseInfoMapper;
 import com.caseflow.mapper.CasePlanMapper;
 import com.caseflow.vo.CaseVO;
+import com.caseflow.vo.StatsVO;
 import com.caseflow.vo.WatchBoardVO;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -65,6 +68,22 @@ public class WatchService {
      * {@link CaseService#page} 一致：OTHER = 非刑事、非行政（含未立案与空值）。
      */
     public WatchBoardVO board(String caseType) {
+        return board(caseType, null);
+    }
+
+    /**
+     * 盯办看板四组计数 + 图表数据。
+     *
+     * <p><b>按案件类型过滤</b>（2026-10 统一类型选择器）：看板卡片与下方列表必须同口径，
+     * 否则用户选中「刑事案件」却看到行政案件的计数。caseType 口径与
+     * {@link CaseService#page} 一致：OTHER = 非刑事、非行政（含未立案与空值）。
+     *
+     * <p><b>按小类过滤</b>（2026-10-09 三级浏览）：从「按类别浏览」选完小类进来时，
+     * 卡片若还按大类统计，就会出现"卡片写 7 件、下面列表只 2 条"的口径错位——
+     * 所以卡片与图表统统走 category；口径与 {@link CaseService#page} 一致：NONE = 类别为空。
+     * 唯一例外是 {@code categoryDist}（各小类分布），见该字段注释。
+     */
+    public WatchBoardVO board(String caseType, String category) {
         LocalDateTime now = LocalDateTime.now();
         WatchBoardVO vo = new WatchBoardVO();
 
@@ -81,7 +100,21 @@ public class WatchService {
             }
         }
         List<CaseInfo> all = caseMapper.selectList(typeW);
-        List<CaseInfo> open = all.stream().filter(c -> !CLOSED.contains(c.getStatus())).collect(Collectors.toList());
+
+        // 小类筛选：NONE = 未分类（NULL 或空串），与 CaseService.page 同一口径。
+        // 在内存里筛而不是再查一次库：本表是内网小数据量（在办案件量级几十），
+        // 少一次往返比省这点内存更值；也让「大类口径」的 all 天然可复用给 categoryDist。
+        List<CaseInfo> scoped = all;
+        if (category != null && !category.trim().isEmpty()) {
+            String cat = category.trim();
+            scoped = all.stream()
+                    .filter(c -> "NONE".equalsIgnoreCase(cat)
+                            ? isBlank(c.getCategory())
+                            : cat.equals(c.getCategory()))
+                    .collect(Collectors.toList());
+        }
+
+        List<CaseInfo> open = scoped.stream().filter(c -> !CLOSED.contains(c.getStatus())).collect(Collectors.toList());
 
         // 初查：无强制措施 + 在办
         List<CaseInfo> initial = open.stream()
@@ -114,7 +147,70 @@ public class WatchService {
         vo.setApprovalStale(approving.stream().filter(c -> c.getUpdatedAt() != null
                 && c.getUpdatedAt().isBefore(staleBefore)).count());
 
+        // ---- 图表：与上面卡片同源同一次查询，杜绝"卡片 7 件、图里 6 件" ----
+        vo.setCategoryDist(categoryDist(
+                all.stream().filter(c -> !CLOSED.contains(c.getStatus())).collect(Collectors.toList())));
+        vo.setDueDist(dueDist(detention, bail, now));
+
         return vo;
+    }
+
+    private boolean isBlank(String s) {
+        return s == null || s.trim().isEmpty();
+    }
+
+    /**
+     * 在办案件按小类统计，条数降序；「未分类」固定垫底。
+     *
+     * <p>条数降序而不是按字典顺序：这张图是拿来横向比较"哪类多、哪类少"的，
+     * 长条在上更省眼；垫底未分类则是因为它是个兜底桶，不该挤在真实类别中间。
+     */
+    private List<StatsVO.NameValue> categoryDist(List<CaseInfo> open) {
+        Map<String, Long> cnt = new LinkedHashMap<>();
+        for (CaseInfo c : open) {
+            cnt.merge(isBlank(c.getCategory()) ? "" : c.getCategory().trim(), 1L, Long::sum);
+        }
+        List<StatsVO.NameValue> list = new ArrayList<>();
+        cnt.forEach((k, v) -> list.add(k.isEmpty()
+                ? new StatsVO.NameValue("NONE", "未分类", v)
+                : new StatsVO.NameValue(k, k, v)));
+        list.sort((a, b) -> {
+            boolean an = "NONE".equals(a.getCode());
+            boolean bn = "NONE".equals(b.getCode());
+            if (an != bn) {
+                return an ? 1 : -1;
+            }
+            return Long.compare(b.getValue(), a.getValue());
+        });
+        return list;
+    }
+
+    /** 已采取措施案件的期限余量分桶；分界与卡片上的「临期（≤7天）」口径一致 */
+    private List<StatsVO.NameValue> dueDist(List<CaseInfo> detention, List<CaseInfo> bail, LocalDateTime now) {
+        List<CaseInfo> withMeasure = new ArrayList<>(detention);
+        withMeasure.addAll(bail);
+        long overdue = 0, d7 = 0, d30 = 0, later = 0, unset = 0;
+        for (CaseInfo c : withMeasure) {
+            LocalDateTime dl = c.getDetainDeadline();
+            if (dl == null) {
+                unset++;
+            } else if (dl.isBefore(now)) {
+                overdue++;
+            } else if (dl.isBefore(now.plusDays(7))) {
+                d7++;
+            } else if (dl.isBefore(now.plusDays(30))) {
+                d30++;
+            } else {
+                later++;
+            }
+        }
+        List<StatsVO.NameValue> list = new ArrayList<>();
+        list.add(new StatsVO.NameValue("OVERDUE", "已超期", overdue));
+        list.add(new StatsVO.NameValue("D7", "7天内到期", d7));
+        list.add(new StatsVO.NameValue("D30", "8-30天", d30));
+        list.add(new StatsVO.NameValue("LATER", "30天以上", later));
+        list.add(new StatsVO.NameValue("UNSET", "未登记期限", unset));
+        return list;
     }
 
     /** 期限在 (now, now+days] 区间内（临期未超期） */

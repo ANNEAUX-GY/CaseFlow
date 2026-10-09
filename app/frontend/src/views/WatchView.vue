@@ -3,7 +3,12 @@
     <!-- 类型锁定提示条：看板四组卡片与三子模块列表都只统计这一类案件 -->
     <div class="cf-gatebar" :class="'is-' + (caseTypeStore.currentOption?.type || 'info')">
       <span class="cf-gatebar__tag">{{ caseTypeStore.currentOption?.label || '未选择' }}</span>
-      <span>当前只看这一类案件；看板计数、页签列表与检索均限定在此类型内</span>
+      <template v-if="scopeCategory">
+        <span class="cf-gatebar__divider"></span>
+        <span>类别：<b>{{ scopeCategoryLabel }}</b></span>
+        <el-button link size="small" @click="clearCategory">清除</el-button>
+      </template>
+      <span>当前只看{{ scopeCategory ? '这一小类' : '这一类' }}案件；看板计数、图表、页签列表与检索均限定在此范围内</span>
       <span class="cf-spacer"></span>
       <span class="cf-gatebar__tip">退回上一级或换类型，请用顶部类型条右侧的按钮</span>
     </div>
@@ -21,6 +26,29 @@
             </span>
           </div>
         </div>
+      </el-col>
+    </el-row>
+
+    <!-- 可视化：三张图与上方卡片同源同口径（都带当前类型 + 小类），
+         结构（占比） / 期限（紧迫度） / 分类（横向比较）三个角度互补，
+         卡片上已有的数字不再重复画一遍，图只补数字表达不出来的分布信息 -->
+    <el-row :gutter="12" class="cf-watch__charts">
+      <el-col :span="8" :xs="24">
+        <ChartPanel title="在办案件构成（点击切换页签）" :empty="!moduleData.length">
+          <EChart :option="modulePieOption" :height="196" @click="onPieClick" />
+        </ChartPanel>
+      </el-col>
+      <el-col :span="8" :xs="24">
+        <ChartPanel :title="'措施期限分布' + (scopeCategory ? '（' + scopeCategoryLabel + '）' : '')"
+          :empty="!dueTotal">
+          <EChart :option="dueBarOption" :height="196" />
+        </ChartPanel>
+      </el-col>
+      <el-col :span="8" :xs="24">
+        <ChartPanel title="各小类案件数（点击即筛该类）" :empty="!categoryBars.length">
+          <EChart :option="categoryBarOption" :height="categoryChartHeight"
+            :max-height="categoryViewport" @click="onCategoryBarClick" />
+        </ChartPanel>
       </el-col>
     </el-row>
 
@@ -50,6 +78,7 @@
               clearable
               filterable
               style="width: 165px"
+              @change="onFilterChange"
             />
             <el-input v-model="query.suspectName" placeholder="嫌疑人姓名" clearable style="width: 130px" @keyup.enter="load" />
             <el-input v-model="query.suspectIdCard" placeholder="身份证号" clearable style="width: 160px" @keyup.enter="load" />
@@ -168,7 +197,10 @@ import { watchApi, employeeApi } from '../api'
 import { useCategoryStore } from '../store/category'
 import { withCaseType, useCaseTypeStore } from '../store/caseType'
 import { CASE_TYPE_META, INVEST_STATUS_META, MEASURE_META, STAGE_META, stageLabel, suspectLabel, suspectNamesText } from '../utils/format'
+import { CHART, barOption } from '../utils/chart'
 import WatchDrawer from '../components/WatchDrawer.vue'
+import ChartPanel from '../components/ChartPanel.vue'
+import EChart from '../components/EChart.vue'
 import PageFooter from '../components/PageFooter.vue'
 
 const categoryStore = useCategoryStore()
@@ -188,11 +220,16 @@ const query = reactive({
 })
 const cascadeFilter = ref([])
 watch(cascadeFilter, (val) => {
-  // 「未分类」(NONE) 不在级联树里，反投影后级联必为空——
-  // 照常清掉 query.category 会让「未分类」卡片进来当场失效（2026-10-09 三级浏览修复）
-  if (!val?.length && query.category === 'NONE') {
-    query.page = 1
-    return
+  // 级联为空 ≠ 一定要清掉小类筛选：NONE（未分类）与字典外的小类都反投影不出级联，
+  // 照常清掉会让「未分类」卡片、以及从图表点选进来的筛选当场失效（2026-10-09）。
+  // 只有「级联本可以表示这个类别、但被用户清掉了」才真的清筛选。
+  if (!val?.length) {
+    const keep = query.category === 'NONE'
+      || (query.category && !categoryStore.typeOfCategory(query.category))
+    if (keep) {
+      query.page = 1
+      return
+    }
   }
   query.caseType = val?.[0] || ''
   query.category = val?.[1] || ''
@@ -264,6 +301,151 @@ const goModule = (card) => {
   load()
 }
 
+// ---- 当前浏览的小类（看板、图表与列表共用的唯一口径）----
+// 就是 query.category：既来自三级浏览的地址栏参数，也来自页内级联控件，
+// 不再另立一份状态，避免"筛选条写电诈、卡片算全刑事"这种两套口径打架。
+const scopeCategory = computed(() => query.category || '')
+const scopeCategoryLabel = computed(() => (!scopeCategory.value ? ''
+  : scopeCategory.value === 'NONE' ? '未分类' : scopeCategory.value))
+const clearCategory = () => {
+  query.category = ''
+  query.page = 1
+  cascadeFilter.value = []
+  load()
+  loadBoard()
+}
+
+// ---- 图表（三张，数据全部来自同一次 /watch/board 返回，与卡片同源）----
+// 卡片上已经有的数字不再重复画一遍，图只补「数字表达不出来的分布」：
+// 占比（在办构成）、紧迫度（期限分桶）、横向比较（各小类多少）。
+
+/** 在办构成：初查 / 刑拘在办 / 取保及监居。三者互斥且完备，相加即全部在办案件 */
+const moduleData = computed(() => {
+  const b = board.value || {}
+  return [
+    { key: 'INITIAL', name: '初查案件', value: b.initialTotal ?? 0, color: CHART.primary },
+    { key: 'DETENTION', name: '刑拘在办', value: b.detentionTotal ?? 0, color: CHART.danger },
+    { key: 'BAIL_RESIDENCE', name: '取保及监居', value: b.bailTotal ?? 0, color: CHART.gold }
+  ].filter((d) => d.value > 0)
+})
+
+const modulePieOption = computed(() => {
+  const data = moduleData.value.map((d) => ({
+    name: d.name,
+    value: d.value,
+    itemStyle: { color: d.color, borderColor: '#ffffff', borderWidth: 2 }
+  }))
+  const total = data.reduce((s, d) => s + d.value, 0)
+  return {
+    tooltip: {
+      trigger: 'item',
+      confine: true,
+      backgroundColor: 'rgba(18,41,74,0.92)',
+      borderWidth: 0,
+      textStyle: { color: '#fff', fontSize: 12 },
+      formatter: '{b}：{c} 件（{d}%）'
+    },
+    // 图例放底部：三块占比相近时环上标签会互相压，图例才是可靠的读数入口
+    legend: {
+      bottom: 0, left: 'center', itemWidth: 10, itemHeight: 8, itemGap: 12,
+      textStyle: { color: CHART.text2, fontSize: 11 }
+    },
+    title: {
+      text: String(total), subtext: '在办合计', left: 'center', top: '30%',
+      textStyle: { fontSize: 24, fontWeight: 600, color: CHART.text },
+      subtextStyle: { fontSize: 11, color: CHART.text3 }
+    },
+    series: [{
+      type: 'pie',
+      radius: ['52%', '72%'],
+      center: ['50%', '42%'],
+      avoidLabelOverlap: true,
+      label: { show: false },
+      labelLine: { show: false },
+      emphasis: { label: { show: false }, scaleSize: 6 },
+      data
+    }],
+    animationDuration: 380
+  }
+})
+
+/** 点环形图某一块 → 跳到对应页签（与点卡片同一行为） */
+const onPieClick = (p) => {
+  const item = moduleData.value[p.dataIndex]
+  if (item) goModule({ key: item.key })
+}
+
+/** 期限分桶配色：红=已超期、橙=7天内、蓝=更宽裕，灰=未登记（缺数据，不是风险） */
+const DUE_COLOR = {
+  OVERDUE: CHART.danger,
+  D7: CHART.warn,
+  D30: CHART.primary,
+  LATER: CHART.primaryLight,
+  UNSET: CHART.text3
+}
+const dueBars = computed(() => board.value.dueDist || [])
+// 空桶也由后端返回（保持柱数稳定），所以"有没有数据"要看总数，不能看数组长度——
+// 否则某一小类下没有采取措施的案件时，会画出五根全 0 的柱子，看着像坏了
+const dueTotal = computed(() => dueBars.value.reduce((s, d) => s + d.value, 0))
+const dueBarOption = computed(() => {
+  const list = dueBars.value
+  return barOption({
+    categories: list.map((d) => d.name),
+    series: [{ name: '案件数', data: list.map((d) => d.value) }],
+    horizontal: true,
+    colors: [list.map((d) => DUE_COLOR[d.code] || CHART.primary)],
+    narrow: false
+  })
+})
+
+/** 各小类案件数：按**大类**统计（不受当前小类筛选影响），选中那根用金色标出 */
+const categoryBars = computed(() => board.value.categoryDist || [])
+const categoryBarOption = computed(() => {
+  const list = categoryBars.value
+  const active = scopeCategory.value
+  return barOption({
+    categories: list.map((d) => d.name),
+    series: [{ name: '案件数', data: list.map((d) => d.value) }],
+    horizontal: true,
+    colors: [list.map((d) => (active && d.code === active ? CHART.gold : CHART.primary))],
+    narrow: false
+  })
+})
+// 条数多时不能硬塞进固定高度：按条数长高、外层限高滚动（与工作台负载图同一套做法）
+const categoryViewport = computed(() => 196)
+const categoryChartHeight = computed(() =>
+  Math.max(categoryViewport.value, categoryBars.value.length * 26 + 40))
+
+/** 点小类柱体 → 直接筛到该类（再点一次取消），列表与看板同时刷新 */
+const onCategoryBarClick = (p) => {
+  const item = categoryBars.value[p.dataIndex]
+  if (!item) return
+  applyCategory(scopeCategory.value === item.code ? '' : item.code)
+}
+
+/**
+ * 统一设置当前小类（'' = 清除）。
+ *
+ * <p>级联控件与 query.category 必须一起改：只改一个，要么筛选条写着电诈而级联是空的，
+ * 要么下次点「查询」时用级联的空值把筛选悄悄清掉。
+ *
+ * <p><b>不要再补一句「把 category 写回」</b>：级联的 watch 是异步 flush 的，
+ * 同步写回只会被稍后的 watch 覆盖，而 load() 早已带着旧值发出去——
+ * 表现就是「提示条上的小类没了、卡片数字还是小类的」（实测踩过）。
+ */
+const applyCategory = (cat) => {
+  query.category = cat
+  query.page = 1
+  if (!cat || cat === 'NONE') {
+    cascadeFilter.value = []
+  } else {
+    const t = categoryStore.typeOfCategory(cat)
+    cascadeFilter.value = t ? [t, cat] : []
+  }
+  load()
+  loadBoard()
+}
+
 const load = async () => {
   loading.value = true
   try {
@@ -276,13 +458,27 @@ const load = async () => {
     total.value = data.total
   } finally { loading.value = false }
 }
-// 看板四组计数同样锁类型，否则卡片数字与下方列表对不上
-const loadBoard = async () => { board.value = await watchApi.board(withCaseType()) }
+/**
+ * 看板四组计数锁类型 + 锁小类（2026-10-09）。
+ * 只锁类型是不够的：从「按类别浏览」选完小类进来时，卡片若还按大类统计，
+ * 就会出现"卡片写 7 件、下面列表只有 2 条"的口径错位。图表与卡片同一次请求，
+ * 天然同源，不存在图上 6 件、卡上 7 件这种自相矛盾。
+ */
+const loadBoard = async () => {
+  board.value = await watchApi.board(withCaseType({ category: query.category }))
+}
 const reset = () => {
   // 不重置 caseType：它归门控管，重置筛选不该把类型也放开
   Object.assign(query, { page: 1, keyword: '', category: '', suspectName: '', suspectIdCard: '', employeeId: null, investigationStatus: '' })
   cascadeFilter.value = []
   load()
+  loadBoard()
+}
+/** 页内筛选变化（分类级联）：列表与看板一起刷，否则会出现"筛选条写电诈、卡片还是全刑事" */
+const onFilterChange = () => {
+  query.page = 1
+  load()
+  loadBoard()
 }
 const refreshAll = () => { load(); loadBoard() }
 
@@ -318,13 +514,16 @@ onMounted(async () => {
 })
 
 // 已在本栏目时再次从小类页选另一个小类过来：地址栏 category 变了要跟着重取
+// （看板同样要重取，否则卡片还停在上一小类的数字上）
 watch(() => route.query.category, () => {
-  if (syncCategoryFromRoute()) { load() }
+  if (syncCategoryFromRoute()) { load(); loadBoard() }
 })
 </script>
 
 <style>
 .cf-watch__board { margin-bottom: 12px }
+/* 图表行：三张图等宽并排，与卡片同宽对齐（同一个 :gutter 12） */
+.cf-watch__charts { margin-bottom: 12px }
 .cf-watch__card {
   cursor: pointer;
   transition: border-color .15s, box-shadow .18s ease;
