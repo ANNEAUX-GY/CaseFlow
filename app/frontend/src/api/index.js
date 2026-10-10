@@ -200,6 +200,11 @@ export const watchApi = {
   /** 新增意见。deadline 可空（'' 或 null），importance 缺省由后端落C */
   addOpinion: (caseId, data) => http.post(`/watch/cases/${caseId}/opinions`,
     typeof data === 'string' ? { content: data } : data),
+  /**
+   * 批量新增意见（一次多条，整批一个事务）。
+   * items: [{ content, deadline, importance }]，空内容的行由后端跳过。
+   */
+  addOpinions: (caseId, items) => http.post(`/watch/cases/${caseId}/opinions/batch`, { items }),
   /** 修改截止时间与重要性（仅管理层）；deadline 传 '' 即清空 */
   updateOpinionMeta: (id, data) => http.post(`/watch/opinions/${id}/meta`, data),
   /** 移除意见（仅管理层）；后端软删并连带清理派生待办 */

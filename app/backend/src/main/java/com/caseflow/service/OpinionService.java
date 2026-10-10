@@ -24,6 +24,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -44,6 +45,12 @@ public class OpinionService {
 
     private static final List<String> FEEDBACK_STATUSES =
             Arrays.asList(CaseLeaderOpinion.FB_DONE, CaseLeaderOpinion.FB_IN_PROGRESS, CaseLeaderOpinion.FB_NOT_DONE);
+
+    /**
+     * 一次批量提交的上限。10 条是「领导一次口头交代」的合理规模；
+     * 再往上多半是拿它当批量导入用，那种需求应该走 Excel 导入而不是这个弹窗。
+     */
+    private static final int MAX_BATCH = 10;
 
     @Resource
     private CaseLeaderOpinionMapper opinionMapper;
@@ -115,10 +122,56 @@ public class OpinionService {
         if (!StringUtils.hasText(content)) {
             throw new BizException("请填写意见内容");
         }
+        return doAdd(caseId, content, deadline, importance);
+    }
+
+    /**
+     * 批量提出意见（管理层）——「添加待办」弹窗一次可以填多条，提交就走这里。
+     *
+     * <p><b>整批一个事务</b>：要么全部落库，要么一条都不留。半批成功是最难收拾的结果
+     * （使用者根本不知道哪几条进去了、要不要重填），所以这里不做"逐条独立"的妥协。
+     *
+     * <p>内容为空的项视为"这一行没填"，直接跳过不算错；但整批都为空要报错，
+     * 否则会静默什么都不做，用户以为保存成功了。
+     *
+     * @param items 每项形如 {content, deadline, importance}，按提交顺序落库
+     * @return 新建的意见，顺序与入参一致（前端按序提示「已添加 N 条」）
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public List<CaseLeaderOpinion> addBatch(Long caseId, List<Map<String, Object>> items) {
         requireCase(caseId);
-        if (!AuthContext.isFullAccess()) {
-            throw new BizException(403, "只有管理员或领导可以提出意见");
+        requireManager();
+
+        List<Map<String, Object>> drafts = new ArrayList<>();
+        if (items != null) {
+            for (Map<String, Object> it : items) {
+                if (it == null) {
+                    continue;
+                }
+                if (StringUtils.hasText(strOf(it.get("content")))) {
+                    drafts.add(it);
+                }
+            }
         }
+        if (drafts.isEmpty()) {
+            throw new BizException("请至少填写一条待办内容");
+        }
+        if (drafts.size() > MAX_BATCH) {
+            throw new BizException("一次最多添加 " + MAX_BATCH + " 条待办，请分两次提交");
+        }
+
+        List<CaseLeaderOpinion> out = new ArrayList<>();
+        for (Map<String, Object> it : drafts) {
+            out.add(doAdd(caseId, strOf(it.get("content")),
+                    strOf(it.get("deadline")), strOf(it.get("importance"))));
+        }
+        return out;
+    }
+
+    /** 提出意见的公共实现（单条 / 批量共用），事务由调用方开启。 */
+    private CaseLeaderOpinion doAdd(Long caseId, String content, String deadline, String importance) {
+        requireCase(caseId);
+        requireManager();
 
         CaseLeaderOpinion o = new CaseLeaderOpinion();
         o.setCaseId(caseId);
@@ -618,6 +671,18 @@ public class OpinionService {
         if (caseId == null || caseMapper.selectById(caseId) == null) {
             throw new BizException(400, "案件不存在");
         }
+    }
+
+    /** 提意见 / 改意见 = 管理层（管理员 + 领导）。单一落点，避免各处口径漂移。 */
+    private void requireManager() {
+        if (!AuthContext.isFullAccess()) {
+            throw new BizException(403, "只有管理员或领导可以提出意见");
+        }
+    }
+
+    /** 宽松取字符串：null 原样返回 null（parseDeadline / normalizeImportance 都吃得下） */
+    private String strOf(Object o) {
+        return o == null ? null : String.valueOf(o);
     }
 
     private String statusName(String status) {

@@ -16,7 +16,7 @@
       <div class="cf-todo__empty-badge">待办</div>
       <div class="cf-todo__empty-title">本案件还没有待办事项</div>
       <ol class="cf-todo__empty-steps">
-        <li v-if="isAdmin">点右上角「＋ 添加」，写清要办的事（可设截止时间和 A/B/C 重要级）</li>
+        <li v-if="isAdmin">点右上角「＋ 添加」，一次可以连着写好几条（可设截止时间和 A/B/C 重要级）</li>
         <li>添加的事项就是办案人的待办，干完活提交反馈说明</li>
         <li>反馈过后勾选前面的方框，该事项即标记完成</li>
       </ol>
@@ -262,9 +262,101 @@
     <!-- 任务详情浮窗：反馈记录 + 落实反馈弹窗（图二口径） -->
     <TodoDetailDialog ref="detailRef" @changed="onDetailChanged" />
 
+    <!-- ============ 添加待办：一次可填多条（批量） ============
+         原来是「一条一弹窗」，领导一次交代三件事就得开关三次。现在改成表格式批量录入：
+         列头只说一次列义，行里只放控件，十几条也不会每行重复一遍标签、把弹窗撑爆。
+         提交走 POST /watch/cases/{id}/opinions/batch，整批一个事务（要么全成、要么全不留）。 -->
+    <el-dialog
+      v-model="addVisible"
+      title="添加待办"
+      class="cf-btodo-dlg"
+      width="min(880px, 94vw)"
+      append-to-body
+      destroy-on-close
+    >
+      <div class="cf-btodo">
+        <div class="cf-btodo__hint">
+          <el-icon><InfoFilled /></el-icon>
+          <span>
+            一次可以连着写多条：填完一行按 <b>Enter</b> 直接写下一行。
+            截止时间与重要程度都是选填，不填按「C 一般」处理。
+          </span>
+        </div>
+
+        <div class="cf-btodo__grid cf-btodo__grid--head">
+          <span>序号</span>
+          <span>待办内容（必填）</span>
+          <span>截止时间（选填）</span>
+          <span>重要程度</span>
+          <span></span>
+        </div>
+
+        <div ref="rowsEl" class="cf-btodo__rows">
+          <div v-for="(r, i) in rows" :key="r.key" class="cf-btodo__grid cf-btodo__row">
+            <span class="cf-btodo__no">{{ i + 1 }}</span>
+            <el-input
+              v-model="r.content"
+              class="cf-btodo__content"
+              maxlength="500"
+              placeholder="写清要办的事，如：72 小时内完成受害人走访"
+              @keyup.enter="onEnter(i)"
+            />
+            <el-date-picker
+              v-model="r.deadline"
+              class="cf-btodo__date"
+              type="datetime"
+              size="small"
+              format="YYYY-MM-DD HH:mm"
+              value-format="YYYY-MM-DDTHH:mm:ss"
+              placeholder="选填"
+              :clearable="true"
+            />
+            <el-radio-group v-model="r.importance" size="small" class="cf-abc cf-btodo__abc">
+              <el-radio-button value="A" class="is-a">A</el-radio-button>
+              <el-radio-button value="B" class="is-b">B</el-radio-button>
+              <el-radio-button value="C" class="is-c">C</el-radio-button>
+            </el-radio-group>
+            <el-button
+              link
+              type="danger"
+              class="cf-btodo__del"
+              :title="rows.length === 1 ? '清空这一行' : '删除这一行'"
+              @click="removeRow(i)"
+            >
+              <el-icon><Delete /></el-icon>
+            </el-button>
+          </div>
+        </div>
+
+        <div class="cf-btodo__legend">
+          重要程度：<b class="is-a">A</b> 最重要 · <b class="is-b">B</b> 重要 · <b class="is-c">C</b> 一般
+        </div>
+      </div>
+
+      <template #footer>
+        <div class="cf-btodo__foot">
+          <div class="cf-btodo__foot-left">
+            <el-button link type="primary" :disabled="rows.length >= MAX_BATCH" @click="addRow()">
+              <el-icon><Plus /></el-icon>再添一条
+            </el-button>
+            <span class="cf-btodo__count">
+              已填 <b>{{ filledCount }}</b> 条<template v-if="rows.length >= MAX_BATCH">（一次最多 {{ MAX_BATCH }} 条）</template>
+            </span>
+          </div>
+          <div>
+            <el-button @click="addVisible = false">取消</el-button>
+            <el-button type="primary" :loading="batchSaving" @click="submitBatch">
+              保存{{ filledCount ? `（${filledCount} 条）` : '' }}
+            </el-button>
+          </div>
+        </div>
+      </template>
+    </el-dialog>
+
+    <!-- 编辑待办：只改内容，仍是单条 —— 批量改内容没有意义，也不该顺手改掉已登记的截止时间 -->
     <el-dialog
       v-model="editVisible"
-      :title="form.id ? '编辑待办' : '添加待办'"
+      title="编辑待办"
       width="460px"
       append-to-body
       destroy-on-close
@@ -280,25 +372,10 @@
             placeholder="写清要办的事，如：72小时内完成受害人走访"
           />
         </el-form-item>
-        <!-- 仅新增时展示：截止时间与重要程度（编辑时只改内容） -->
-        <template v-if="!form.id">
-          <el-form-item label="截止时间">
-            <el-date-picker v-model="form.deadline" type="datetime"
-              format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DDTHH:mm:ss"
-              placeholder="选填；到期前会提示临期 / 逾期" :clearable="true" style="width: 100%" />
-          </el-form-item>
-          <el-form-item label="重要程度">
-            <el-radio-group v-model="form.importance">
-              <el-radio-button value="A">A 最重要</el-radio-button>
-              <el-radio-button value="B">B 重要</el-radio-button>
-              <el-radio-button value="C">C 一般</el-radio-button>
-            </el-radio-group>
-          </el-form-item>
-        </template>
       </el-form>
       <template #footer>
         <el-button @click="editVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="submit">保存</el-button>
+        <el-button type="primary" :loading="saving" @click="submitEdit">保存</el-button>
       </template>
     </el-dialog>
   </div>
@@ -318,7 +395,7 @@
  */
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Bell, View, Plus, ArrowDown, ArrowUp, User, Clock, AlarmClock, InfoFilled, ChatLineSquare } from '@element-plus/icons-vue'
+import { Bell, View, Plus, ArrowDown, ArrowUp, User, Clock, AlarmClock, InfoFilled, ChatLineSquare, Delete } from '@element-plus/icons-vue'
 import Sortable from 'sortablejs'
 import { todoApi, watchApi } from '../api'
 import { useUserStore } from '../store/user'
@@ -661,33 +738,111 @@ const onDetailChanged = async () => {
 }
 
 // ---- 管理层维护 ----
-const openAdd = () => {
-  form.value = { id: null, content: '', deadline: '', importance: 'C' }
-  editVisible.value = true
+/* ============ 批量添加待办（2026-10-11） ============
+ * 一次可以填多条，提交走 addOpinions（整批一个事务）。
+ * 空行不发；到上限就停住「再添一条」并给出说明，不做无限追加。
+ * ================================================== */
+const MAX_BATCH = 10
+const addVisible = ref(false)
+const batchSaving = ref(false)
+const rows = ref([])
+const rowsEl = ref(null)
+let rowSeq = 0
+
+const newRow = (importance = 'C') => ({ key: ++rowSeq, content: '', deadline: '', importance })
+
+const focusRow = (i) => {
+  // 定位到行的内容输入框。用容器 ref 而不是 document 查询：
+  // 详情抽屉与盯办抽屉各挂一份本组件时，全局查询会点错面板。
+  const el = rowsEl.value?.children?.[i]?.querySelector('input')
+  el?.focus()
 }
+
+const filledCount = computed(() => rows.value.filter((r) => (r.content || '').trim()).length)
+
+/** 打开「添加待办」：先给一行并把光标放好，少点一次鼠标 */
+const openAdd = () => {
+  rows.value = [newRow('C')]
+  addVisible.value = true
+  nextTick(() => focusRow(0))
+}
+
+/** Enter = 接着写下一行；已在最后一行就追加一行（到上限则原地不动） */
+const onEnter = (i) => {
+  if (i < rows.value.length - 1) {
+    focusRow(i + 1)
+    return
+  }
+  addRow(i)
+}
+
+/**
+ * 追加一行。after 为空即加到末尾。
+ * 新行沿用上一行的重要程度——一批待办常常是同一档，省得每条都点一遍。
+ */
+const addRow = (after) => {
+  if (rows.value.length >= MAX_BATCH) return
+  const at = after == null ? rows.value.length - 1 : after
+  const prev = rows.value[at]
+  rows.value.splice(at + 1, 0, newRow(prev ? prev.importance : 'C'))
+  nextTick(() => focusRow(at + 1))
+}
+
+/** 只剩一行时不清空整个列表，只把这一行恢复成空白——按钮语义仍是「这条不要了」 */
+const removeRow = (i) => {
+  if (rows.value.length === 1) {
+    rows.value = [newRow('C')]
+    nextTick(() => focusRow(0))
+    return
+  }
+  rows.value.splice(i, 1)
+}
+
+/**
+ * 提交批量添加。
+ *
+ * <p>失败时不关弹窗、不清已填内容：整批事务意味着要么全进去要么一条没进，
+ * 用户改正后直接再点一次即可，不用重填（这也是把校验放在提交前的原因）。
+ */
+const submitBatch = async () => {
+  const items = rows.value
+    .filter((r) => (r.content || '').trim())
+    .map((r) => ({
+      content: r.content.trim(),
+      deadline: r.deadline || '',
+      importance: r.importance || 'C'
+    }))
+  if (!items.length) {
+    ElMessage.warning('请至少填写一条待办内容')
+    return
+  }
+  batchSaving.value = true
+  try {
+    await watchApi.addOpinions(props.caseId, items)
+    ElMessage.success(`已添加 ${items.length} 条待办`)
+    addVisible.value = false
+    rows.value = []
+    await load()
+    emit('changed')
+  } finally {
+    batchSaving.value = false
+  }
+}
+
 const openEdit = (t) => {
   form.value = { id: t.id, content: t.content }
   editVisible.value = true
 }
 
-const submit = async () => {
+const submitEdit = async () => {
   if (!form.value.content || !form.value.content.trim()) {
     ElMessage.warning('请填写待办内容')
     return
   }
   saving.value = true
   try {
-    if (form.value.id) {
-      await todoApi.update(form.value.id, { content: form.value.content })
-    } else {
-      // 统一走「提意见」链路：一条意见 = 一条待办（新条目由后端排到列表末尾，序号递增）
-      await watchApi.addOpinion(props.caseId, {
-        content: form.value.content,
-        deadline: form.value.deadline || '',
-        importance: form.value.importance || 'C'
-      })
-    }
-    ElMessage.success(form.value.id ? '已保存' : '已添加')
+    await todoApi.update(form.value.id, { content: form.value.content })
+    ElMessage.success('已保存')
     editVisible.value = false
     await load()
     emit('changed')
@@ -975,6 +1130,77 @@ onBeforeUnmount(() => {
 .cf-todo__act .el-icon { margin-right: 3px }
 .cf-todo__act-more { margin-left: 2px !important; margin-right: 0 !important }
 .cf-todo__menu-danger { color: #c62a2a }
+
+/* ============ 添加待办：批量录入弹窗 ============
+   列宽一套变量统一管：序号 / 内容 / 截止时间 / 重要程度 / 删除。
+   表头只说一次列义，行里只放控件——这是它比"每行一套 label"更省地方的关键。 */
+.cf-btodo { --cf-btodo-cols: 36px minmax(0, 1fr) 182px 124px 30px; }
+
+.cf-btodo__hint {
+  display: flex; align-items: flex-start; gap: 6px;
+  margin-bottom: 12px; padding: 8px 12px; border-radius: 6px;
+  background: #f2f6fc; color: #1b4a8c; font-size: 12.5px; line-height: 1.6;
+}
+.cf-btodo__hint .el-icon { margin-top: 2px; flex: none; color: #1b4a8c }
+.cf-btodo__hint b { color: #12294a }
+
+.cf-btodo__grid {
+  display: grid;
+  grid-template-columns: var(--cf-btodo-cols);
+  gap: 10px;
+  align-items: center;
+}
+/* 表头：加粗一点、贴一条底边线，把"这是列名"和"这是数据"分开 */
+.cf-btodo__grid--head {
+  padding: 0 8px 6px;
+  font-size: 12px; font-weight: 600; color: #5a6472;
+  border-bottom: 1px solid #e4e8ee;
+}
+.cf-btodo__rows { max-height: 46vh; overflow-y: auto; padding: 0 8px }
+.cf-btodo__row { padding: 7px 0; border-bottom: 1px dashed #eef1f6 }
+.cf-btodo__row:last-child { border-bottom: none }
+.cf-btodo__row:hover { background: #fafcff }
+.cf-btodo__row .el-date-editor { width: 100% }
+/* 注意：Element 的日期选择器根元素同时带 el-input 类，所以移动端排版
+   必须按自己的类定位（.cf-btodo__content / .cf-btodo__date），
+   用 .el-input 会连日期框一起命中、两个控件叠到同一个栅格区里。 */
+.cf-btodo__no {
+  width: 22px; height: 22px; line-height: 22px; text-align: center;
+  background: #eef3fa; color: #1b4a8c; border-radius: 50%;
+  font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.cf-btodo__del { padding: 0 !important; height: 22px }
+.cf-btodo__legend { padding: 10px 8px 0; font-size: 12px; color: #8a929e }
+.cf-btodo__legend b { font-weight: 700 }
+.cf-btodo__legend .is-a { color: #c62a2a }
+.cf-btodo__legend .is-b { color: #d98a0b }
+.cf-btodo__legend .is-c { color: #1b4a8c }
+
+.cf-btodo__foot {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+.cf-btodo__foot-left { display: flex; align-items: center; gap: 12px }
+.cf-btodo__count { font-size: 12px; color: #8a929e }
+.cf-btodo__count b { color: #1b4a8c; font-size: 13px; font-variant-numeric: tabular-nums }
+
+/* 窄屏：栅格改成三条竖排（序号+内容+删除 / 截止时间 / 重要程度），
+   否则固定列宽加起来会比屏幕还宽，内容框被压成一条缝。 */
+@media (max-width: 760px) {
+  .cf-btodo__grid--head { display: none }
+  .cf-btodo__row {
+    grid-template-columns: 26px minmax(0, 1fr) 26px;
+    grid-template-areas:
+      'no  content del'
+      '.   date    date'
+      '.   abc     abc';
+    row-gap: 6px;
+  }
+  .cf-btodo__no { grid-area: no }
+  .cf-btodo__content { grid-area: content }
+  .cf-btodo__del { grid-area: del }
+  .cf-btodo__date { grid-area: date }
+  .cf-btodo__abc { grid-area: abc }
+}
 
 /* 实时提醒条 */
 .cf-todo__notice {

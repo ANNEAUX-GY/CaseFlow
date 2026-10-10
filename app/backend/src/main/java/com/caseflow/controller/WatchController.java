@@ -230,6 +230,28 @@ public class WatchController {
     }
 
     /**
+     * 批量提出意见（管理层）——「添加待办」弹窗一次填多条时走这里。
+     *
+     * <p>body.items = [{content, deadline, importance}, ...]，按数组顺序落库；
+     * 整批一个事务，不会出现"进去一半"。
+     */
+    @PostMapping("/cases/{caseId}/opinions/batch")
+    @SuppressWarnings("unchecked")
+    public Result<List<CaseLeaderOpinion>> addOpinions(@PathVariable Long caseId,
+                                                       @RequestBody Map<String, Object> body) {
+        Object raw = body.get("items");
+        List<Map<String, Object>> items = new ArrayList<>();
+        if (raw instanceof List) {
+            for (Object o : (List<Object>) raw) {
+                if (o instanceof Map) {
+                    items.add((Map<String, Object>) o);
+                }
+            }
+        }
+        return Result.ok(opinionService.addBatch(caseId, items));
+    }
+
+    /**
      * 拖拽排序（管理层）：按新顺序重排位次。
      *
      * <p>body.opinionIds = 拖拽后的 opinionId 数组（完整、有序）。
