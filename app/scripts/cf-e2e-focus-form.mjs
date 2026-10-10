@@ -342,8 +342,15 @@ const run = async () => {
     await sleep(1200)
     const names = await p.evaluate(() => [...document.querySelectorAll('.el-table__row')]
       .map((x) => x.innerText.replace(/\s+/g, ' ').slice(0, 40)))
-    checkTrue('⑤ 「只看重点」只剩已标注的案件',
-      names.length > 0 && names.every((t) => t.includes(name.slice(0, 8))), JSON.stringify(names))
+    // 注意：不能断言"只剩本脚本标的那一条"——库里可能有用户自己标的真实重点案件
+    // （179 号案就是）。要钉的是"筛出来的每一行都是重点"，而不是"全库只有我一条重点"。
+    const litAll = await p.evaluate(() => {
+      const rows = [...document.querySelectorAll('.el-table__row')]
+      return rows.length > 0 && rows.every((r) => !!r.querySelector('.cf-star.is-on'))
+    })
+    checkTrue('⑤ 「只看重点」的结果包含刚标注的案件',
+      names.some((t) => t.includes(name.slice(0, 8))), JSON.stringify(names))
+    checkTrue('⑤ 「只看重点」的结果每一行都是重点', litAll, JSON.stringify(names))
     await p.screenshot({ path: `${OUT}/ff4-focus-only.png` })
 
     // 其它三个栏目的星标是否都在

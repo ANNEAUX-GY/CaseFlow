@@ -205,7 +205,30 @@ public class TodoService {
         return caseMapper.selectList(w).stream().map(CaseInfo::getId).collect(Collectors.toList());
     }
 
+    /**
+     * 重点关注（focus = 1）的案件 id。
+     *
+     * <p>与 CaseService 的 focus 口径严格对齐：**等于 1** 才算。
+     * focus 列带 NOT NULL DEFAULT 0，但存量行可能是 NULL，
+     * 所以不能写成 {@code <> 0}（那会把历史数据误算成重点）。
+     */
+    private List<Long> caseIdsOfFocus() {
+        return caseMapper.selectList(new LambdaQueryWrapper<CaseInfo>().eq(CaseInfo::getFocus, 1))
+                .stream().map(CaseInfo::getId).collect(Collectors.toList());
+    }
+
     public List<CaseTodoVO> overview(String status, Long caseId, String caseType) {
+        return overview(status, caseId, caseType, false);
+    }
+
+    /**
+     * 待办总览列表。
+     *
+     * @param focusOnly 只看重点关注案件下的待办（2026-10-10）。
+     *                  星标打在案件上，所以这里是「先取 focus=1 的案件 id，再收敛待办」，
+     *                  与 {@link com.caseflow.service.CaseService#page} 的 focus 口径一致（等于 1）。
+     */
+    public List<CaseTodoVO> overview(String status, Long caseId, String caseType, boolean focusOnly) {
         LambdaQueryWrapper<CaseTodo> w = new LambdaQueryWrapper<CaseTodo>()
                 .eq(StringUtils.hasText(status), CaseTodo::getStatus, status)
                 .eq(caseId != null, CaseTodo::getCaseId, caseId);
@@ -215,6 +238,13 @@ public class TodoService {
                 return new ArrayList<>();   // 该类型下一件案件都没有，直接空
             }
             w.in(CaseTodo::getCaseId, typeIds);
+        }
+        if (focusOnly) {
+            List<Long> focusIds = caseIdsOfFocus();
+            if (focusIds.isEmpty()) {
+                return new ArrayList<>();   // 一件重点案件都没有，待办自然为空
+            }
+            w.in(CaseTodo::getCaseId, focusIds);
         }
         w.orderByAsc(CaseTodo::getCaseId)
                 .orderByAsc(CaseTodo::getSort)
@@ -243,26 +273,39 @@ public class TodoService {
 
     /** 总览汇总数字：待办 / 已完成 / 待上传佐证 */
     public java.util.Map<String, Object> overviewSummary() {
-        return overviewSummary(null);
+        return overviewSummary(null, false);
+    }
+
+    public java.util.Map<String, Object> overviewSummary(String caseType) {
+        return overviewSummary(caseType, false);
     }
 
     /**
      * 待办总览汇总（按案件类型过滤，2026-10）。
      * 与 {@link #overview} 同口径：卡片数字与下面列表必须一致。
+     *
+     * <p>勾了「只看重点」时卡片也必须跟着收——否则又出现"卡片 21 件、列表 2 条"的口径错位。
      */
-    public java.util.Map<String, Object> overviewSummary(String caseType) {
-        List<CaseTodo> all;
-        if (StringUtils.hasText(caseType)) {
-            List<Long> typeIds = caseIdsOfType(caseType);
-            if (typeIds.isEmpty()) {
-                all = new ArrayList<>();
-            } else {
-                all = todoMapper.selectList(new LambdaQueryWrapper<CaseTodo>()
-                        .in(CaseTodo::getCaseId, typeIds));
-            }
-        } else {
-            all = todoMapper.selectList(null);
+    public java.util.Map<String, Object> overviewSummary(String caseType, boolean focusOnly) {
+        List<Long> typeIds = StringUtils.hasText(caseType) ? caseIdsOfType(caseType) : null;
+        List<Long> focusIds = focusOnly ? caseIdsOfFocus() : null;
+        // 任一维度筛出来是空集，结果必然是空——直接短路，少查一次库
+        if ((typeIds != null && typeIds.isEmpty()) || (focusIds != null && focusIds.isEmpty())) {
+            java.util.Map<String, Object> empty = new java.util.HashMap<>();
+            empty.put("total", 0);
+            empty.put("done", 0);
+            empty.put("pending", 0);
+            empty.put("doneNoEvidence", 0);
+            return empty;
         }
+        LambdaQueryWrapper<CaseTodo> w = new LambdaQueryWrapper<>();
+        if (typeIds != null) {
+            w.in(CaseTodo::getCaseId, typeIds);
+        }
+        if (focusIds != null) {
+            w.in(CaseTodo::getCaseId, focusIds);
+        }
+        List<CaseTodo> all = todoMapper.selectList(w);
         int total = all.size();
         int done = 0;
         int doneNoEvidence = 0;

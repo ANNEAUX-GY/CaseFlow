@@ -266,7 +266,7 @@ mvn -Dmaven.repo.local=../.tools/m2repo -Dspring-boot.run.profiles=mysql spring-
 | --- | --- |
 | 案件录入 | 支持手打案件名，或上传 PDF / Word / Excel（自动识别来源类型）；填案件编号、是否采取强制措施、截止期限（精确到天 + 自定节点名 + 提前几天提醒） |
 | 案件指派 | 指派抽屉内「检索」或「组织树」选人，区分主办 / 协办，可改派（旧记录留痕）；抽屉顶部可直接设定 / 调整 / 清除截止期限（日期精确到天） |
-| 一键重点关注 | 案件管理 / 案件盯办 / 待办总览 / 到期提醒 四个列表里直接点星标注，不必打开案件详情；列表支持「只看重点」筛选，重点行左侧有金色标识 |
+| 一键重点关注 | 案件管理 / 案件盯办 / 待办总览 / 到期提醒 **四个栏目口径完全一致**：列表首列都能直接点星标注（不必打开案件详情）、都有同一个「只看重点」勾选框、重点行左侧都有金色标识。盯办看板卡片与待办总览汇总数字也会跟着筛，不会出现"卡片写 10 件、列表只 1 条"的对不上。筛选与星标都只给管理层（后端 `focus` 接口是 `@FullAccessOnly`） |
 | 员工图谱 | Excel 导入（姓名 / 工号 / 上级工号 / 部门 / 职务），自动生成 领导-副领导-组长-组员 层级 |
 | 到期提醒 | 已逾期 / 今天到期 / 3 天内 / 7 天内 分桶，逾期行整行标红 |
 | 工作台 | 8 个关键指标一眼可见：总数、待指派、处理中、已办结、逾期、今日、3 天、7 天 |
@@ -398,7 +398,7 @@ mvn -Dmaven.repo.local=../.tools/m2repo -Dspring-boot.run.profiles=mysql spring-
 | POST | `/api/cases/{id}/assign` | 指派 / 改派（可同时设定或清除截止期限：传 `deadline` + `deadlineTouched=true`） |
 | POST | `/api/cases/{id}/status` | 状态流转 |
 | POST | `/api/cases/{id}/focus` | 一键重点关注：`{focus:1}` 标注 / `{focus:0}` 取消（`@FullAccessOnly`） |
-| GET | `/api/cases/reminders?bucket=OVERDUE` | 到期提醒清单 |
+| GET | `/api/cases/reminders?bucket=OVERDUE` | 到期提醒清单（`focusOnly=true` 只看重点，口径同 `/cases`） |
 | GET | `/api/cases/dashboard` | 工作台聚合数据 |
 | GET | `/api/cases/stats?days=14` | 图表统计：趋势 / 状态 / 优先级 / 来源 / 到期分桶 / 逾期账龄 / 未来 7 天 / 部门负载 / 个人负载 |
 | POST | `/api/files/upload` | 附件上传（PDF/Word/Excel） |

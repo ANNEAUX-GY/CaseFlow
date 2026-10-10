@@ -68,7 +68,11 @@ public class WatchService {
      * {@link CaseService#page} 一致：OTHER = 非刑事、非行政（含未立案与空值）。
      */
     public WatchBoardVO board(String caseType) {
-        return board(caseType, null);
+        return board(caseType, null, false);
+    }
+
+    public WatchBoardVO board(String caseType, String category) {
+        return board(caseType, category, false);
     }
 
     /**
@@ -82,8 +86,13 @@ public class WatchService {
      * 卡片若还按大类统计，就会出现"卡片写 7 件、下面列表只 2 条"的口径错位——
      * 所以卡片与图表统统走 category；口径与 {@link CaseService#page} 一致：NONE = 类别为空。
      * 唯一例外是 {@code categoryDist}（各小类分布），见该字段注释。
+     *
+     * <p><b>按重点关注过滤</b>（2026-10-10）：列表勾了「只看重点」，卡片/图表也必须跟着收，
+     * 否则又回到"卡片写 10 件、下面列表只 1 条"的老毛病。focus 口径与
+     * {@link CaseService#page} 一致：**等于 1** 才算（focus 列 NOT NULL DEFAULT 0，
+     * 但存量行可能是 NULL，写 &lt;&gt;0 会把历史数据误算成重点）。
      */
-    public WatchBoardVO board(String caseType, String category) {
+    public WatchBoardVO board(String caseType, String category, boolean focusOnly) {
         LocalDateTime now = LocalDateTime.now();
         WatchBoardVO vo = new WatchBoardVO();
 
@@ -107,10 +116,17 @@ public class WatchService {
         List<CaseInfo> scoped = all;
         if (category != null && !category.trim().isEmpty()) {
             String cat = category.trim();
-            scoped = all.stream()
+            scoped = scoped.stream()
                     .filter(c -> "NONE".equalsIgnoreCase(cat)
                             ? isBlank(c.getCategory())
                             : cat.equals(c.getCategory()))
+                    .collect(Collectors.toList());
+        }
+        // 只看重点：放在 category 之后、分桶之前，卡片与列表共用同一份 scoped。
+        // 与 CaseService.page 的口径严格对齐：focus 等于 1（NULL 不算）。
+        if (focusOnly) {
+            scoped = scoped.stream()
+                    .filter(c -> c.getFocus() != null && c.getFocus() == 1)
                     .collect(Collectors.toList());
         }
 

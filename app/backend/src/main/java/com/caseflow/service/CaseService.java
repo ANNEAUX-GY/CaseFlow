@@ -955,6 +955,18 @@ public class CaseService {
      * 所以过滤口径与案件管理页完全一致，不会出现两页数字不同。
      */
     public List<CaseVO> reminders(String bucket, int limit, String caseType) {
+        return reminders(bucket, limit, caseType, false);
+    }
+
+    /**
+     * 到期提醒清单。
+     *
+     * <p>内部走的还是 {@link #page}，所以「只看重点」等筛选口径与案件管理天然一致——
+     * 不要在这里另写一套 deadline 查询，否则两个页面迟早对不上。
+     *
+     * @param focusOnly 只看重点关注（focus = 1）
+     */
+    public List<CaseVO> reminders(String bucket, int limit, String caseType, boolean focusOnly) {
         CaseQuery q = new CaseQuery();
         q.setPage(1);
         q.setSize(limit);
@@ -963,11 +975,12 @@ public class CaseService {
         q.setSortOrder("asc");
         q.setStatus("OPEN");
         q.setCaseType(caseType);
+        q.setFocusOnly(focusOnly);
         return page(q).getList();
     }
 
     public List<CaseVO> reminders(String bucket, int limit) {
-        return reminders(bucket, limit, null);
+        return reminders(bucket, limit, null, false);
     }
 
     public DashboardVO dashboard() {

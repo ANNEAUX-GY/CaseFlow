@@ -96,6 +96,12 @@
           <el-select v-model="query.investigationStatus" placeholder="侦查进度" clearable style="width: 120px" @change="load">
             <el-option v-for="(m, code) in INVEST_STATUS_META" :key="code" :label="m.label" :value="code" />
           </el-select>
+          <!-- 只看重点（2026-10-10）：案件管理有这个勾选框，盯办也补上，
+               四个栏目对重点案件的说法才一致。跟着星标列一起按权限收敛：
+               普通民警看不到星标，只给他一个永远筛不出东西的勾选框反而添乱。 -->
+          <el-checkbox v-if="canFocus" v-model="query.focusOnly" style="margin: 0 2px" @change="onFilterChange">
+            只看重点
+          </el-checkbox>
           <el-button @click="reset">重置</el-button>
           <el-button type="primary" @click="load">查询</el-button>
         </div>
@@ -226,7 +232,9 @@ const currentId = ref(null)
 
 const query = reactive({
   page: 1, size: 20, keyword: '', caseType: '', category: '',
-  suspectName: '', suspectIdCard: '', employeeId: null, investigationStatus: ''
+  suspectName: '', suspectIdCard: '', employeeId: null, investigationStatus: '',
+  // 只看重点（2026-10-10）：与案件管理同一个勾选框，四个栏目都能把标过星的重点案件筛出来
+  focusOnly: false
 })
 const cascadeFilter = ref([])
 watch(cascadeFilter, (val) => {
@@ -461,7 +469,8 @@ const load = async () => {
   try {
     // withCaseType 最后写入 caseType，会覆盖掉 query 里可能残留的同名字段——
     // 这是"不允许跨类型混选"的关键：类型只能来自门控，不来自页面筛选
-    const params = withCaseType({ ...query, module: module.value })
+    // focusOnly 只在勾选时传：未勾选就是 undefined，被下面一轮清理掉，URL 保持干净
+    const params = withCaseType({ ...query, module: module.value, focusOnly: query.focusOnly || undefined })
     Object.keys(params).forEach((k) => { if (params[k] === '' || params[k] == null) delete params[k] })
     const data = await watchApi.cases(params)
     rows.value = data.list
@@ -475,11 +484,15 @@ const load = async () => {
  * 天然同源，不存在图上 6 件、卡上 7 件这种自相矛盾。
  */
 const loadBoard = async () => {
-  board.value = await watchApi.board(withCaseType({ category: query.category }))
+  // focusOnly 必须跟列表一起传：卡片数字与列表条数是同一个口径承诺
+  board.value = await watchApi.board(withCaseType({
+    category: query.category,
+    focusOnly: query.focusOnly || undefined
+  }))
 }
 const reset = () => {
   // 不重置 caseType：它归门控管，重置筛选不该把类型也放开
-  Object.assign(query, { page: 1, keyword: '', category: '', suspectName: '', suspectIdCard: '', employeeId: null, investigationStatus: '' })
+  Object.assign(query, { page: 1, keyword: '', category: '', suspectName: '', suspectIdCard: '', employeeId: null, investigationStatus: '', focusOnly: false })
   cascadeFilter.value = []
   load()
   loadBoard()

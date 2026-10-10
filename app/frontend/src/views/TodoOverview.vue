@@ -43,6 +43,11 @@
           >
             <template #prefix><el-icon><Search /></el-icon></template>
           </el-input>
+          <!-- 只看重点（2026-10-10）：与案件管理/盯办同一个勾选框。
+               跟星标列一样按权限收敛——普通民警看不到星标，给了也是永远筛空的 -->
+          <el-checkbox v-if="canFocus" v-model="focusOnly" size="small" style="margin: 0 2px" @change="load">
+            只看重点
+          </el-checkbox>
           <el-button size="small" @click="load">刷新</el-button>
         </div>
 
@@ -114,6 +119,8 @@ const list = ref([])
 const summary = ref({})
 const status = ref('')
 const keyword = ref('')
+// 只看重点（2026-10-10）：星标打在案件上，这里筛出「重点案件名下的待办」
+const focusOnly = ref(false)
 const loading = ref(false)
 
 const filtered = computed(() => {
@@ -129,9 +136,11 @@ const fmtTime = (s) => (s ? String(s).replace('T', ' ').slice(0, 16) : '-')
 const load = async () => {
   loading.value = true
   try {
-    // 锁定当前案件类型：卡片汇总与下方列表必须同口径
-    list.value = await todoApi.overview({ status: status.value || undefined, ...withCaseType() })
-    summary.value = await todoApi.summary(withCaseType())
+    // 锁定当前案件类型 + 只看重点：卡片汇总与下方列表必须同口径，
+    // 否则勾了「只看重点」会出现"卡片 21 件、列表 2 条"的对不上
+    const base = { focusOnly: focusOnly.value || undefined, ...withCaseType() }
+    list.value = await todoApi.overview({ status: status.value || undefined, ...base })
+    summary.value = await todoApi.summary(base)
   } finally {
     loading.value = false
   }

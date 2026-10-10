@@ -192,8 +192,10 @@ public class CaseController {
     @GetMapping("/reminders")
     public Result<List<CaseVO>> reminders(@RequestParam(defaultValue = "OVERDUE") String bucket,
                                           @RequestParam(defaultValue = "20") int limit,
-                                          @RequestParam(required = false) String caseType) {
-        return Result.ok(caseService.reminders(bucket, limit, caseType));
+                                          @RequestParam(required = false) String caseType,
+                                          // 「只看重点」：与案件管理/盯办同一口径，四个栏目都能筛重点
+                                          @RequestParam(required = false) Boolean focusOnly) {
+        return Result.ok(caseService.reminders(bucket, limit, caseType, Boolean.TRUE.equals(focusOnly)));
     }
 
     /**

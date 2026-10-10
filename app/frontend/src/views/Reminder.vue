@@ -8,6 +8,13 @@
       <el-tab-pane label="未设期限" name="NONE" />
     </el-tabs>
 
+    <!-- 只看重点（2026-10-10）：四个栏目（案件管理 / 案件盯办 / 待办总览 / 到期提醒）
+         都要能把标过星的重点案件筛出来。跟星标列同一条件按权限收敛 -->
+    <div v-if="canFocus" style="margin: -6px 0 8px">
+      <el-checkbox v-model="focusOnly" @change="load">只看重点</el-checkbox>
+      <span v-if="focusOnly" class="cf-muted" style="margin-left: 8px">仅显示已标为重点的案件</span>
+    </div>
+
     <!-- 可视化：账龄 + 未来 7 天到期量 -->
     <el-row :gutter="12">
       <el-col :span="10" :xs="24">
@@ -69,6 +76,7 @@ import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { caseApi } from '../api'
 import { withCaseType } from '../store/caseType'
+import { useUserStore } from '../store/user'
 import CaseTable from '../components/CaseTable.vue'
 import AssignDialog from '../components/AssignDialog.vue'
 import CaseDetailDrawer from '../components/CaseDetailDrawer.vue'
@@ -78,6 +86,10 @@ import { CHART, lineOption, barOption } from '../utils/chart'
 import PageFooter from '../components/PageFooter.vue'
 
 const route = useRoute()
+// 与盯办/待办总览同一判据：重点筛选只给管理端（后端 /cases/{id}/focus 是 @FullAccessOnly，
+// 普通民警察看不到星标列，给他一个永远筛空的勾选框只是添乱）
+const userStore = useUserStore()
+const canFocus = computed(() => userStore.isFullAccess)
 const bucket = ref('OVERDUE')
 const rows = ref([])
 const assignVisible = ref(false)
@@ -87,11 +99,17 @@ const currentName = ref('')
 const currentDeadline = ref(null)
 
 const loading = ref(false)
+// 只看重点（2026-10-10）：与案件管理同一个字段，后端走同一个 page() 查询，口径天然一致
+const focusOnly = ref(false)
 const load = async () => {
   loading.value = true
   try {
     // 锁定当前案件类型：提醒清单与下方图表同口径
-    rows.value = await caseApi.reminders(withCaseType({ bucket: bucket.value, limit: 100 }))
+    rows.value = await caseApi.reminders(withCaseType({
+      bucket: bucket.value,
+      limit: 100,
+      focusOnly: focusOnly.value || undefined
+    }))
   } finally {
     loading.value = false
   }

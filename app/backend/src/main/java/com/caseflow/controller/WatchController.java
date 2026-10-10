@@ -69,6 +69,9 @@ public class WatchController {
                                             @RequestParam(required = false) String suspectName,
                                             @RequestParam(required = false) String suspectIdCard,
                                             @RequestParam(required = false) Long employeeId,
+                                            // 「只看重点」：与案件管理同一个口径（CaseQuery.focusOnly）。
+                                            // 这里是逐字段手工搬进 CaseQuery 的，加字段忘了在这儿接一下就会被静默丢掉。
+                                            @RequestParam(required = false) Boolean focusOnly,
                                             @RequestParam(required = false) String investigationStatus) {
         CaseQuery q = new CaseQuery();
         q.setPage(page);
@@ -80,15 +83,18 @@ public class WatchController {
         q.setSuspectName(suspectName);
         q.setSuspectIdCard(suspectIdCard);
         q.setEmployeeId(employeeId);
+        q.setFocusOnly(Boolean.TRUE.equals(focusOnly));
         q.setInvestigationStatus(investigationStatus);
         return Result.ok(watchService.page(q));
     }
 
-    /** 盯办看板四组计数 + 图表数据；category 与列表同口径，保证「卡片数字 = 列表条数」 */
+    /** 盯办看板四组计数 + 图表数据；caseType / category / focusOnly 与列表同口径，
+     *  保证「卡片数字 = 列表条数」——列表勾了「只看重点」而卡片不跟，数字立刻对不上 */
     @GetMapping("/board")
     public Result<WatchBoardVO> board(@RequestParam(required = false) String caseType,
-                                      @RequestParam(required = false) String category) {
-        return Result.ok(watchService.board(caseType, category));
+                                      @RequestParam(required = false) String category,
+                                      @RequestParam(required = false) Boolean focusOnly) {
+        return Result.ok(watchService.board(caseType, category, Boolean.TRUE.equals(focusOnly)));
     }
 
     // ---------------- 侦查计划 ----------------

@@ -260,14 +260,17 @@ public class TodoController {
     @FullAccessOnly("查看待办总览")
     public Result<List<CaseTodoVO>> overview(@RequestParam(required = false) String status,
                                              @RequestParam(required = false) Long caseId,
-                                             @RequestParam(required = false) String caseType) {
-        return Result.ok(todoService.overview(status, caseId, caseType));
+                                             @RequestParam(required = false) String caseType,
+                                             // 「只看重点」：与列表口径一致，没有它就筛不出重点案件下的待办
+                                             @RequestParam(required = false) Boolean focusOnly) {
+        return Result.ok(todoService.overview(status, caseId, caseType, Boolean.TRUE.equals(focusOnly)));
     }
 
-    /** 总览汇总数字 */
+    /** 总览汇总数字；必须与列表同口径（含 focusOnly），否则卡片与列表对不上 */
     @GetMapping("/overview/summary")
     @FullAccessOnly("查看待办总览")
-    public Result<Map<String, Object>> summary(@RequestParam(required = false) String caseType) {
-        return Result.ok(todoService.overviewSummary(caseType));
+    public Result<Map<String, Object>> summary(@RequestParam(required = false) String caseType,
+                                               @RequestParam(required = false) Boolean focusOnly) {
+        return Result.ok(todoService.overviewSummary(caseType, Boolean.TRUE.equals(focusOnly)));
     }
 }
