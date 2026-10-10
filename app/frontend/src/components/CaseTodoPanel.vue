@@ -328,6 +328,30 @@
           </div>
         </div>
 
+        <!-- 常用待办：后台按「本人写过几次」记下来的，点一下就直接加一条，
+             不用把天天写的那几句再手打一遍（次数越多排越前） -->
+        <div v-if="presets.length" class="cf-btodo__preset">
+          <div class="cf-btodo__preset-label">
+            常用待办
+            <span class="cf-btodo__preset-tip">点一下就直接加一条，不用手打</span>
+          </div>
+          <div class="cf-btodo__chips">
+            <button
+              v-for="p in presets"
+              :key="p.id"
+              type="button"
+              class="cf-btodo__chip"
+              :disabled="presetSaving"
+              :title="`点击直接添加：${p.content}`"
+              @click="applyPreset(p)"
+            >
+              <span class="cf-btodo__chip-plus">＋</span>
+              <span class="cf-btodo__chip-text">{{ p.content }}</span>
+              <span v-if="p.useCount > 1" class="cf-btodo__chip-n">{{ p.useCount }}</span>
+            </button>
+          </div>
+        </div>
+
         <div class="cf-btodo__legend">
           重要程度：<b class="is-a">A</b> 最重要 · <b class="is-b">B</b> 重要 · <b class="is-c">C</b> 一般
         </div>
@@ -765,6 +789,46 @@ const openAdd = () => {
   rows.value = [newRow('C')]
   addVisible.value = true
   nextTick(() => focusRow(0))
+  loadPresets()
+}
+
+/* ============ 常用待办（后台记忆，2026-10-11） ============
+ * 服务端按「本人写过几次」排好序给回来，这里只管展示与点击。
+ * 只在打开弹窗时拉一次——它是慢变量，没必要跟着每次输入刷新。 */
+const presets = ref([])
+const presetSaving = ref(false)
+
+const loadPresets = async () => {
+  try {
+    presets.value = await watchApi.todoPresets(8)
+  } catch (e) {
+    // 拉不到就当没有：快捷入口是锦上添花，不该因为它弹个错把弹窗搞得没法用
+    presets.value = []
+  }
+}
+
+/**
+ * 点「常用待办」= 直接添加这一条（不用手打，也不用再点保存）。
+ *
+ * <p>已填的行不受影响：只把这一条提交上去，弹窗继续开着，接着写别的照旧。
+ */
+const applyPreset = async (p) => {
+  if (presetSaving.value) return
+  presetSaving.value = true
+  try {
+    await watchApi.addOpinions(props.caseId, [{
+      content: p.content,
+      deadline: '',
+      importance: p.importance || 'C'
+    }])
+    ElMessage.success(`已添加：${p.content}`)
+    // 次数变了排序可能跟着变，顺手刷一次，让"最常用的"始终在最前
+    await loadPresets()
+    await load()
+    emit('changed')
+  } finally {
+    presetSaving.value = false
+  }
 }
 
 /** Enter = 接着写下一行；已在最后一行就追加一行（到上限则原地不动） */
@@ -822,6 +886,7 @@ const submitBatch = async () => {
     ElMessage.success(`已添加 ${items.length} 条待办`)
     addVisible.value = false
     rows.value = []
+    loadPresets()   // 刚写进去的内容会进「常用待办」，下次打开就能一键添加
     await load()
     emit('changed')
   } finally {
@@ -1170,6 +1235,34 @@ onBeforeUnmount(() => {
   font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums;
 }
 .cf-btodo__del { padding: 0 !important; height: 22px }
+/* 常用待办：一排可点的标签，点一下就加一条。
+   用原生 button 而不是 el-tag——它天生带 disabled 与键盘可达，
+   而 el-tag 是纯展示组件，点击语义要靠额外的 tabindex 补。 */
+.cf-btodo__preset { margin-top: 12px; padding: 10px 8px 0; border-top: 1px dashed #e4e8ee }
+.cf-btodo__preset-label {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  font-size: 12.5px; font-weight: 600; color: #1b2430;
+}
+.cf-btodo__preset-tip { font-weight: 400; color: #8a929e }
+.cf-btodo__chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px }
+.cf-btodo__chip {
+  display: inline-flex; align-items: center; gap: 4px; max-width: 100%;
+  padding: 4px 10px; border: 1px solid #c9d8ec; border-radius: 999px;
+  background: #f5f9ff; color: #1b4a8c; font-size: 12.5px; line-height: 1.5;
+  cursor: pointer; transition: background .15s, border-color .15s;
+}
+.cf-btodo__chip:hover:not(:disabled) { background: #e6effb; border-color: #93b4df }
+.cf-btodo__chip:disabled { opacity: .55; cursor: not-allowed }
+.cf-btodo__chip-plus { flex: none; font-weight: 700 }
+/* 内容过长时截断：标签是"一眼认出来"，完整内容在 title 与添加后的列表里都有 */
+.cf-btodo__chip-text {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cf-btodo__chip-n {
+  flex: none; min-width: 16px; padding: 0 4px; border-radius: 999px;
+  background: #1b4a8c; color: #fff; font-size: 11px; text-align: center;
+  font-variant-numeric: tabular-nums;
+}
 .cf-btodo__legend { padding: 10px 8px 0; font-size: 12px; color: #8a929e }
 .cf-btodo__legend b { font-weight: 700 }
 .cf-btodo__legend .is-a { color: #c62a2a }

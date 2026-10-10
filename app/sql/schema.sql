@@ -172,6 +172,31 @@ CREATE TABLE IF NOT EXISTS case_todo_feedback (
 -- 反馈表的两条二级索引（todo_id+created_at / case_id）放 index-mysql.sql：
 -- 「CREATE INDEX IF NOT EXISTS」是 H2 语法，MySQL 8 不支持，写在通用脚本里会让 init_db 在建表段直接失败
 
+-- 5.1.2b 常用待办记忆（2026-10-11）
+--
+-- 「添加待办」弹窗底部的「常用待办」提示：记下这个人最常写的那几条待办，
+-- 点一下就直接加进去，重复录入的手工活就省了。
+--
+-- 设计取舍：
+--   * **按人记**（user_id），不按全所共享——甲天天写的「走访受害人」对乙未必常用，
+--     混在一起会变成谁都不想看的噪声；
+--   * **只记内容，不记截止时间**：截止时间是随案定的（这个案子 3 天、那个案子 7 天），
+--     把它记进模板只会让人加上一条过期时间；重要性倒是会沿用（last_importance），
+--     因为「这条我一直当 A 级办」是稳定的个人习惯；
+--   * **去重在应用层做**（先按 user_id 查出来比对，命中就 +1）：
+--     content 是 VARCHAR(500)，在 (user_id, content) 上建唯一索引会撞
+--     H2 / MySQL 对索引键长度的不同限制，为这点收益背一个方言坑不值得。
+CREATE TABLE IF NOT EXISTS todo_preset (
+    id              BIGINT       AUTO_INCREMENT PRIMARY KEY COMMENT '主键',
+    user_id         BIGINT       NOT NULL COMMENT '归属登录人（记忆按人记，不跨账号共享）',
+    content         VARCHAR(500) NOT NULL COMMENT '待办内容原文（去首尾空格后按原文匹配去重）',
+    last_importance VARCHAR(8)   DEFAULT NULL COMMENT '最近一次使用的重要性 A/B/C；点击添加时沿用',
+    use_count       INT          NOT NULL DEFAULT 1 COMMENT '累计使用次数（排序主依据）',
+    last_used_at    DATETIME     DEFAULT NULL COMMENT '最近一次使用时间',
+    created_at      DATETIME     DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at      DATETIME     DEFAULT CURRENT_TIMESTAMP COMMENT '更新时间'
+);
+
 -- 5.1.3 疑问问答（2026-10-04）
 --
 -- 普通员工办任务遇到不懂的，在此提问；管理层看到后回答。

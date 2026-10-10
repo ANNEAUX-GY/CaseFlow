@@ -15,8 +15,10 @@ import com.caseflow.service.FlowService;
 import com.caseflow.service.OpinionService;
 import com.caseflow.service.PlanService;
 import com.caseflow.service.ProgressCommentService;
+import com.caseflow.service.TodoPresetService;
 import com.caseflow.service.WatchService;
 import com.caseflow.vo.CaseVO;
+import com.caseflow.vo.TodoPresetVO;
 import com.caseflow.vo.WatchBoardVO;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -53,6 +55,9 @@ public class WatchController {
     private ProgressCommentService commentService;
     @Resource
     private OpinionService opinionService;
+    /** 常用待办记忆（「添加待办」弹窗底部的可点标签） */
+    @Resource
+    private TodoPresetService todoPresetService;
     @Resource
     private FlowService flowService;
     @Resource
@@ -249,6 +254,17 @@ public class WatchController {
             }
         }
         return Result.ok(opinionService.addBatch(caseId, items));
+    }
+
+    /**
+     * 我的常用待办（2026-10-11）：按使用次数降序，给「添加待办」弹窗底部当快捷入口。
+     *
+     * <p>不鉴权到管理层——查的是<b>本人</b>的记忆，普通民警本来就没有添加待办的记录，
+     * 查出来自然是空的，没必要额外拦一道。
+     */
+    @GetMapping("/todo-presets")
+    public Result<List<TodoPresetVO>> todoPresets(@RequestParam(required = false) Integer limit) {
+        return Result.ok(todoPresetService.listForMe(limit));
     }
 
     /**

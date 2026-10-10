@@ -205,6 +205,11 @@ export const watchApi = {
    * items: [{ content, deadline, importance }]，空内容的行由后端跳过。
    */
   addOpinions: (caseId, items) => http.post(`/watch/cases/${caseId}/opinions/batch`, { items }),
+  /**
+   * 我的常用待办（后台按使用次数记的，从多到少）。
+   * 给「添加待办」弹窗底部做一键添加用；新用户没有记录时返回空数组。
+   */
+  todoPresets: (limit = 8) => http.get('/watch/todo-presets', { params: { limit } }),
   /** 修改截止时间与重要性（仅管理层）；deadline 传 '' 即清空 */
   updateOpinionMeta: (id, data) => http.post(`/watch/opinions/${id}/meta`, data),
   /** 移除意见（仅管理层）；后端软删并连带清理派生待办 */

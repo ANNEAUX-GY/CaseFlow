@@ -75,6 +75,12 @@ public class OpinionService {
     /** 派生待办的级联清理（意见移除时把对应待办一起删掉） */
     @Resource
     private TodoService todoService;
+    /**
+     * 常用待办记忆（2026-10-11）：每次添加待办都记一笔，供「添加待办」弹窗底部推荐。
+     * 只注入不反向依赖（它只读写自己的表），不会形成循环。
+     */
+    @Resource
+    private TodoPresetService todoPresetService;
 
     public List<CaseLeaderOpinion> listOf(Long caseId) {
         List<CaseLeaderOpinion> list = opinionMapper.selectList(new LambdaQueryWrapper<CaseLeaderOpinion>()
@@ -189,6 +195,11 @@ public class OpinionService {
       "提出意见：" + abbrev(o.getContent())
       + (o.getDeadline() != null ? "（截止 " + o.getDeadline() + "）" : "")
         + "（重要性 " + o.getImportance() + "）");
+
+        // 常用待办记忆（2026-10-11）：这条内容本人又写了一次。
+        // 只累加、不因后续删除/编辑而回退——记忆回答的是「你常写什么」，
+        // 把它跟某条具体意见绑定会在删意见时把习惯也一起删掉，那不是用户想要的。
+        todoPresetService.hit(o.getCreatorId(), o.getContent(), o.getImportance());
 
         // 自动派生民警待办（2026-10-04）：领导提意见 = 民警收到一条待办。
         // 同一事务内直接派生，失败即整体回滚——避免出现"有意见但没待办"的漏项
