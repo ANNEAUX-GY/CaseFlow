@@ -39,9 +39,17 @@ public class WebConfig implements WebMvcConfigurer {
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         // 顺序要紧：先登录校验（401），再权限校验（403）
+        //
+        // 放行的只有「登录前必须能访问」的那几个：登录、注册及其选项、角色字典、退出。
+        // 早先这里图省事写成 excludePathPatterns("/auth/**")，把整个 /auth 都放行了，
+        // 结果 GET /auth/info 里 AuthContext 永远是 null，**它一直返回 401「未登录」**
+        // （看着像能用、其实谁调谁失败）。前端要拿它做"启动时验令牌真伪"，必须让它真的受鉴权。
+        // 以后再往 /auth 下加接口，想清楚是不是登录前就要用：不是的话就别往放行名单里塞。
         registry.addInterceptor(loginInterceptor)
                 .addPathPatterns("/**")
-                .excludePathPatterns("/auth/**", "/h2-console/**", "/console/**", "/error")
+                .excludePathPatterns("/auth/login", "/auth/register", "/auth/register/**",
+                        "/auth/roles", "/auth/logout",
+                        "/h2-console/**", "/console/**", "/error")
                 .order(1);
         registry.addInterceptor(permissionInterceptor)
                 .addPathPatterns("/**")

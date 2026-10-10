@@ -1,6 +1,7 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import { isFullAccessRole, isSystemAdminRole } from '../store/user'
 import { GATED_PATHS, useCaseTypeStore } from '../store/caseType'
+import { authApi } from '../api'
 
 /**
  * 普通民警（非全权限角色）只能进这两个页面：内容都只与本人民下案件相关。
@@ -68,12 +69,52 @@ const router = createRouter({
   routes
 })
 
-router.beforeEach((to) => {
+/**
+ * 进入受保护页面之前，拿 localStorage 里的令牌**验一次真伪**（每个令牌只验一次）。
+ *
+ * <p>起因（用户反馈）：后端令牌是内存态，重启后全部失效，但浏览器里那份 `cf_token` 还在。
+ * 守卫原先只看"有没有 token"，于是照样放行进工作台，页面并发打十几个请求全部 401，
+ * 表现为「一屏 Request failed with status code 401 + 满屏 0」，必须先退出再登录才正常。
+ * 这里提前用 `/auth/info` 验一次：令牌废了就直接去登录页，工作台根本不会带着死令牌渲染。
+ *
+ * <p>两种"验不过"要区分开，不能一律踢下线：
+ * - **401**：令牌确实失效 → 去登录页（提示语由 axios 拦截器统一给）；
+ * - **网络错误 / 后端还没起来**：不能当成掉线，照常放行，否则后端启动稍慢就会把人踢出去。
+ *
+ * <p>结果按令牌值缓存，避免每次路由跳转都打一次接口；换令牌（重新登录）后会自动重验。
+ */
+let verifiedToken = null
+const verifySessionOnce = async () => {
+  const token = localStorage.getItem('cf_token')
+  if (!token || verifiedToken === token) {
+    return true
+  }
+  try {
+    // silent：探到 401 不弹提示、不改 hash，由守卫统一定向到登录页并说明原因
+    await authApi.info({ silent: true })
+    verifiedToken = token
+    return true
+  } catch (e) {
+    if (e?.unauthorized) {
+      return false
+    }
+    // 网络不通 / 后端还没起来：不误判为掉线，照常放行
+    return true
+  }
+}
+
+router.beforeEach(async (to) => {
   if (!to.meta.public && !localStorage.getItem('cf_token')) {
     return { path: '/login' }
   }
   if (to.meta.public) {
     return true
+  }
+  // 令牌真伪校验（一次性）。放在角色/类型门控之前：
+  // 令牌都是废的，后面那些判断没有必要，也免得白跑一遍。
+  // expired=1 是给登录页的提示语：让用户知道是"登录过期"而不是自己点错了。
+  if (!(await verifySessionOnce())) {
+    return { path: '/login', query: { expired: '1' } }
   }
 
   const role = storedRole()

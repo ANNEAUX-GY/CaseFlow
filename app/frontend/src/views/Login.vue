@@ -38,8 +38,8 @@
 </template>
 
 <script setup>
-import { reactive, ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { reactive, ref, computed, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { homePathOf } from '../router'
 import { useUserStore } from '../store/user'
 import { ElMessage } from 'element-plus'
@@ -49,8 +49,22 @@ const slogan = computed(() => SLOGANS[new Date().getDate() % SLOGANS.length])
 
 const form = reactive({ username: '', password: '' })
 const loading = ref(false)
+const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
+
+/**
+ * 被路由守卫"请"回登录页时说明原因。
+ * 最常见的场景：后端重启后内存里的令牌全失效（见 TokenStore），
+ * 浏览器里那份旧 cf_token 就作废了——不是用户操作有问题，得说清楚。
+ */
+onMounted(() => {
+  if (route.query.expired) {
+    ElMessage.warning('登录已过期，请重新登录')
+    // 抹掉 query，免得用户刷新页面又提示一次
+    router.replace({ path: '/login' })
+  }
+})
 
 const onLogin = async () => {
   const account = (form.username || '').trim()

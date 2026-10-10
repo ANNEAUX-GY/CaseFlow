@@ -14,6 +14,67 @@ http.interceptors.request.use((config) => {
   return config
 })
 
+/**
+ * 登录态失效（401）的统一处理。
+ *
+ * <p>为什么必须集中处理、而且**只提示一次**：
+ * 后端令牌是内存态的（`TokenStore`），后端一重启全部失效，而浏览器 localStorage 里
+ * 那份 `cf_token` 还在。此时路由守卫只看"有没有 token"就放行，工作台一进去就并发打
+ * 十几个请求，**每个都 401** —— 用户看到的就是一屏「Request failed with status code 401」
+ * 加满屏的 0，点谁都不好用，必须先退出登录再重新登录。
+ * 所以在响应层把 401 收口：清登录态、清掉堆出来的错误提示、回登录页，只留一句人话提示。
+ */
+let unauthorizedHandled = false
+
+const unauthorizedError = (msg) => {
+  const e = new Error(msg || '登录已过期，请重新登录')
+  e.unauthorized = true
+  e.response = { status: 401 }
+  return e
+}
+
+/**
+ * 同一句话在短时间内只弹一次。
+ *
+ * <p>页面渲染时是**并发**发请求的（工作台一次就是十几个），后端一旦整体不可用
+ * （401 / 网络不通 / 服务没起来），每个请求都会各弹一次 —— 不去重就是一屏重复的红条，
+ * 看着像"页面崩了"，其实只有一件事。这里按文案+时间窗去重，只把话说一遍。
+ */
+const lastToast = { msg: '', at: 0 }
+const toastOnce = (msg, level = 'error') => {
+  const now = Date.now()
+  if (lastToast.msg === msg && now - lastToast.at < 3000) {
+    return
+  }
+  lastToast.msg = msg
+  lastToast.at = now
+  ElMessage[level](msg)
+}
+
+/**
+ * @param {object} opts
+ * @param {boolean} opts.silent 静默模式（`config.silent = true` 的请求）：
+ *        只清登录态，不弹提示、不自己跳转 —— 交给调用方决定怎么落地。
+ *        路由守卫的启动探测就用这个：它自己会带着 query 跳登录页并在页面上说明原因，
+ *        不需要拦截器抢着弹一句 toast、再抢着改 hash。
+ */
+const handleUnauthorized = (opts = {}) => {
+  const silent = !!opts.silent
+  localStorage.removeItem('cf_token')
+  localStorage.removeItem('cf_user')
+  if (silent) return
+  if (unauthorizedHandled) return
+  unauthorizedHandled = true
+  // 并发请求会同时撞 401，先清掉已经弹出来的一堆红条，再只提示一句
+  ElMessage.closeAll()
+  toastOnce('登录已过期，请重新登录', 'warning')
+  if (location.hash !== '#/login') {
+    location.href = '#/login'
+  }
+  // 复位，便于重新登录后再次失效时还能提示
+  setTimeout(() => { unauthorizedHandled = false }, 3000)
+}
+
 http.interceptors.response.use(
   (res) => {
     const body = res.data
@@ -22,25 +83,40 @@ http.interceptors.response.use(
         return body.data
       }
       if (body.code === 401) {
-        localStorage.removeItem('cf_token')
-        localStorage.removeItem('cf_user')
-        if (location.hash !== '#/login') {
-          location.href = '#/login'
-        }
+        handleUnauthorized({ silent: res.config?.silent })
+        return Promise.reject(unauthorizedError(body.msg))
       }
-      ElMessage.error(body.msg || '操作失败')
+      if (!res.config?.silent) {
+        toastOnce(body.msg || '操作失败')
+      }
       return Promise.reject(new Error(body.msg || '操作失败'))
     }
     return body
   },
   (err) => {
+    const status = err?.response?.status
+    // 401（HTTP 态）= 未登录 / 登录已过期（后端 LoginInterceptor 直接回 401）。
+    // 早先这里没接，401 落到最下面的兜底分支，只弹一句英文报错、不清登录态也不跳登录页，
+    // 于是页面就"半死不活"地停在工作台上——这就是「每次启动都要先退出再登录」的根因。
+    if (status === 401) {
+      handleUnauthorized({ silent: err.config?.silent })
+      return Promise.reject(unauthorizedError(err.response?.data?.msg))
+    }
+    if (err.config?.silent) {
+      return Promise.reject(err)
+    }
     // 403 = 角色权限不足（后端 @FullAccessOnly 拦截），提示语更具体一些
-    if (err?.response?.status === 403) {
+    if (status === 403) {
       const msg = err.response?.data?.msg || '当前角色没有该操作权限'
-      ElMessage.error(msg)
+      toastOnce(msg)
       return Promise.reject(new Error(msg))
     }
-    ElMessage.error(err?.message || '网络异常')
+    // 网络层失败（后端没起来 / 断网）：同样只提示一次。
+    // 之前是每个失败请求弹一次，后端没就绪时页面会瞬间铺满"网络异常"。
+    const netMsg = err?.response
+      ? (err.message || '请求失败')
+      : '无法连接服务，请确认后端已启动'
+    toastOnce(netMsg)
     return Promise.reject(err)
   }
 )
@@ -55,7 +131,8 @@ export const authApi = {
   registerEmployees: (params) => http.get('/auth/register/employees', { params }),
   // 注册页「部门」下拉的选项：组织架构里已存在的部门
   registerDepts: () => http.get('/auth/register/depts'),
-  info: () => http.get('/auth/info'),
+  /** 当前登录人。传 { silent: true } 表示"只探测登录态"：失败不弹提示、不自动跳转（路由守卫用） */
+  info: (config) => http.get('/auth/info', config),
   logout: () => http.post('/auth/logout'),
   dict: () => http.get('/auth/dict')
 }

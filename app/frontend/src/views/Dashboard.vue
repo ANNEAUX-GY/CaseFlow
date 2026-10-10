@@ -389,12 +389,20 @@ const loadLogsByType = async (type) => {
 }
 
 const loading = ref(false)
+/**
+ * 工作台是登录后的落地页，一次要打十几个请求。
+ * 后端没就绪 / 网络不通 / 登录失效时，这里必须自己接住异常：
+ * 提示语由 axios 拦截器统一给（已去重），页面这边只管把数字留空，
+ * 否则 Promise.all 会抛出未处理的 rejection（控制台一整段红字，看着像崩了）。
+ */
 const load = async () => {
   loading.value = true
   try {
     data.value = await caseApi.dashboard()
     // 最近操作：同步刷新当前页签（事件流来了新操作要在面板里看到）
     await loadLogsByType(logTab.value)
+  } catch (e) {
+    // 保持空数据即可；错误提示已由拦截器给出
   } finally {
     loading.value = false
   }
@@ -405,7 +413,11 @@ const loadStats = async () => {
   if (caseTypeSel.value.length) params.caseTypes = caseTypeSel.value.join(',')
   if (dueBucketSel.value.length) params.dueBuckets = dueBucketSel.value.join(',')
   if (prioritySel.value.length) params.priorities = prioritySel.value.join(',')
-  stats.value = await caseApi.stats(params)
+  try {
+    stats.value = await caseApi.stats(params)
+  } catch (e) {
+    // 同上：图表留空，不抛未处理异常
+  }
 }
 
 // ---- 图表数据 ----
