@@ -318,7 +318,18 @@ watch(visible, (v) => emit('update:modelValue', v))
 
 const reload = async () => {
   if (!props.caseId) return
-  detail.value = await caseApi.detail(props.caseId)
+  try {
+    detail.value = await caseApi.detail(props.caseId)
+  } catch (e) {
+    // 案件已被删除，或当前登录人已经看不到它（转手后不再承办）：
+    // 抽屉继续开着只会是一张空白卡，不如关掉并说清原因。
+    // 信箱里留着的旧信件指到已删案件时，走的就是这条路径——
+    // 不接住会变成控制台里一条没人管的 Promise 异常（2026-10-11 修）。
+    detail.value = {}
+    visible.value = false
+    ElMessage.warning('该案件已被删除或无权查看')
+    return
+  }
   // 办理进度：仅管理层加载（普通员工面板已隐藏，接口也在后端拦截）
   if (canManage.value) {
     progress.value = await logApi.caseLogs(props.caseId)

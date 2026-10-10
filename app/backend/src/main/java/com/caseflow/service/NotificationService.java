@@ -12,6 +12,7 @@ import com.caseflow.security.AuthContext;
 import com.caseflow.security.Roles;
 import com.caseflow.support.SseHub;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
 import java.time.LocalDateTime;
@@ -93,6 +94,8 @@ public class NotificationService {
     private CaseAssigneeMapper assigneeMapper;
     @Resource
     private SysUserMapper userMapper;
+    @Resource
+    private com.caseflow.mapper.CaseInfoMapper caseMapper;
     @Resource
     private SseHub sseHub;
 
@@ -329,6 +332,69 @@ public class NotificationService {
         if (key.contains("COMMENT")) return "新增了批注";
         if (key.startsWith("FILE_")) return "更新了案件材料";
         return "更新了案件";
+    }
+
+    // ------------------------------------------------------------------
+    // 悬空信件清理（2026-10-11）
+    // ------------------------------------------------------------------
+
+    /**
+     * 删掉某个案件的全部信件（删除案件时调用）。
+     *
+     * <p>为什么必须删：信件里存的是 case_id 与定位锚点，案件一删这些信息就成了死链——
+     * 用户点「查看案件」只会得到一句"案件不存在"（本次实测：18 条信件里 6 条指向已删案件，
+     * 全是自检脚本留下的）。留着它们等于让信箱里永远躺着一批点不开的信。
+     *
+     * <p><b>不进快照/撤回体系</b>：信件是通知副本，撤回案件时由 {@code onLog} 重新生成一条
+     * 「删除案件」的信件即可，把旧信件还原回来反而会制造第二条死链。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public int removeAllOfCase(Long caseId) {
+        if (caseId == null) {
+            return 0;
+        }
+        return notificationMapper.delete(new LambdaQueryWrapper<CaseNotification>()
+                .eq(CaseNotification::getCaseId, caseId));
+    }
+
+    /**
+     * 清掉「所指案件已经不在了」的信件（启动时跑一次，幂等）。
+     *
+     * <p>这是给存量数据擦屁股的：在 {@code removeAllOfCase} 上线之前删掉的案件，
+     * 它们的信件还留在库里。不做这一步，用户今天打开信箱照样点得进去一片空白。
+     *
+     * <p>只在启动时跑，不在每次查询时过滤——后者会让"信箱条数"与"未读数"两套口径
+     * 反复打架，而信件失效是一次性的事实，清掉就完了。
+     *
+     * @return 清掉的条数
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public int purgeOrphan() {
+        List<CaseNotification> all = notificationMapper.selectList(new LambdaQueryWrapper<CaseNotification>()
+                .select(CaseNotification::getId, CaseNotification::getCaseId)
+                .isNotNull(CaseNotification::getCaseId));
+        if (all.isEmpty()) {
+            return 0;
+        }
+        Set<Long> caseIds = new HashSet<>();
+        for (CaseNotification n : all) {
+            caseIds.add(n.getCaseId());
+        }
+        Set<Long> alive = new HashSet<>();
+        for (com.caseflow.entity.CaseInfo c : caseMapper.selectBatchIds(caseIds)) {
+            alive.add(c.getId());
+        }
+        List<Long> dead = new ArrayList<>();
+        for (CaseNotification n : all) {
+            if (!alive.contains(n.getCaseId())) {
+                dead.add(n.getId());
+            }
+        }
+        if (dead.isEmpty()) {
+            return 0;
+        }
+        notificationMapper.deleteBatchIds(dead);
+        return dead.size();
     }
 
     private Map<String, Object> notificationEvent(Long userId, CaseNotification n) {

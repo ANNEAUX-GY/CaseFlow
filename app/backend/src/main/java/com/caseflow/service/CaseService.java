@@ -130,6 +130,9 @@ public class CaseService {
     private com.caseflow.mapper.CaseSuspectMapper suspectMapper;
     @Resource
     private SuspectService suspectService;
+    /** 删案件时连信箱里的信件一起清（否则「查看案件」点进去是条死链） */
+    @Resource
+    private NotificationService notificationService;
 
     // ------------------------------------------------------------------
     // 查询
@@ -705,6 +708,8 @@ public class CaseService {
         assigneeMapper.delete(new LambdaQueryWrapper<CaseAssignee>().eq(CaseAssignee::getCaseId, id));
         suspectMapper.delete(new LambdaQueryWrapper<CaseSuspect>().eq(CaseSuspect::getCaseId, id));
         todoService.removeAllOfCase(id);
+        // 信箱里指向本案的信件一并清掉：案件没了，那些「查看案件」就成了点不开的死链
+        notificationService.removeAllOfCase(id);
         caseMapper.deleteById(id);
         logService.log("CASE", "DELETE", "CASE", id, "删除案件：" + c.getName(),
                 before, snapshotService.absentJson());

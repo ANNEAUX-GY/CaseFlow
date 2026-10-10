@@ -47,6 +47,15 @@ def unread(tk):
     return call(tk, "/notifications/unread")["data"]
 
 
+def box_all(tk):
+    """未读 + 已读合起来（信箱两个页签的全量）"""
+    out = []
+    for box in ("unread", "read"):
+        r = call(tk, "/notifications/list?box=" + box)
+        out += r.get("data") or []
+    return out
+
+
 def count(tk):
     return call(tk, "/notifications/unread-count")["data"]
 
@@ -115,6 +124,35 @@ def main():
         ck("全部已读成功", r.get("code"), 0)
         ck("全部已读后未读归零", count(law_tk), 0)
         # 注意：上面的「全部已读」会清掉 e2e_law 的所有未读（含历史测试遗留），可接受
+
+    print("\n=== 4. 删案件连带清信件（信箱里不留点不开的死链）===")
+    MK2 = "DL%d" % (int(time.time()) % 10000)
+    created = call(boss_tk, "/cases", {"name": "【自检】信件清理-" + MK2, "caseType": "CRIMINAL"})
+    cid2 = (created.get("data") or {}).get("id")
+    ck("建了一个自检案件", bool(cid2), True)
+    if cid2:
+        call(boss_tk, "/watch/cases/%d/opinions" % cid2, {"content": MK2 + " 清理验证", "importance": "B"})
+        time.sleep(0.8)
+        if law_tk:
+            got = [n for n in unread(law_tk) if n.get("caseId") == cid2]
+            ck("案件上的操作进了管理层的信箱", len(got) > 0, True)
+        call(boss_tk, "/cases/%d" % cid2, None, "DELETE")
+        time.sleep(0.6)
+        if law_tk:
+            left = [n for n in box_all(law_tk) if n.get("caseId") == cid2]
+            ck("案件删除后，指向它的信件一并清掉", len(left), 0)
+        gone = call(boss_tk, "/cases/%d" % cid2)
+        ck("案件确实已删除", gone.get("code") == 0, False)
+
+    # 全量体检：信箱里不该再有任何一条指向已删案件的信
+    orphans = []
+    for n in box_all(boss_tk):
+        c = n.get("caseId")
+        if not c:
+            continue
+        if call(boss_tk, "/cases/%d" % c).get("code") != 0:
+            orphans.append((n.get("id"), c))
+    ck("信箱里没有指向已删案件的悬空信件", len(orphans), 0)
 
     if oid:
         call(boss_tk, "/watch/opinions/%d/remove" % oid, {})

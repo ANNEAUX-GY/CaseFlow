@@ -411,6 +411,34 @@ const onRemove = async (row) => {
   load()
 }
 
+/**
+ * 信箱点信件跳过来：直接打开对应案件的详情抽屉；若带了定位锚点则继续下钻到具体内容。
+ *
+ * <p><b>必须放在 onMounted 里消费，不能放进下面那个 immediate 的 watch(route.query)</b>
+ * （2026-10-11 修的真 bug）：immediate 的 watcher 在 <b>setup 期间同步执行</b>，
+ * 而"打开抽屉"紧接着要 `router.replace` 把定位参数从地址栏抹掉——
+ * 在「从 /watch 跳到 /cases」这次导航还没落地时就发起第二次导航，会把这一次 push 顶掉。
+ * 表现为：<b>在案件盯办/待办总览/到期提醒点「查看案件」，地址栏变成了 /cases，抽屉却没开</b>；
+ * 只有在案件管理页自己点才碰巧正常（不重新挂载，只是 query 变化）。
+ * 与 MyCases 同一约定：等导航落地（onMounted）再动手。
+ */
+const consumeOpenCase = () => {
+  const q = route.query || {}
+  if (!q.caseId) return
+  currentId.value = Number(q.caseId)
+  const anchor = {
+    todoId: q.todoId ? Number(q.todoId) : null,
+    questionId: q.questionId ? Number(q.questionId) : null,
+    subtaskId: q.subtaskId ? Number(q.subtaskId) : null
+  }
+  locateAnchor.value = anchor.todoId || anchor.questionId || anchor.subtaskId ? anchor : null
+  detailVisible.value = true
+  // 抹掉定位参数，否则刷新会重复打开（与 MyCases 同一约定）
+  const rest = { ...q }
+  delete rest.caseId; delete rest.todoId; delete rest.questionId; delete rest.subtaskId
+  router.replace({ path: '/cases', query: rest })
+}
+
 watch(() => route.query, (q) => {
   if (!q) return
   // 按类别浏览板块页跳过来：按类别过滤并同步级联显示（NONE=未分类）
@@ -431,24 +459,13 @@ watch(() => route.query, (q) => {
     if (q.employeeName) employeeOptions.value = [{ id, name: q.employeeName }]
     load()
   }
-  // 信箱点信件跳过来：直接打开对应案件的详情抽屉；若带了定位锚点则继续下钻到具体内容。
-  // 打开后立刻把定位参数从地址栏抹掉，否则刷新会重复打开（与 MyCases 同一约定）。
-  if (q.caseId) {
-    currentId.value = Number(q.caseId)
-    const anchor = {
-      todoId: q.todoId ? Number(q.todoId) : null,
-      questionId: q.questionId ? Number(q.questionId) : null,
-      subtaskId: q.subtaskId ? Number(q.subtaskId) : null
-    }
-    locateAnchor.value = anchor.todoId || anchor.questionId || anchor.subtaskId ? anchor : null
-    detailVisible.value = true
-    const rest = { ...q }
-    delete rest.caseId; delete rest.todoId; delete rest.questionId; delete rest.subtaskId
-    router.replace({ path: '/cases', query: rest })
-  }
 }, { immediate: true })
 
+// 信箱跳转：同上，等导航落地再消费（不能放进上面那个 immediate 的 watcher）
+watch(() => route.query.caseId, consumeOpenCase)
+
 onMounted(async () => {
+  consumeOpenCase()
   await categoryStore.load()
   await load()
   await loadStats()
