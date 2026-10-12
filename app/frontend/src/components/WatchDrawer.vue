@@ -66,6 +66,12 @@
       </div>
 
 
+            <!-- 办案流程（阶段→环节→任务，2026-10-12）：进度不落库，全部实时算。
+           阶段做完不自动跳，转入哪一条分支由领导点确认。 -->
+      <div class="cf-panel" style="margin-top: 12px">
+        <CaseFlowPanel :case-id="detail.id" @changed="after" />
+      </div>
+
             <!-- 案件待办（含领导意见）：与案件详情抽屉同一个合并面板，落实状态单一来源 -->
       <div class="cf-panel" style="margin-top: 12px">
         <CaseTodoPanel :case-id="detail.id" @changed="after" />
@@ -127,6 +133,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { caseApi, watchApi } from '../api'
+import CaseFlowPanel from './CaseFlowPanel.vue'
 import CaseTodoPanel from './CaseTodoPanel.vue'
 import StaffWorkloadDialog from './StaffWorkloadDialog.vue'
 import { useUserStore } from '../store/user'

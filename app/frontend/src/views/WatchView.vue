@@ -142,7 +142,7 @@
               <span v-else class="cf-muted">未开始</span>
             </template>
           </el-table-column>
-          <el-table-column label="阶段进度" width="178">
+          <el-table-column label="办案阶段" width="186">
             <template #default="{ row }">
               <div style="display: flex; align-items: center; gap: 6px">
                 <el-tag size="small" :type="(STAGE_META[row.flowStage] || {}).type" effect="plain">
@@ -155,6 +155,13 @@
                   style="flex: 1; min-width: 60px" />
                 <span v-else class="cf-muted" style="font-size: 12px">暂无任务</span>
               </div>
+              <!-- 阶段做完不自动跳：在这里标出来，领导才知道哪个案子在等他拍板 -->
+              <el-tooltip v-if="row.flowFinished" content="本阶段任务已全部完成，待领导确认转入下一阶段"
+                placement="top">
+                <el-tag size="small" type="warning" effect="dark" style="margin-top: 4px">
+                  待确认流转
+                </el-tag>
+              </el-tooltip>
             </template>
           </el-table-column>
           <el-table-column label="措施期限" width="140">

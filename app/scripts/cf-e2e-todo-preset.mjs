@@ -129,8 +129,11 @@ const run = async () => {
     return ok
   }
 
-  const presetsApi = async (limit = 8) =>
-    (await api('GET', '/watch/todo-presets?limit=' + limit, null, token)).body?.data || []
+  // 默认取全量（200），不要用前端那个 limit=8：
+  // 自检条目是新加的 useCount=1，boss 的历史记忆已累积到 20+ 条，它排在第 8 名开外，
+  // 用 8 查不到 → 断言报"没进记忆"，其实已经进了。前 8 的展示效果由 A/D 组单独验。
+  const presetsApi = async (limit = 200) =>
+  (await api('GET', '/watch/todo-presets?limit=' + limit, null, token)).body?.data || []
 
   const opinionsApi = async () =>
     (await api('GET', '/watch/cases/' + caseId + '/opinions', null, token)).body?.data || []
@@ -220,8 +223,11 @@ const run = async () => {
     const mine = cs.find((c) => c.text === MARK)
     checkTrue('B1 我刚写的那条排进了列表', !!mine, JSON.stringify(cs.map((c) => c.text.slice(0, 12))))
     check('B2 用过 3 次就显示 3（次数写在角标里）', mine?.n, '3')
-    check('B3 列表顺序与接口一致（都是按次数排）',
-      cs.map((c) => c.text), before.map((x) => x.content))
+    // UI 只渲染前 8 个标签，接口默认给全量——比**前 8 条**，否则长度永远不等，
+    // 会把「顺序不一致」误报成「UI 少显示了 25 条」。
+    // 注意 before 是本脚本开头取的快照，要用它取前 8（不是此刻的全量）。
+    check('B3 前8 的顺序与接口一致（都是按次数排）',
+      cs.map((c) => c.text), before.slice(0, 8).map((x) => x.content))
 
     // ================= C. 点标签 = 直接添加 =================
     console.log('\n=== C. 点一下就添加（不用打字、不用再点保存）===')

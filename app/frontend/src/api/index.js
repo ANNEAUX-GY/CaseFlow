@@ -190,6 +190,16 @@ export const watchApi = {
   transition: (caseId, data) => http.post(`/watch/cases/${caseId}/transition`, data),
   /** 强制措施登记 / 变更（管理层） */
   measure: (caseId, data) => http.post(`/watch/cases/${caseId}/measure`, data),
+  // ---- 阶段→环节→任务（办案流程面板，2026-10-12） ----
+  /** 流程视图：当前阶段 + 环节顺序 + 每环节任务与进度 + 可选流转分支 */
+  flow: (caseId) => http.get(`/watch/cases/${caseId}/flow`),
+  /** 阶段流转（仅管理层）：action = DETAIN/BAIL/RELEASE/ARREST/PUNISH/CLOSE */
+  flowTransfer: (caseId, action) => http.post(`/watch/cases/${caseId}/flow/transfer`, { action }),
+  /** 补全当前阶段标准任务（老案件从没铺过任务时用；幂等） */
+  flowSeed: (caseId) => http.post(`/watch/cases/${caseId}/flow/seed`),
+  /** 勾选完成 / 撤销完成一条流程任务（双向切换） */
+  planDone: (planId) => http.post(`/watch/plans/${planId}/done`),
+  planRevert: (planId) => http.post(`/watch/plans/${planId}/revert`),
   // ---- 办理进度批注（写=管理层，读=所有能看案件的人） ----
   comments: (caseId) => http.get(`/watch/cases/${caseId}/comments`),
   addComment: (logId, content) => http.post(`/watch/logs/${logId}/comments`, { content }),

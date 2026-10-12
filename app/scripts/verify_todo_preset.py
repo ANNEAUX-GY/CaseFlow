@@ -75,7 +75,14 @@ def login():
 
 
 def presets(limit=None):
-    path = "/watch/todo-presets" + (("?limit=%d" % limit) if limit else "")
+    """取本人记忆。
+
+    **默认取全量（limit=200），不要用前端的limit=8**：
+    自检条目是新加的，useCount=1，排在 27 条历史记忆的第 8 名开外，
+    用 8 会查不到它 → 断言报"次数=None"，看着像功能坏了，其实只是窗口太窄。
+    排序/limit 的行为由第 5 节单独验（那里才真的传小limit）。
+    """
+    path = "/watch/todo-presets" + (("?limit=%d" % limit) if limit else "?limit=200")
     r = call(path)
     return r.get("data") if r.get("code") == 0 else None
 

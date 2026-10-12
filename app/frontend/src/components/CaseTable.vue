@@ -47,6 +47,13 @@
           <span v-else class="cf-muted">—</span>
         </template>
       </el-table-column>
+      <el-table-column v-if="!compact" label="办案阶段" width="120">
+        <template #default="{ row }">
+          <el-tag size="small" :type="(STAGE_META[row.flowStage] || {}).type" effect="plain">
+            {{ row.flowStageName || stageLabel(row.flowStage) }}
+          </el-tag>
+        </template>
+      </el-table-column>
       <el-table-column label="主办 / 协办" :min-width="compact ? 110 : 150" show-overflow-tooltip>
         <template #default="{ row }">
           <span>{{ row.owner ? row.owner.employeeName : '未指派' }}</span>
@@ -81,7 +88,7 @@
 
 <script setup>
 import { computed } from 'vue'
-import { DUE_META, STATUS_META, PRIORITY_META, SOURCE_META, CASE_TYPE_META, dueText, rowClassOf, suspectLabel, suspectNamesText } from '../utils/format'
+import { DUE_META, STATUS_META, PRIORITY_META, SOURCE_META, CASE_TYPE_META, STAGE_META, dueText, rowClassOf, stageLabel, suspectLabel, suspectNamesText } from '../utils/format'
 import { useUserStore } from '../store/user'
 import FocusStar from './FocusStar.vue'
 

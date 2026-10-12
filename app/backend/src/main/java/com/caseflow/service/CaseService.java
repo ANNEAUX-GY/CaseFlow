@@ -133,6 +133,18 @@ public class CaseService {
     /** 删案件时连信箱里的信件一起清（否则「查看案件」点进去是条死链） */
     @Resource
     private NotificationService notificationService;
+    /**
+     * 建案时铺流程阶段的标准任务（2026-10-12）。
+     *
+     * <p>不注入会有两个后果：① 新案件打开是 0/0，流程面板一片空白；
+     * ② 列表「阶段进度」列永远是「暂无任务」，用户看不到这个系统到底管什么。
+     *
+     * <p>FlowService 只依赖 mapper 与日志服务，不回调 CaseService，无循环依赖。
+     * 失败不回滚建案（流程任务是附加价值），因此**必须吞异常**——
+     * 为了铺一份任务清单把整个建案动作搞失败，代价太大。
+     */
+    @Resource
+    private FlowService flowService;
 
     // ------------------------------------------------------------------
     // 查询
@@ -401,6 +413,13 @@ public class CaseService {
         vo.setDetainDaysLeft(DictHolder.daysLeft(c.getDetainDeadline(), now));
         vo.setInvestigationStatus(c.getInvestigationStatus());
         vo.setInvestigationStatusName(DictHolder.name("INVESTIGATION_STATUS", c.getInvestigationStatus()));
+        // 办案阶段（2026-10-12）：flow_stage 为 NULL 的存量案件按「初查」归位，
+        // 与 FlowService.stageOf 同一口径，不在这里另判一次。
+        String stage = c.getFlowStage() == null || c.getFlowStage().trim().isEmpty()
+                ? com.caseflow.flow.CaseFlowTemplate.STAGE_INITIAL
+                : c.getFlowStage();
+        vo.setFlowStage(stage);
+        vo.setFlowStageName(com.caseflow.flow.CaseFlowTemplate.stageLabel(stage));
         vo.setRemark(c.getRemark());
         vo.setCreatedByName(userName(c.getCreatedBy()));
         vo.setCreatedAt(c.getCreatedAt());
@@ -633,6 +652,16 @@ public class CaseService {
             ar.setMemberIds(req.getMemberIds());
             ar.setNote(req.getAssignNote());
             assign(ar);
+        }
+        // 新建即铺初始阶段的标准任务（幂等，编辑案件不重复铺）
+        if (isNew) {
+            try {
+                flowService.generateStageTasks(c.getId(),
+                        com.caseflow.flow.CaseFlowTemplate.STAGE_INITIAL);
+            } catch (Exception e) {
+                org.slf4j.LoggerFactory.getLogger(CaseService.class)
+                        .warn("[CaseService] 建案后生成流程任务失败（不影响建案）：{}", e.getMessage());
+            }
         }
         // 快照写在最后：这样 after 里连指派关系一起带上，撤回时能整体回到操作前
         String after = snapshotService.capture(c.getId());

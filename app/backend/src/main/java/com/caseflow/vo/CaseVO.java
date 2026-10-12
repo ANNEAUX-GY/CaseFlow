@@ -90,6 +90,13 @@ public class CaseVO implements Serializable {
     private String flowStage;
     /** 阶段中文名，便于前端直接展示 */
     private String flowStageName;
+    /**
+     * 当前阶段是否已 100% 完成（2026-10-12）。
+     *
+     * <p>用于列表里标「待领导确认流转」——阶段做完<b>不自动跳</b>（出口有刑拘/取保/释放三条路，
+     * 是人的决定），但做完也不该再无声无息，否则领导根本不知道有个案子卡在 100% 等他拍板。
+     */
+    private Boolean flowFinished;
 
     /** 待办（to do）进度：已完成 / 总数（仅详情页填充） */
     private Integer todoDone;

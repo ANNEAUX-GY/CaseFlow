@@ -56,6 +56,9 @@ public class WatchService {
                     : vo.getFlowStage();
             vo.setFlowStage(fs);
             vo.setFlowStageName(com.caseflow.flow.CaseFlowTemplate.stageLabel(fs));
+            // 阶段做完不自动跳（出口要人拍板），但必须让领导看得见「这个案子在等你确认流转」
+            vo.setFlowFinished(st != null && st.total > 0 && st.done == st.total
+                    && !com.caseflow.flow.CaseFlowTemplate.STAGE_CLOSED.equals(fs));
         }
         return r;
     }
