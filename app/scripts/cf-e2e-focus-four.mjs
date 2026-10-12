@@ -227,15 +227,15 @@ const run = async () => {
   }
 
   // ================= F. 「只看重点」不能被埋在人堆里（2026-10-12） =================
-  // 用户三次反馈：第一次「这三个栏目没有只看重点」（塞在筛选行中间没人看见），
-  // 第二次「待办总览那个位置不好看」（独占一行吊在标题下面像孤儿），
-  // 第三次「放在左边」（贴着「刷新」像附属按钮，不像一个筛选条件）。
-  // 现在的约定：**待办总览排条首（lead 筛选片），其余三页独占一行放页面顶部。**
-  // 本节把落位钉死，防止又被打回中间那排控件里或右端贴「刷新」。
-  console.log('\n=== F. 「只看重点」的落位（待办总览=条首筛选片；其余=页面顶部） ===')
+  // 位置反馈共四轮：①塞在筛选行中间没人看见；②独占一行吊在标题下像孤儿；
+  // ③待办总览里贴着「刷新」像附属按钮；④其余三页也要跟待办总览统一成条首筛选片。
+  // 现在的约定：**有检索条的（案件管理/案件盯办/待办总览）一律用 `lead` 排条首**，
+  // 只有没有检索条的到期提醒才独占一行放页面顶部。
+  // 本节把落位钉死，防止又被打回中间那排控件里或右端贴按钮。
+  console.log('\n=== F. 「只看重点」的落位（有检索条=条首筛选片；到期提醒=页面顶部） ===')
   for (const [label, hash, mode] of [
-    ['案件管理', '/cases', 'top'],
-    ['案件盯办', '/watch', 'top'],
+    ['案件管理', '/cases', 'lead'],
+    ['案件盯办', '/watch', 'lead'],
     ['待办总览', '/todos', 'lead'],
     ['到期提醒', '/reminders', 'top']
   ]) {
@@ -250,21 +250,14 @@ const run = async () => {
       const out = { exists: !!t, inline, lead, count: visible.length }
       if (!t) return out
       if (mode === 'lead') {
-        // 条首筛选片：必须在筛选条里，且排在状态切换与搜索框左侧
-        const bar = t.closest('.cf-filter-bar, .cf-toolbar')
-        const group = bar && bar.querySelector('.el-radio-group')
+        // 条首筛选片：必须在检索条里，且排在**所有**其他检索控件左侧
+        const bar = t.closest('.cf-toolbar, .cf-filter-bar')
+        // 注意：候选里要排除筛选片自身的 button，否则 first 永远是它自己
+        const first = bar && [...bar.querySelectorAll('.el-input, .el-select, .el-cascader, .el-radio-group, button')]
+          .find((x) => !t.contains(x))
         out.inBar = !!bar
-        out.leftOfGroup = !!(bar && group
-          && t.getBoundingClientRect().right <= group.getBoundingClientRect().left + 1)
-        const table = document.querySelector('.el-table')
-        out.aboveTable = !!(table && t.getBoundingClientRect().bottom <= table.getBoundingClientRect().top + 1)
-      } else if (inline) {
-        // inline 模式：必须落在筛选条里，且在搜索框右侧（不是挤在中间那排控件里）
-        const bar = t.closest('.cf-filter-bar, .cf-toolbar')
-        const search = bar && bar.querySelector('.el-input')
-        out.inBar = !!bar
-        out.rightOfSearch = !!(bar && search
-          && t.getBoundingClientRect().left >= search.getBoundingClientRect().right - 1)
+        out.leftOfRest = !!(bar && first
+          && t.getBoundingClientRect().right <= first.getBoundingClientRect().left + 1)
         // 且必须在表格上方：它管的是下面这张表
         const table = document.querySelector('.el-table')
         out.aboveTable = !!(table && t.getBoundingClientRect().bottom <= table.getBoundingClientRect().top + 1)
@@ -277,10 +270,7 @@ const run = async () => {
     check(`F · ${label} 有且只有一个「只看重点」`, [r.exists, r.count], [true, 1])
     check(`F · ${label} 落位方式符合约定（${mode}）`, mode === 'lead' ? r.lead : r.inline, mode !== 'top')
     if (mode === 'lead') {
-      checkTrue(`F · ${label} 在筛选条里、且排在状态切换左侧`, r.inBar && r.leftOfGroup, JSON.stringify(r))
-      checkTrue(`F · ${label} 在表格上方`, r.aboveTable, JSON.stringify(r))
-    } else if (r.inline) {
-      checkTrue(`F · ${label} 在筛选条里、且排在搜索框右侧`, r.inBar && r.rightOfSearch, JSON.stringify(r))
+      checkTrue(`F · ${label} 在检索条里、且排在所有检索控件最左`, r.inBar && r.leftOfRest, JSON.stringify(r))
       checkTrue(`F · ${label} 在表格上方`, r.aboveTable, JSON.stringify(r))
     } else {
       checkTrue(`F · ${label} 在主要内容（工具条/卡片/图表）上方`, r.aboveAnchor, JSON.stringify(r))
@@ -293,9 +283,11 @@ const run = async () => {
     await openPage(hash)
     await tickFocus()
     await sleep(1500)
+    // 用 textContent 而不是 innerText：lead 形态的说明文案放在 .cf-sr-only 裁剪区
+// （避免行内文字把检索条挤换行），innerText 对裁剪区元素的计入行为不可靠
     const hint = await p.evaluate(() => {
       const t = document.querySelector('.cf-focus-toggle')
-      return t ? t.innerText.replace(/\s+/g, ' ').trim() : ''
+      return t ? t.textContent.replace(/\s+/g, ' ').trim() : ''
     })
     checkTrue(`G · ${label} 提示文案出现`, hint.includes('仅显示已标为重点的案件'), hint)
   }

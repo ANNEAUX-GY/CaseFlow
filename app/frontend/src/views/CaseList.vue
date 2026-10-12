@@ -15,11 +15,12 @@
       <span class="cf-gatebar__tip">退回上一级或换类型，请用顶部类型条右侧的按钮</span>
     </div>
 
-    <!-- 只看重点：与「到期提醒」同一个位置、同一句提示（2026-10-12 从筛选行提到这里）。
-         放在趋势图上面，勾选后顶部"当前共 N 件"与列表一起只数重点案件 -->
-    <FocusOnlyToggle v-model="query.focusOnly" @change="load" />
-
     <div class="cf-toolbar">
+      <!-- 只看重点（2026-10-12）：排在检索条第一项的星标筛选片，与「待办总览」同款。
+           位置改过两轮：先在筛选行中间（没人看见）、再提到页面顶部独占一行（像孤儿），
+           现在贴回检索条最左端——它是这里最"重"的筛选条件（勾上后整个列表只剩重点案件），
+           该占第一眼；镀金态与下面重点行的金色高亮同色。 -->
+      <FocusOnlyToggle v-model="query.focusOnly" @change="load" lead />
       <el-input v-model="query.keyword" placeholder="案件名 / 编号 / 备注" clearable style="width: 220px" @keyup.enter="load" />
       <el-select v-model="query.status" placeholder="状态" clearable style="width: 120px" @change="load">
         <el-option label="未办结" value="OPEN" />
@@ -75,7 +76,6 @@
         <el-option label="7天内" value="D7" />
         <el-option label="未设期限" value="NONE" />
       </el-select>
-      <!-- 只看重点已提到页面顶部（FocusOnlyToggle，与「到期提醒」同一位置），筛选行里不再重复放 -->
       <el-button @click="reset">重置</el-button>
       <span class="cf-spacer" />
       <el-button type="primary" @click="onCreate">新建案件</el-button>

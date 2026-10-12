@@ -334,8 +334,11 @@ const run = async () => {
     check('⑤ 接口侧 focus=1', after.body?.data?.focus, 1)
     await p.screenshot({ path: `${OUT}/ff3-focus-on.png` })
 
-    // 只看重点
+    // 只看重点：案件管理用的是 lead 筛选片（button），到期提醒仍是 checkbox 形态，两种都要兼容
     await p.evaluate(() => {
+      const btn = [...document.querySelectorAll('.cf-focus-lead')]
+        .filter((x) => x.offsetParent !== null)[0]
+      if (btn) { btn.click(); return }
       const cb = [...document.querySelectorAll('.el-checkbox')].find((x) => x.innerText.includes('只看重点'))
       cb && cb.querySelector('input').click()
     })

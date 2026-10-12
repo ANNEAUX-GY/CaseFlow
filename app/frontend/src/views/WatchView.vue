@@ -13,10 +13,9 @@
       <span class="cf-gatebar__tip">退回上一级或换类型，请用顶部类型条右侧的按钮</span>
     </div>
 
-    <!-- 只看重点：与「到期提醒」同一个位置、同一句提示（2026-10-12 从筛选行提到这里）。
-         放在看板卡片上面的好处是"整页一个开关"——卡片数字、三张图、页签列表同口径，
-         不会出现"勾了只看重点，卡片还显示全部"这种对不上的情况。 -->
-    <FocusOnlyToggle v-model="query.focusOnly" @change="onFilterChange" />
+    <!-- 只看重点见下方检索条首项（lead 筛选片，与「待办总览」同款）。
+         放条内而不是页面顶部，是为了让"看板卡片 + 三张图 + 页签列表"共用同一个开关，
+         不会出现"勾了只看重点、卡片还显示全部件数"这种对不上的情况。 -->
 
     <!-- 盯办看板：三大子模块 + 待审批，点击卡片跳对应页签 -->
     <el-row :gutter="12" class="cf-watch__board">
@@ -73,6 +72,11 @@
 
         <!-- 检索区：初查页签支持嫌疑人检索 -->
         <div class="cf-toolbar" style="margin-bottom: 12px">
+          <!-- 只看重点（2026-10-12）：排在检索条第一项的星标筛选片，与「待办总览」同款。
+               位置改过两轮：先在筛选行中间（没人看见）、再提到页面顶部独占一行（像孤儿），
+               现在贴回检索条最左端——它是这里最"重"的筛选条件（勾上后整个列表只剩重点案件），
+               该占第一眼；镀金态与下面重点行的金色高亮同色。 -->
+          <FocusOnlyToggle v-model="query.focusOnly" @change="onFilterChange" lead />
           <el-input v-model="query.keyword" placeholder="案件名 / 编号" clearable style="width: 190px" @keyup.enter="load" />
           <template v-if="module === 'INITIAL'">
             <el-cascader
@@ -101,7 +105,6 @@
           <el-select v-model="query.investigationStatus" placeholder="侦查进度" clearable style="width: 120px" @change="load">
             <el-option v-for="(m, code) in INVEST_STATUS_META" :key="code" :label="m.label" :value="code" />
           </el-select>
-          <!-- 只看重点已提到页面顶部（FocusOnlyToggle，与「到期提醒」同一位置），筛选行里不再重复放 -->
           <el-button @click="reset">重置</el-button>
           <el-button type="primary" @click="load">查询</el-button>
         </div>

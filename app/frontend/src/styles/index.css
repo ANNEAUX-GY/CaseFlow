@@ -272,6 +272,20 @@ body {
 }
 .cf-focus-lead.is-on .el-icon { color: var(--cf-gold); }
 
+/* 仅供读屏/检索、不占版面也不入 innerText 的说明文字。
+   放在裁剪区而不是 display:none —— 后者会被读屏软件一并跳过，等于白写。 */
+.cf-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* 详情抽屉标题行：案件编号 + 重点星标并排（2026-10-09） */
 .cf-drawer__head { display: flex; align-items: center; gap: 8px; }
 
