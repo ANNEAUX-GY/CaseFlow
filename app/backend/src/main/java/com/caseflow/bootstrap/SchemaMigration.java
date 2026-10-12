@@ -140,7 +140,12 @@ public class SchemaMigration implements ApplicationRunner {
             //                   读取时前端按 0 处理，不额外判空。
             {"case_info", "deadline_label", "VARCHAR(64) NULL"},
             {"case_info", "remind_days", "INT NULL"},
-            {"case_info", "focus", "TINYINT NOT NULL DEFAULT 0"}
+            {"case_info", "focus", "TINYINT NOT NULL DEFAULT 0"},
+            // 办案阶段收敛到「案件待办」（2026-10-12）：
+            // 原先阶段进度算在 case_plan（阶段→环节→标准任务）上，等于和「案件待办」
+            // 并行维护两套任务清单，用户要求删掉那套。现在判据统一落在 case_todo：
+            // 加 flow_stage 记录这条待办属于哪个阶段，NULL=存量按案件当前阶段处理。
+            {"case_todo", "flow_stage", "VARCHAR(24) NULL"}
     };
 
     /** 旧数据回填：把历史「案件类型」自由文本里的大类词归位到 case_type（小类位清空）。
@@ -182,11 +187,44 @@ public class SchemaMigration implements ApplicationRunner {
             removeCivilType(conn);
             seedCategories(conn, existing);
             backfillFeedbackDeclare(conn, existing);
+            retireStdPlanTasks(conn, existing);
         } catch (Exception e) {
             // 不阻断启动：库里可能只有只读权限。缺列的表现是「撤回」功能不可用，
             // 报错信息会明确指出，不会静默损坏数据。
             log.error("[SchemaMigration] 增量建列失败，撤回功能可能不可用：{}。"
                     + "可手动执行：{}", e.getMessage(), describeAll());
+        }
+    }
+
+    /**
+     * 一次性清理：作废「模板生成的标准任务」（2026-10-12）。
+     *
+     * <p><b>背景</b>：阶段推进最早做成「阶段→环节→标准任务」三层，建案时会给每个新案件
+     * 自动铺 13 项标准任务（接收材料/立案/侦查…）。后来办案阶段统一由
+     * <b>案件待办</b>承担，那批任务就变成了第二套并行清单——同一个案子要在一处勾
+     * 「接收材料/立案」，又要在另一处勾领导交代的事，两处数字还会对不上。
+     * 用户明确要求删掉那套，所以这些行不能再留在计划统计里。
+     *
+     * <p><b>为什么置 CANCELLED 而不是 DELETE</b>：这是办案留痕，
+     * 而且可能已被勾选完成过；直接删行会毁掉"这个案子当初走过哪些步骤"的记录。
+     * 置 CANCELLED 后它们自动退出所有统计口径（planStats / 待办口径都跳过），
+     * 需要追溯时数据还在库里。
+     *
+     * <p>幂等：只处理 is_std=1 且尚未 CANCELLED 的行，重复启动不会二次改动。
+     */
+    private void retireStdPlanTasks(Connection conn, Set<String> existing) {
+        if (!existing.contains("case_plan.is_std")) {
+            return;
+        }
+        String sql = "UPDATE case_plan SET status='CANCELLED' WHERE is_std=1 AND status<>'CANCELLED'";
+        try (Statement st = conn.createStatement()) {
+            int n = st.executeUpdate(sql);
+            if (n > 0) {
+                log.info("[SchemaMigration] 已作废 {} 条模板生成的标准任务"
+                        + "（办案阶段改由案件待办承担，这些行不再计入统计）", n);
+            }
+        } catch (Exception e) {
+            log.warn("[SchemaMigration] 标准任务作废跳过：{}", e.getMessage());
         }
     }
 

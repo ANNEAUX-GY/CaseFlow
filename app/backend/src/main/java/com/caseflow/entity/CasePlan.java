@@ -9,13 +9,18 @@ import java.io.Serializable;
 import java.time.LocalDateTime;
 
 /**
- * 阶段任务项（原「侦查计划」，2026-10 升格为流程任务）：
- * 阶段 {@link #stage} → 环节 {@link #stepKey} → 任务（本行）三层结构。
+ * 侦查计划（工作项）。
  *
  * <p>随案件快照一并存档，撤回时可整体还原。
  *
- * <p><b>存量兼容</b>：升级前的计划行 stage/step_key/task_key 皆为 NULL、
- * is_std=0，读进度时归入「初查 / 侦查」环节展示，不影响既有数据可见。
+ * <p><b>2026-10-12 变更</b>：本表曾被升格为「阶段→环节→标准任务」三层结构，
+ * 建案时自动铺一批标准任务（接收材料/立案/侦查…）。办案阶段后来统一由
+ * <b>案件待办</b>（{@code case_todo}）承担，阶段进度只看待办，
+ * 那批模板任务已在启动迁移里置为 CANCELLED（留痕但不再计入统计）。
+ * 本表回归本来的角色：民警自排的工作计划与逾期预警。
+ *
+ * <p>下面 stage / stepKey / taskKey / isStd 四列<b>不再被写入</b>，
+ * 仅保留以兼容历史数据；新代码不要依赖它们做业务判断。
  */
 @Data
 @TableName("case_plan")
@@ -41,23 +46,17 @@ public class CasePlan implements Serializable {
     private LocalDateTime updatedAt;
 
     /**
-     * 所属阶段：INITIAL初查 / DETAIN刑拘在办 / BAIL取保及监居 / CLOSED已终结。
-     * NULL=存量计划，读时按 INITIAL 处理。
+     * 历史字段（2026-10-12 起不再写入）：所属阶段 INITIAL/DETAIN/BAIL/CLOSED。
+     * 仅存量的模板任务行有值，新数据一律为 NULL。
      */
     private String stage;
 
-    /**
-     * 所属环节：RECEIVE接收材料 / CASE_FILL立案 / INVESTIGATE侦查 / DETAIN刑拘 …
-     * NULL=存量计划，读时按 {@link com.caseflow.flow.CaseFlowTemplate#STEP_INVESTIGATE} 处理。
-     */
+    /** 历史字段（2026-10-12 起不再写入）：所属环节。 */
     private String stepKey;
 
-    /**
-     * 标准任务标识（模板内唯一），仅 {@link #isStd}=1 的行有值。
-     * 用于「补充/重置标准任务」时幂等去重，避免重复生成。
-     */
+    /** 历史字段（2026-10-12 起不再写入）：模板内任务标识。 */
     private String taskKey;
 
-    /** 1=按流程模板生成的标准任务；0=民警自建或存量数据 */
+    /** 历史字段（2026-10-12 起不再写入）：1=曾按模板生成的标准任务；0=民警自建或存量 */
     private Integer isStd;
 }

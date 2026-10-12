@@ -130,6 +130,10 @@ CREATE TABLE IF NOT EXISTS case_todo (
     deadline       DATETIME     DEFAULT NULL COMMENT '截止时间（取意见的落实截止时间，可空）',
     done_at        DATETIME     DEFAULT NULL COMMENT '完成时间',
     done_by        BIGINT       DEFAULT NULL COMMENT '完成人',
+    -- 办案阶段（2026-10-12）：待办归属的阶段（INITIAL初查/DETAIN刑拘在办/BAIL取保监居/CLOSED已终结）。
+    -- NULL=存量数据，读取时按案件当前阶段处理（与 FlowService.stageOf 同一归位口径）。
+    -- 流转后新阶段的待办从 0 起算，阶段进度天然归零，不需要额外"重置"。
+    flow_stage     VARCHAR(24)  DEFAULT NULL COMMENT '办案阶段：NULL=存量按案件当前阶段',
     remark         VARCHAR(512) DEFAULT NULL COMMENT '备注/完成说明',
     created_by     BIGINT       DEFAULT NULL COMMENT '创建人',
     created_at     DATETIME     DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',

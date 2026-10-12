@@ -5,8 +5,10 @@ import com.caseflow.common.PageResult;
 import com.caseflow.dto.CaseQuery;
 import com.caseflow.entity.CaseInfo;
 import com.caseflow.entity.CasePlan;
+import com.caseflow.entity.CaseTodo;
 import com.caseflow.mapper.CaseInfoMapper;
 import com.caseflow.mapper.CasePlanMapper;
+import com.caseflow.mapper.CaseTodoMapper;
 import com.caseflow.vo.CaseVO;
 import com.caseflow.vo.StatsVO;
 import com.caseflow.vo.WatchBoardVO;
@@ -35,6 +37,8 @@ public class WatchService {
     private CaseInfoMapper caseMapper;
     @Resource
     private CasePlanMapper planMapper;
+    @Resource
+    private CaseTodoMapper todoMapper;
 
     /** 盯办列表 = 通用分页查询 + 计划进度填充（done/total/overdue） */
     public PageResult<CaseVO> page(CaseQuery query) {
@@ -44,6 +48,8 @@ public class WatchService {
             return r;
         }
         Map<Long, PlanStat> stats = planStats(list.stream().map(CaseVO::getId).collect(Collectors.toList()));
+        List<Long> ids = list.stream().map(CaseVO::getId).collect(Collectors.toList());
+        Map<Long, TodoStat> todoStats = todoStats(ids, list);
         LocalDateTime now = LocalDateTime.now();
         for (CaseVO vo : list) {
             PlanStat st = stats.get(vo.getId());
@@ -56,8 +62,18 @@ public class WatchService {
                     : vo.getFlowStage();
             vo.setFlowStage(fs);
             vo.setFlowStageName(com.caseflow.flow.CaseFlowTemplate.stageLabel(fs));
+            // 阶段进度口径 = 该阶段**案件待办**的完成情况（2026-10-12）。
+            // 列表口径必须与 FlowService.progressOf 完全一致，否则会出现
+            // "列表写 100%、点进抽屉写 60%"这种没法解释的错位。
+            TodoStat td = todoStats.get(vo.getId());
+            int fDone = td == null ? 0 : td.done;
+            int fTotal = td == null ? 0 : td.total;
+            vo.setFlowDone(fDone);
+            vo.setFlowTotal(fTotal);
+            vo.setTodoDone(fDone);
+            vo.setTodoTotal(fTotal);
             // 阶段做完不自动跳（出口要人拍板），但必须让领导看得见「这个案子在等你确认流转」
-            vo.setFlowFinished(st != null && st.total > 0 && st.done == st.total
+            vo.setFlowFinished(fTotal > 0 && fDone == fTotal
                     && !com.caseflow.flow.CaseFlowTemplate.STAGE_CLOSED.equals(fs));
         }
         return r;
@@ -257,26 +273,14 @@ public class WatchService {
     /**
      * 批量计划统计：total 只计 待完成+已完成（取消的不进分母）；overdue = 待完成且已过计划时限。
      *
-     * <p><b>按流程阶段过滤</b>（2026-10）：只统计案件<strong>当前阶段</strong>的任务。
-     * 阶段流转时旧阶段任务会置 CANCELLED 已天然排除，但存量计划（stage 为 NULL）
-     * 若不按阶段归位，会在案件流转到「刑拘在办」后仍被计入分母，
-     * 导致进度虚高、且与流程面板显示的数字对不上。
-     * 这里统一用「stage 为 NULL 视为 INITIAL」的同一套归位口径，与 FlowService 保持一致。
+     * <p>case_plan 在 2026-10-12 之后<b>不再承担阶段任务</b>——办案阶段统一由
+     * 「案件待办」承担，这里回归它本来的角色：民警自排的工作计划与逾期预警，
+     * 因此<b>不再按 flow_stage 过滤</b>（否则民警在计划里写的事会随阶段流转凭空消失）。
      */
     private Map<Long, PlanStat> planStats(List<Long> caseIds) {
         Map<Long, PlanStat> map = new HashMap<>();
         if (caseIds == null || caseIds.isEmpty()) {
             return map;
-        }
-        // 取每案的当前阶段，用于过滤
-        Map<Long, String> stageOfCase = new HashMap<>();
-        for (CaseInfo c : caseMapper.selectList(new LambdaQueryWrapper<CaseInfo>()
-                .select(CaseInfo::getId, CaseInfo::getFlowStage)
-                .in(CaseInfo::getId, caseIds))) {
-            stageOfCase.put(c.getId(),
-                    c.getFlowStage() == null || c.getFlowStage().trim().isEmpty()
-                            ? com.caseflow.flow.CaseFlowTemplate.STAGE_INITIAL
-                            : c.getFlowStage());
         }
 
         List<CasePlan> plans = planMapper.selectList(new LambdaQueryWrapper<CasePlan>()
@@ -285,20 +289,61 @@ public class WatchService {
             if ("CANCELLED".equals(p.getStatus())) {
                 continue;
             }
-            // 只算当前阶段的任务：stage 为 NULL 的存量归初查
-            String st = p.getStage() == null || p.getStage().trim().isEmpty()
-                    ? com.caseflow.flow.CaseFlowTemplate.STAGE_INITIAL
-                    : p.getStage();
-            String cur = stageOfCase.get(p.getCaseId());
-            if (cur == null || !cur.equals(st)) {
-                continue;
-            }
             PlanStat stat = map.computeIfAbsent(p.getCaseId(), k -> new PlanStat());
             stat.total++;
             if ("DONE".equals(p.getStatus())) {
                 stat.done++;
             } else if (p.getPlannedAt() != null) {
                 stat.pendingDeadlines.add(p.getPlannedAt());
+            }
+        }
+        return map;
+    }
+
+    /**
+     * 批量待办统计（2026-10-12）：按案件<b>当前阶段</b>归集。
+     *
+     * <p><b>为什么不用 planStats</b>：阶段任务已经统一到「案件待办」（case_todo），
+     * case_plan 回到它本来的角色——民警自己排的工作计划（含计划时限与逾期）。
+     * 两套口径分工明确：planStats 管「计划逾期预警」，todoStats 管「阶段进度」。
+     *
+     * <p><b>归位口径必须与 FlowService.listTodosOfStage 一致</b>：
+     * 只算顶层主任务（子任务是细节）、排除 CANCELLED、
+     * flow_stage 为 NULL 的存量待办归入案件当前阶段。
+     */
+    private Map<Long, TodoStat> todoStats(List<Long> caseIds, List<CaseVO> voList) {
+        Map<Long, TodoStat> map = new HashMap<>();
+        if (caseIds == null || caseIds.isEmpty()) {
+            return map;
+        }
+        // 每案当前阶段（flow_stage 空 → INITIAL）
+        Map<Long, String> stageOfCase = new HashMap<>();
+        for (CaseVO vo : voList) {
+            String s = vo.getFlowStage() == null || vo.getFlowStage().trim().isEmpty()
+                    ? com.caseflow.flow.CaseFlowTemplate.STAGE_INITIAL
+                    : vo.getFlowStage();
+            stageOfCase.put(vo.getId(), s);
+        }
+        List<CaseTodo> all = todoMapper.selectList(new LambdaQueryWrapper<CaseTodo>()
+                .in(CaseTodo::getCaseId, caseIds)
+                .isNull(CaseTodo::getParentId));
+        for (CaseTodo t : all) {
+            if ("CANCELLED".equals(t.getStatus())) {
+                continue;
+            }
+            String cur = stageOfCase.get(t.getCaseId());
+            if (cur == null) {
+                continue;
+            }
+            String ts = t.getFlowStage() == null || t.getFlowStage().trim().isEmpty()
+                    ? cur : t.getFlowStage();
+            if (!cur.equals(ts)) {
+                continue;   // 属于历史阶段，不计入当前阶段进度
+            }
+            TodoStat stat = map.computeIfAbsent(t.getCaseId(), k -> new TodoStat());
+            stat.total++;
+            if ("DONE".equals(t.getStatus())) {
+                stat.done++;
             }
         }
         return map;
@@ -313,5 +358,11 @@ public class WatchService {
         long overdueOf(LocalDateTime now) {
             return pendingDeadlines.stream().filter(t -> t.isBefore(now)).count();
         }
+    }
+
+    /** 阶段待办统计：当前阶段的待办完成情况（2026-10-12） */
+    private static class TodoStat {
+        int done;
+        int total;
     }
 }

@@ -148,15 +148,16 @@
                 <el-tag size="small" :type="(STAGE_META[row.flowStage] || {}).type" effect="plain">
                   {{ row.flowStageName || stageLabel(row.flowStage) }}
                 </el-tag>
-                <el-progress v-if="row.planTotal > 0"
-                  :percentage="Math.round((row.planDone / row.planTotal) * 100)"
+                <!-- 进度 = 本阶段待办完成情况（阶段任务 = 案件待办，2026-10-12） -->
+                <el-progress v-if="row.flowTotal > 0"
+                  :percentage="Math.round((row.flowDone / row.flowTotal) * 100)"
                   :status="planProgressStatus(row)"
                   :stroke-width="8"
                   style="flex: 1; min-width: 60px" />
-                <span v-else class="cf-muted" style="font-size: 12px">暂无任务</span>
+                <span v-else class="cf-muted" style="font-size: 12px">暂无待办</span>
               </div>
               <!-- 阶段做完不自动跳：在这里标出来，领导才知道哪个案子在等他拍板 -->
-              <el-tooltip v-if="row.flowFinished" content="本阶段任务已全部完成，待领导确认转入下一阶段"
+              <el-tooltip v-if="row.flowFinished" content="本阶段待办已全部完成，待领导确认转入下一阶段"
                 placement="top">
                 <el-tag size="small" type="warning" effect="dark" style="margin-top: 4px">
                   待确认流转

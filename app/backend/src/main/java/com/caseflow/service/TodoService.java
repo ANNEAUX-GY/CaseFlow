@@ -55,6 +55,13 @@ public class TodoService {
     /** 意见派生待办在完成/反馈时需要回写对应意见的落实状态 */
     @Resource
     private CaseLeaderOpinionMapper opinionMapper;
+    /**
+     * 办案阶段标记（2026-10-12）：阶段任务 = 案件待办，
+     * 新建待办必须记下它属于哪个阶段，否则流转后新旧待办混在一起算进度。
+     * FlowService 只依赖 mapper，不回调本类，无循环依赖。
+     */
+    @Resource
+    private FlowService flowService;
 
     /** 单个案件待办条数上限，防止误批量粘贴把详情页撑爆 */
     private static final int MAX_PER_CASE = 50;
@@ -353,6 +360,7 @@ public class TodoService {
         t.setCreatedBy(AuthContext.userId());
         t.setCreatedAt(LocalDateTime.now());
         t.setUpdatedAt(t.getCreatedAt());
+        flowService.stampStage(t);
         todoMapper.insert(t);
         touchCase(c);
 
@@ -820,6 +828,8 @@ public class TodoService {
         s.setParentId(todoId);
         s.setContent(content.trim());
         s.setStatus("PENDING");
+        // 阶段随父任务：子任务是主任务的细节，不该自己漂到别的阶段去
+        s.setFlowStage(parent.getFlowStage());
         // 子任务排在主任务之后：取该案件当前最大 sort +1
         int sort = 0;
         for (CaseTodo t : todoMapper.selectList(new LambdaQueryWrapper<CaseTodo>()
@@ -1024,6 +1034,7 @@ public class TodoService {
             t.setCreatedBy(AuthContext.userId());
             t.setCreatedAt(LocalDateTime.now());
             t.setUpdatedAt(t.getCreatedAt());
+            flowService.stampStage(t);
             todoMapper.insert(t);
             created++;
         }

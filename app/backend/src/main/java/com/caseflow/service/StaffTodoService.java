@@ -68,6 +68,8 @@ public class StaffTodoService {
     @Resource
     private CaseService caseService;
     @Resource
+    private FlowService flowService;
+    @Resource
     private LogService logService;
 
     // ==================================================================
@@ -114,6 +116,9 @@ public class StaffTodoService {
         t.setCreatedBy(op.getCreatorId());
         t.setCreatedAt(LocalDateTime.now());
         t.setUpdatedAt(t.getCreatedAt());
+        // 办案阶段（2026-10-12）：阶段任务 = 案件待办，这条派生的待办属于提意见时所处的阶段。
+        // 不打这一章，流转后它会跟着案件走，导致新阶段进度一开始就"带着别人的尾巴"。
+        flowService.stampStage(t);
         todoMapper.insert(t);
         return t;
     }

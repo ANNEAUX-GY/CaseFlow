@@ -66,13 +66,19 @@
       </div>
 
 
-            <!-- 办案流程（阶段→环节→任务，2026-10-12）：进度不落库，全部实时算。
-           阶段做完不自动跳，转入哪一条分支由领导点确认。 -->
+            <!-- 办案阶段（2026-10-12）：阶段任务 = 案件待办。
+           这一条阶段做完了不自动跳，由领导在这里确认转入下一阶段。 -->
       <div class="cf-panel" style="margin-top: 12px">
-        <CaseFlowPanel :case-id="detail.id" @changed="after" />
+        <div class="cf-panel__head">
+          <span>办案阶段</span>
+          <span class="cf-panel__head-tip">本阶段待办全部办完后，由领导确认转入下一阶段</span>
+        </div>
+        <div style="padding: 12px 16px">
+          <CaseStageBar :case-id="detail.id" @changed="after" />
+        </div>
       </div>
 
-            <!-- 案件待办（含领导意见）：与案件详情抽屉同一个合并面板，落实状态单一来源 -->
+      <!-- 案件待办（含领导意见）：与案件详情抽屉同一个合并面板，落实状态单一来源 -->
       <div class="cf-panel" style="margin-top: 12px">
         <CaseTodoPanel :case-id="detail.id" @changed="after" />
       </div>
@@ -133,7 +139,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { caseApi, watchApi } from '../api'
-import CaseFlowPanel from './CaseFlowPanel.vue'
+import CaseStageBar from './CaseStageBar.vue'
 import CaseTodoPanel from './CaseTodoPanel.vue'
 import StaffWorkloadDialog from './StaffWorkloadDialog.vue'
 import { useUserStore } from '../store/user'

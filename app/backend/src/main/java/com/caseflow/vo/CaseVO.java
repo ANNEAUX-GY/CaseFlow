@@ -81,7 +81,8 @@ public class CaseVO implements Serializable {
     private String investigationStatusName;
 
     /** 侦查计划进度（盯办模块）：done/total/pending/overdue
-     *  注意 2026-10 起口径已收窄为「当前阶段」任务，与流程面板数字一致 */
+     *  口径 2026-10-12 起恢复为「全部工作计划」：阶段任务已统一到案件待办，
+     *  case_plan 回归"民警自排工作计划 + 逾期预警"的角色，不再按阶段过滤 */
     private Integer planDone;
     private Integer planTotal;
     private Integer planOverdue;
@@ -93,10 +94,15 @@ public class CaseVO implements Serializable {
     /**
      * 当前阶段是否已 100% 完成（2026-10-12）。
      *
-     * <p>用于列表里标「待领导确认流转」——阶段做完<b>不自动跳</b>（出口有刑拘/取保/释放三条路，
-     * 是人的决定），但做完也不该再无声无息，否则领导根本不知道有个案子卡在 100% 等他拍板。
+     * <p>用于列表里标「待领导确认流转」——阶段做完<b>不自动跳</b>（出口是人的决定），
+     * 但做完也不该再无声无息，否则领导根本不知道有个案子卡在 100% 等他拍板。
+     *
+     * <p>判据 = 该阶段的<b>案件待办</b>全部完成（阶段任务 = 案件待办，2026-10-12）。
      */
     private Boolean flowFinished;
+    /** 阶段待办进度：本阶段已完成 / 本阶段总数（判据同 flowFinished） */
+    private Integer flowDone;
+    private Integer flowTotal;
 
     /** 待办（to do）进度：已完成 / 总数（仅详情页填充） */
     private Integer todoDone;

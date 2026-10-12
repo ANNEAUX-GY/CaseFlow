@@ -9,7 +9,7 @@ import org.apache.ibatis.annotations.Mapper;
 public interface CaseTodoMapper extends BaseMapper<CaseTodo> {
 
     /** 还原快照时保留原主键（IdType.AUTO 的 insert 会省主键列） */
-    @Insert("INSERT INTO case_todo (id, case_id, content, status, sort, done_at, done_by, remark, created_by, created_at, updated_at) VALUES "
-            + "(#{id}, #{caseId}, #{content}, #{status}, #{sort}, #{doneAt}, #{doneBy}, #{remark}, #{createdBy}, #{createdAt}, #{updatedAt})")
+    @Insert("INSERT INTO case_todo (id, case_id, content, status, sort, done_at, done_by, flow_stage, remark, created_by, created_at, updated_at) VALUES "
+            + "(#{id}, #{caseId}, #{content}, #{status}, #{sort}, #{doneAt}, #{doneBy}, #{flowStage}, #{remark}, #{createdBy}, #{createdAt}, #{updatedAt})")
     int insertWithId(CaseTodo entity);
 }

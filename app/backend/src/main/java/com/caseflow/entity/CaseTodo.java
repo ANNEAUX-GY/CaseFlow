@@ -79,6 +79,16 @@ public class CaseTodo implements Serializable {
     private LocalDateTime doneAt;
     /** 完成人（账号 ID） */
     private Long doneBy;
+
+    /**
+     * 办案阶段（2026-10-12）：INITIAL初查 / DETAIN刑拘在办 / BAIL取保监居 / CLOSED已终结。
+     *
+     * <p><b>为什么阶段要落在待办上</b>：阶段进度 = 该阶段待办完成数 / 该阶段待办总数。
+     * 不落"进度百分比"字段，流转时新阶段的待办分母自然从 0 起算，
+     * 不存在"忘了重置导致进度虚高"。NULL=存量数据，读取时按案件当前阶段处理。
+     */
+    private String flowStage;
+
     /** 完成说明（选填） */
     private String remark;
     /** 父任务 ID：NULL=顶层主任务；非空=子任务（细节工作）。NULL 兼容存量 */
