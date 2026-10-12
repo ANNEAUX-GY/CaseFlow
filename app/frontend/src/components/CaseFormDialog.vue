@@ -1,9 +1,11 @@
 <template>
-  <!-- 手机端整屏弹窗：760px 的表单塞进 375px 会到处折行，全屏反而更好填 -->
+  <!-- 手机端整屏弹窗：这么宽的表单塞进 375px 会到处折行，全屏反而更好填。
+       宽度用 min()：900px 是「三列并排都不截断」的最小值（见 H 组回归断言），
+       再由 94vw 兜住窄屏，不至于在小屏上溢出。 -->
   <el-dialog
     v-model="visible"
     :title="isEdit ? '编辑案件' : '新建案件'"
-    width="760px"
+    width="min(960px, 94vw)"
     destroy-on-close
     class="cf-dialog"
   >
@@ -28,8 +30,12 @@
         </el-upload>
       </el-form-item>
 
+      <!-- 第一行三列（2026-10-12 重排）：原先 12/6/6，来源类型只拿到 ~80px，
+           「手工录入」被截成「手...」。按"控件需要多宽"重新分配：
+           案件分类的占位文案最长（必选：先选大类…），来源类型次之（手工录入 4 字），
+           优先级选项只有两字，可以最窄。 -->
       <el-row :gutter="12">
-        <el-col :span="12" :xs="24">
+        <el-col :span="10" :xs="24">
           <el-form-item label="案件分类" required>
             <el-cascader
               v-model="formCascade"
@@ -43,7 +49,7 @@
             <div class="cf-form-tip">案件类型为必填项，选定大类后保存才有效</div>
           </el-form-item>
         </el-col>
-        <el-col :span="6" :xs="24">
+        <el-col :span="8" :xs="24">
           <el-form-item label="来源类型">
             <el-select v-model="form.sourceType" style="width: 100%">
               <el-option label="手工录入" value="MANUAL" />
@@ -101,33 +107,35 @@
 
       <!-- 期限三件套（2026-10-09）：节点叫什么 + 哪一天 + 提前多久提醒。
             原来的「+1天 / +3天 / +7天」按钮取消——期限该是哪天就填哪天，
-            快捷键只会引诱人随手一点填个不准的日期。 -->
+            快捷键只会引诱人随手一点填个不准的日期。
+            列宽 10/7/7（2026-10-12）：节点名最占地方（预设里有「取保候审期限届满时间」
+            这种十字长词），原先 8/8/8 在 760px 弹窗里被截成「变更羁押期限时」。 -->
       <el-row :gutter="12">
-        <el-col :span="8" :xs="24">
+        <el-col :span="10" :xs="24">
           <el-form-item label="时间节点">
             <el-autocomplete
               v-model="form.deadlineLabel"
               :fetch-suggestions="suggestLabel"
-              placeholder="如：受案时间（选填）"
+              placeholder="如：受案时间"
               maxlength="64"
               clearable
               style="width: 100%"
             />
-            <div class="cf-form-tip">填了就按这个名字显示；不填默认叫「截止期限」</div>
+            <div class="cf-form-tip">不填则默认叫「截止期限」</div>
           </el-form-item>
         </el-col>
-        <el-col :span="8" :xs="24">
+        <el-col :span="7" :xs="24">
           <el-form-item label="期限日期">
             <el-date-picker
               v-model="deadlineDay"
               type="date"
               value-format="YYYY-MM-DD"
-              placeholder="选择日期（精确到天）"
+              placeholder="选择日期"
               style="width: 100%"
             />
           </el-form-item>
         </el-col>
-        <el-col :span="8" :xs="24">
+        <el-col :span="7" :xs="24">
           <el-form-item label="提前提醒">
             <el-select v-model="form.remindDays" placeholder="不提醒" clearable style="width: 100%">
               <el-option v-for="d in REMIND_DAY_PRESETS" :key="d" :label="`提前 ${d} 天`" :value="d" />
