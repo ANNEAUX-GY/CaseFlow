@@ -221,8 +221,16 @@ body {
 .cf-star:hover { color: #c8a45c !important; }
 .cf-star.is-on { color: #c8a45c !important; }
 
-/* 「只看重点」开关（2026-10-12）：从筛选行提到页面顶部，与「到期提醒」同一位置同一文案 */
+/* 「只看重点」开关（2026-10-12）：默认独占一行放在页面顶部；
+   inline 变体放进筛选条里，右侧对齐用分隔线与左边筛选区划开（不再塞进一排下拉框中间） */
 .cf-focus-toggle { margin: -6px 0 10px; }
+.cf-focus-toggle.is-inline {
+  margin: 0;
+  padding-left: 12px;
+  border-left: 1px solid var(--cf-border);
+  display: inline-flex;
+  align-items: center;
+}
 
 /* 详情抽屉标题行：案件编号 + 重点星标并排（2026-10-09） */
 .cf-drawer__head { display: flex; align-items: center; gap: 8px; }

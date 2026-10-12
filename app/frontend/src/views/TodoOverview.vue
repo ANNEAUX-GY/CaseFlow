@@ -6,9 +6,9 @@
         <span class="cf-panel__head-tip">查看各案件待办的完成状态与对应佐证材料</span>
       </div>
 
-      <!-- 只看重点：与「到期提醒」同一个位置、同一句提示（2026-10-12 从筛选行提到这里）。
-           放在汇总数字上面，勾选后汇总卡片与列表一起只数重点案件的待办 -->
-      <FocusOnlyToggle v-model="focusOnly" @change="load" />
+      <!-- 只看重点（2026-10-12）：放在筛选条右端、与「刷新」同组。
+           曾经挂在面板标题和汇总数字之间，像个孤儿；挪到筛选行右侧对齐后，
+           靠一条竖线与左边筛选区分开，既不挤中间那排控件，又一眼看得见。 -->
 
       <div class="cf-panel__body">
         <!-- 汇总数字 -->
@@ -47,7 +47,11 @@
           >
             <template #prefix><el-icon><Search /></el-icon></template>
           </el-input>
-          <!-- 只看重点已提到页面顶部（FocusOnlyToggle，与「到期提醒」同一位置），筛选行里不再重复放 -->
+          <!-- 只看重点（2026-10-12）：右对齐并用竖线与左边筛选区分开。
+               早先塞在中间那排控件里没人看得见；后来又独占一行吊在标题下面，
+               像孤儿（用户反馈"位置不好看"）。现在这里既有分隔、又不占整行。 -->
+          <span class="cf-spacer"></span>
+          <FocusOnlyToggle v-model="focusOnly" @change="load" inline />
           <el-button size="small" @click="load">刷新</el-button>
         </div>
 

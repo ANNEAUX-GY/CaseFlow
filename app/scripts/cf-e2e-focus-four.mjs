@@ -222,34 +222,50 @@ const run = async () => {
     })
   }
 
-  // ================= F. 「只看重点」必须放在页面顶部（2026-10-12） =================
-  // 起因：用户反馈「这三个栏目没有只看重点」。实际不是没做，是勾选框塞在筛选行里
-  // （一排下拉框挤在一起），根本发现不了。现在四个栏目共用 FocusOnlyToggle，
-  // 位置、文案与「到期提醒」完全一致——本节把"位置"也钉死，防止又被打回筛选行。
-  console.log('\n=== F. 「只看重点」在页面顶部，且只有一个 ===')
-  for (const [label, hash, anchorSel] of [
-    ['案件管理', '/cases', '.cf-toolbar'],
-    ['案件盯办', '/watch', '.cf-watch__board'],
-    ['待办总览', '/todos', '.cf-todo-stats'],
-    ['到期提醒', '/reminders', '.el-row']
+  // ================= F. 「只看重点」不能被埋在人堆里（2026-10-12） =================
+  // 用户两次反馈：第一次「这三个栏目没有只看重点」（塞在筛选行中间没人看见），
+  // 第二次「待办总览那个位置不好看」（独占一行吊在标题下面像孤儿）。
+  // 现在的约定：**有工具条/筛选条的就放条里右对齐（is-inline），没有的才独占一行放顶部。**
+  // 本节把两种约定都钉死，防止又被打回中间那排控件里。
+  console.log('\n=== F. 「只看重点」的落位（有筛选条→条内右对齐；无→页面顶部） ===')
+  for (const [label, hash, mode] of [
+    ['案件管理', '/cases', 'top'],
+    ['案件盯办', '/watch', 'top'],
+    ['待办总览', '/todos', 'inline'],
+    ['到期提醒', '/reminders', 'top']
   ]) {
     await openPage(hash)
-    const r = await p.evaluate((sel) => {
+    const r = await p.evaluate((mode) => {
       const t = document.querySelector('.cf-focus-toggle')
-      const a = document.querySelector(sel)
-      const boxes = [...document.querySelectorAll('.el-checkbox')]
+      const inline = !!(t && t.classList.contains('is-inline'))
+      const visible = [...document.querySelectorAll('.el-checkbox')]
         .filter((x) => x.offsetParent !== null && x.innerText.includes('只看重点'))
-      return {
-        exists: !!t,
-        count: boxes.length,
-        aboveAnchor: !!(t && a && t.getBoundingClientRect().bottom <= a.getBoundingClientRect().top + 1),
-        toggleTop: t ? Math.round(t.getBoundingClientRect().top) : null,
-        anchorTop: a ? Math.round(a.getBoundingClientRect().top) : null
+      const out = { exists: !!t, inline, count: visible.length }
+      if (!t) return out
+      if (inline) {
+        // 条内模式：必须落在筛选条里，且在搜索框右侧（不是挤在中间那排控件里）
+        const bar = t.closest('.cf-filter-bar, .cf-toolbar')
+        const search = bar && bar.querySelector('.el-input')
+        out.inBar = !!bar
+        out.rightOfSearch = !!(bar && search
+          && t.getBoundingClientRect().left >= search.getBoundingClientRect().right - 1)
+        // 且必须在表格上方：它管的是下面这张表
+        const table = document.querySelector('.el-table')
+        out.aboveTable = !!(table && t.getBoundingClientRect().bottom <= table.getBoundingClientRect().top + 1)
+      } else {
+        const anchor = document.querySelector('.cf-toolbar, .cf-watch__board, .el-row')
+        out.aboveAnchor = !!(anchor && t.getBoundingClientRect().bottom <= anchor.getBoundingClientRect().top + 1)
       }
-    }, anchorSel)
+      return out
+    }, mode)
     check(`F · ${label} 有且只有一个「只看重点」`, [r.exists, r.count], [true, 1])
-    checkTrue(`F · ${label} 开关在主要内容（卡片/图表）上方`,
-      r.aboveAnchor, `toggleTop=${r.toggleTop} anchorTop=${r.anchorTop}`)
+    check(`F · ${label} 落位方式符合约定（${mode}）`, r.inline, mode === 'inline')
+    if (r.inline) {
+      checkTrue(`F · ${label} 在筛选条里、且排在搜索框右侧`, r.inBar && r.rightOfSearch, JSON.stringify(r))
+      checkTrue(`F · ${label} 在表格上方`, r.aboveTable, JSON.stringify(r))
+    } else {
+      checkTrue(`F · ${label} 在主要内容（工具条/卡片/图表）上方`, r.aboveAnchor, JSON.stringify(r))
+    }
   }
 
   // ================= G. 勾选后给出提示文案 =================

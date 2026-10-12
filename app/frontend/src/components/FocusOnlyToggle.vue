@@ -1,10 +1,8 @@
 <template>
-  <!-- 只看重点（2026-10-12）：与「到期提醒」完全同一个位置、同一句提示。
-       原先三个页面也都有这个勾选框，但塞在筛选行里（一堆下拉框挤在一起），
-       用户根本发现不了——反馈"这三个栏目没有只看重点"就是这么来的。
-       提到页面顶部后，卡片 / 图表 / 汇总 / 列表都在它下面，勾选即整页同口径。 -->
-  <div v-if="canFocus" class="cf-focus-toggle">
-    <el-checkbox :model-value="modelValue" @change="onChange">只看重点</el-checkbox>
+  <!-- 只看重点（2026-10-12）：与「到期提醒」同一个控件。
+       inline = 放进筛选条/工具条里（不独占一行），窄条页面用这个更耐看 -->
+  <div v-if="canFocus" class="cf-focus-toggle" :class="{ 'is-inline': inline }">
+    <el-checkbox :model-value="modelValue" :size="inline ? 'small' : 'default'" @change="onChange">只看重点</el-checkbox>
     <span v-if="modelValue" class="cf-muted" style="margin-left: 8px">仅显示已标为重点的案件</span>
   </div>
 </template>
@@ -14,7 +12,8 @@ import { computed } from 'vue'
 import { useUserStore } from '../store/user'
 
 const props = defineProps({
-  modelValue: { type: Boolean, default: false }
+  modelValue: { type: Boolean, default: false },
+  inline: { type: Boolean, default: false }
 })
 const emit = defineEmits(['update:modelValue', 'change'])
 
