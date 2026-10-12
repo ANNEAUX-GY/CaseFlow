@@ -135,12 +135,14 @@ body {
 /* KPI 数字块：数字最大、标签最小
    列数写死（而不是 auto-fit），窗口宽度变化时不会突然换行导致整页往下窜 */
 .cf-kpi-grid {
+  /* 9 格：加了「重点案件」之后不再是整数个 8。
+     用 auto-fit + minmax 让它按宽度自动排（9 / 5 / 3…），
+     比硬写 repeat(9, 1fr) 更耐不同屏宽——硬写会让最右一格在窄屏被压扁。 */
   display: grid;
-  grid-template-columns: repeat(8, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
   gap: 8px;
 }
-@media (max-width: 1440px) { .cf-kpi-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-@media (max-width: 860px) { .cf-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 860px) { .cf-kpi-grid { grid-template-columns: repeat(auto-fit, minmax(104px, 1fr)); } }
 
 .cf-kpi {
   background: var(--cf-panel);
@@ -154,6 +156,10 @@ body {
 .cf-kpi:hover { border-color: var(--cf-primary-hover); background: #fafcff; }
 .cf-kpi--danger { border-left-color: var(--cf-danger); }
 .cf-kpi--warn { border-left-color: var(--cf-warn); }
+/* 重点案件（工作台）：金色，与星标 / 重点行高亮同一个色，一眼知道它是"标了重点的那批" */
+.cf-kpi--focus { border-left-color: var(--cf-gold); background: rgba(200, 164, 92, 0.07); }
+.cf-kpi--focus:hover { border-color: var(--cf-gold); background: rgba(200, 164, 92, 0.13); }
+.cf-kpi--focus .cf-kpi__value { color: #8a6a1f; }
 
 .cf-kpi__value {
   font-size: 26px;

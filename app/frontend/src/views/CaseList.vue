@@ -463,6 +463,13 @@ watch(() => route.query, (q) => {
     if (q.employeeName) employeeOptions.value = [{ id, name: q.employeeName }]
     load()
   }
+  // 工作台「重点案件」点 KPI / 查看全部跳过来：自动勾上「只看重点」筛选片。
+  // 这里改的是 query 对象本身，筛选片是 v-model 绑着它的，会跟着变亮/熄灭；
+  // 但仍要 load() —— 别人跳转过来时组件是重新挂载的，光改值不会自己请求。
+  if (q.focusOnly != null) {
+    query.focusOnly = q.focusOnly === 'true' || q.focusOnly === '1'
+    load()
+  }
 }, { immediate: true })
 
 // 信箱跳转：同上，等导航落地再消费（不能放进上面那个 immediate 的 watcher）

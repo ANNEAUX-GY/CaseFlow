@@ -1,6 +1,12 @@
 <template>
   <div class="cf-page">
     <div class="cf-kpi-grid">
+      <!-- 重点案件（2026-10-12）：工作台是"今天要盯什么"的入口，
+           领导标了星的那批案子不该只能去案件管理找。金色边框与星标、重点行高亮同色。 -->
+      <div v-if="canFocus" class="cf-kpi cf-kpi--focus" @click="gotoFocusOnly">
+        <div class="cf-kpi__value">{{ data.focusCase || 0 }}</div>
+        <div class="cf-kpi__label">重点案件</div>
+      </div>
       <div class="cf-kpi" @click="go('OPEN')">
         <div class="cf-kpi__value">{{ data.totalCase || 0 }}</div>
         <div class="cf-kpi__label">案件总数</div>
@@ -159,6 +165,39 @@
       </el-col>
     </el-row>
 
+    <!-- 重点案件（2026-10-12）：放在逾期/待指派**之前**。
+         它是领导手动标的"必须盯住的那批"，比系统按规则算出来的逾期更该先看到。
+         面板只给管理层（星标本身是 @FullAccessOnly），普通民警的工作台看不到这一块。 -->
+    <div v-if="canFocus" class="cf-panel">
+      <div class="cf-panel__head">
+        <span class="cf-focus-head">
+          <el-icon :size="15" class="cf-star is-on"><StarFilled /></el-icon>
+          重点案件
+        </span>
+        <span class="cf-panel__head-tip">领导标星的案件，按紧急程度排列</span>
+        <span class="cf-spacer"></span>
+        <span v-if="data.focusOverdue" class="cf-danger cf-dash__focus-overdue">
+          其中 {{ data.focusOverdue }} 件已逾期
+        </span>
+        <el-button link type="primary" @click="gotoFocusOnly">查看全部</el-button>
+      </div>
+      <!-- 清单可能为空：没有标过星的案件时给一句话，而不是留一块空白表格 -->
+      <div v-if="!(data.focusList || []).length" class="cf-panel__body">
+        <div class="cf-muted">还没有标为重点的案件。在案件列表点案件名左侧的星标即可标重点。</div>
+      </div>
+      <CaseTable
+        v-else
+        :rows="data.focusList"
+        :height="270"
+        :min-body="300"
+        compact
+        :loading="loading"
+        @open="openDetail"
+        @assign="openAssign"
+        @focus="load"
+      />
+    </div>
+
     <el-row :gutter="12">
       <el-col :span="12" :xs="24">
         <div class="cf-panel">
@@ -173,6 +212,7 @@
             :loading="loading"
             @open="openDetail"
             @assign="openAssign"
+            @focus="load"
           />
         </div>
       </el-col>
@@ -189,6 +229,7 @@
             :loading="loading"
             @open="openDetail"
             @assign="openAssign"
+            @focus="load"
           />
         </div>
       </el-col>
@@ -210,6 +251,7 @@
             :loading="loading"
             @open="openDetail"
             @assign="openAssign"
+            @focus="load"
           />
         </div>
       </el-col>
@@ -295,6 +337,7 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { StarFilled } from '@element-plus/icons-vue'
 import { caseApi, logApi } from '../api'
 import { gotoGated } from '../store/caseType'
 import { useUserStore } from '../store/user'
@@ -310,6 +353,9 @@ import PageFooter from '../components/PageFooter.vue'
 
 const router = useRouter()
 const userStore = useUserStore()
+// 重点案件（KPI + 清单）只给管理层：标星/取消星是 @FullAccessOnly，
+// 给普通民警一块只会永远空的「重点案件」面板（他也不能标），反而像坏了。
+const canFocus = computed(() => userStore.isFullAccess)
 const data = ref({})
 const stats = ref({})
 
@@ -598,6 +644,14 @@ const onOwnerClick = (p) => {
 
 const go = (status) => gotoGated(router, '/cases', { status })
 const gotoReminder = (bucket) => gotoGated(router, '/reminders', { bucket })
+/**
+ * 点「重点案件」去案件管理并自动勾上「只看重点」。
+ *
+ * <p><b>不自己过滤列表，直接跳带 focusOnly 的地址</b>：案件管理页已经有这套筛选与它的
+ * 分页/排序/搜索，这里再复制一份筛选逻辑只会出现"工作台 10 条、跳过去 12 条"的不一致。
+ * 那边读得到 route.query.focusOnly 并自动勾上对应筛选片（见 CaseList 的路由监听）。
+ */
+const gotoFocusOnly = () => gotoGated(router, '/cases', { focusOnly: 'true' })
 const openDetail = (row) => {
   currentId.value = row.id
   detailVisible.value = true
@@ -711,6 +765,18 @@ onBeforeUnmount(() => {
   font-size: 12px;
   color: var(--cf-text-3);
   white-space: nowrap;
+}
+/* 重点案件面板标题：金句+金星，与下方列表的金色高亮同一套色 */
+.cf-focus-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #8a6a1f;
+}
+.cf-dash__focus-overdue {
+  font-size: 12px;
+  white-space: nowrap;
+  margin-right: 4px;
 }
 /* 「7 天内到期」与「最近操作」同排等高（2026-10-08）：
    两列高度由内部写死的内容区决定（表格 262 / 日志区 262），

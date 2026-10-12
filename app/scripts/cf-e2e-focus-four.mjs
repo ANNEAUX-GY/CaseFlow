@@ -292,6 +292,90 @@ const run = async () => {
     checkTrue(`G · ${label} 提示文案出现`, hint.includes('仅显示已标为重点的案件'), hint)
   }
 
+  // ================= H. 工作台也能一眼看到重点案件 =================
+  // 用户要求：「要求在工作台能看到重点案件情况」。
+  // 工作台是"今天要盯什么"的入口，重点案件只在案件管理里找，等于这个功能在工作台不存在。
+  // 本节钉四件事：KPI 计数、清单、两者同口径、点进去能落到筛选好的列表。
+  console.log('\n=== H. 工作台的重点案件（KPI + 清单 + 跳转） ===')
+  await openPage('/')
+  let dashTotal = 0
+  {
+    const expTotal = (await apiGet('/cases?size=1&focusOnly=true&status=OPEN')).data.total
+    const d = (await apiGet('/cases/dashboard')).data || {}
+    dashTotal = d.focusCase || 0
+
+    checkTrue('H1 工作台有「重点案件」KPI',
+      await p.evaluate(() => [...document.querySelectorAll('.cf-kpi')]
+        .some((x) => x.innerText.includes('重点案件'))))
+    check('H2 KPI 计数 = 案件管理 focusOnly+OPEN 的条数', dashTotal, expTotal)
+    check('H3 KPI 上显示的数字就是那个计数', await p.evaluate((want) => {
+      const k = [...document.querySelectorAll('.cf-kpi')]
+        .find((x) => x.innerText.includes('重点案件'))
+      return (k?.querySelector('.cf-kpi__value')?.innerText || '').trim()
+    }, String(dashTotal)), String(dashTotal))
+
+    checkTrue('H4 有「重点案件」清单面板', await p.evaluate(() => !!document.querySelector('.cf-focus-head')))
+    const listInfo = await p.evaluate(() => {
+      // 清单面板是页面里第 4 张表（KPI 之后依次是重点/状态图/负载图/已逾期/待指派…），
+      // 用标题定位更稳：从 .cf-focus-head 所在的 .cf-panel 内找表格
+      const panel = document.querySelector('.cf-focus-head')?.closest('.cf-panel')
+      const rows = panel ? [...panel.querySelectorAll('.el-table__row')] : []
+      return {
+        rows: rows.length,
+        allLit: rows.length > 0 && rows.every((r) => !!r.querySelector('.cf-star.is-on')),
+        allHighlit: rows.length > 0 && rows.every((r) => r.className.includes('cf-row--focus'))
+      }
+    })
+    check('H5 清单条数 = 接口 focusList 条数', listInfo.rows, (d.focusList || []).length)
+    checkTrue('H6 清单每行都已点亮星标', listInfo.allLit, JSON.stringify(listInfo))
+    checkTrue('H7 清单每行都有重点高亮（金色边条）', listInfo.allHighlit, JSON.stringify(listInfo))
+
+    // 排序：已逾期的排最前（领导第一眼要看到最急的），未设期限的排最后
+    const order = (d.focusList || []).map((c) => c.deadline === null)
+    checkTrue('H8 未设期限的重点案件排在最后', order.indexOf(true) === -1 || order.lastIndexOf(false) < order.indexOf(true), JSON.stringify(order))
+    const dl = (d.focusList || []).map((c) => c.deadline).filter(Boolean)
+    checkTrue('H9 清单按期限升序（越急越靠前）',
+      dl.every((v, i) => i === 0 || dl[i - 1] <= v), JSON.stringify(dl))
+
+    // 「其中 N 件已逾期」不能超过清单条数（它是"这 N 条里几条逾期"）
+    checkTrue('H10 逾期条数不超过清单条数',
+      (d.focusOverdue || 0) <= (d.focusList || []).length,
+      `${d.focusOverdue} / ${(d.focusList || []).length}`)
+  }
+
+  // 点 KPI 跳案件管理：筛选片必须自动点亮，且列表 = 重点案件
+  await openPage('/')
+  await p.evaluate(() => {
+    const k = [...document.querySelectorAll('.cf-kpi')].find((x) => x.innerText.includes('重点案件'))
+    k && k.click()
+  })
+  await sleep(2600)
+  {
+    checkTrue('H11 点 KPI 跳到案件管理并带上 focusOnly',
+      (await p.evaluate(() => location.hash)).includes('focusOnly=true'),
+      await p.evaluate(() => location.hash))
+    checkTrue('H12 「只看重点」筛选片自动点亮',
+      await p.evaluate(() => !!document.querySelector('.cf-focus-lead.is-on')))
+    const n = await rowCount()
+    check('H13 跳转后列表条数 = 重点案件总数', n, Math.min(20, dashTotal))
+  }
+
+  // 普通民警：工作台不该出现重点 KPI 与清单（他既不能标星，也不该看到一块空面板）
+  // 与 D 组同一手法：降级本地用户态，不真换账号（工作台对所有人可进，不需要白名单）
+  await p.evaluate(() => {
+    const u = JSON.parse(localStorage.getItem('cf_user') || '{}')
+    u.role = 'STAFF'
+    u.isFullAccess = false
+    localStorage.setItem('cf_user', JSON.stringify(u))
+  })
+  await openPage('/')
+  {
+    checkTrue('H14 普通民警工作台无「重点案件」KPI',
+      await p.evaluate(() => ![...document.querySelectorAll('.cf-kpi')].some((x) => x.innerText.includes('重点案件'))))
+    checkTrue('H15 普通民警工作台无「重点案件」清单面板',
+      await p.evaluate(() => !document.querySelector('.cf-focus-head')))
+  }
+
   const realErrs = errs.filter((e) => !e.includes('Failed to load resource'))
   console.log('\n非资源类控制台错误：' + (realErrs.length ? realErrs.join('\n  ') : 'none'))
   check('E0 全程无 JS 异常', realErrs, [])

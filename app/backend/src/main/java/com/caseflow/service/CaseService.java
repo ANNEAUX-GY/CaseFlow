@@ -38,6 +38,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -996,6 +997,38 @@ public class CaseService {
         return reminders(bucket, limit, null, false);
     }
 
+    /**
+     * 工作台「重点案件」清单（2026-10-12）。
+     *
+     * <p>仍然走 {@link #page}，不另写查询：
+     * <ul>
+     *   <li>focusOnly=true 与案件管理页的「只看重点」是**同一套 SQL 条件**，不会两页数字不同；</li>
+     *   <li>数据范围收敛（{@link #scopeToSelf}）自动生效，普通民警只能看到自己的重点案件；</li>
+     *   <li>VO 的 dueLevel / focus / 阶段名等派生字段一次算齐，前端不用再拼。</li>
+     * </ul>
+     *
+     * <p>排序：按期限升序（越急越靠前）。**未设期限的排最后** —— 否则 NULL 在
+     * 升序里落到最前，工作台第一行反倒是个"没期限"的案件，领导第一眼看过去最容易误判。
+     * 这里在内存里二次排序，而不是依赖 SQL 的 NULLS LAST（H2 与 MySQL 默认行为不一致）。
+     */
+    public List<CaseVO> focusList(int limit) {
+        CaseQuery q = new CaseQuery();
+        q.setPage(1);
+        q.setSize(limit);
+        q.setStatus("OPEN");
+        q.setFocusOnly(true);
+        q.setSortField("deadline");
+        q.setSortOrder("asc");
+        List<CaseVO> list = new ArrayList<>(page(q).getList());
+        list.sort(Comparator
+                // 有期限的在前
+                .comparing((CaseVO c) -> c.getDeadline() == null ? 1 : 0)
+                // 同组内按期限升序（已逾期最前）；都无期限时按 id 兜底，保证顺序稳定
+                .thenComparing(c -> c.getDeadline(), Comparator.nullsLast(Comparator.naturalOrder()))
+                .thenComparing(CaseVO::getId));
+        return list;
+    }
+
     public DashboardVO dashboard() {
         return dashboard(null);
     }
@@ -1044,8 +1077,36 @@ public class CaseService {
         vo.setDueSoonList(reminders("D7", 10));
         vo.setPendingList(pendingList(8));
         vo.setRecentLogs(operationLogService.recent(20));
+        fillFocus(vo);
         return vo;
     }
+
+    /**
+     * 填「重点案件」相关字段（KPI 计数 + 清单）。
+     *
+     * <p><b>计数必须等于清单的完整条数，不能等于清单截断后的长度</b>：
+     * 清单只取前 N 条给人看，计数是"一共多少件重点案件"。
+     * 若拿 list.size() 去填计数，案件一多卡片就会撒谎（显示 10 件，实际 30 件）。
+     * 所以计数另走一次 count 查询，口径与 {@link #focusList} 的 focusOnly + OPEN 完全相同。
+     *
+     * <p>focusOverdue 用返回的清单算即可 —— 它的用途是"这 N 条里有几条已经逾期"，
+     * 只对**页面上能看到的那几条**有意义，与计数语义不同，不复用计数。
+     */
+    private void fillFocus(DashboardVO vo) {
+        vo.setFocusList(focusList(FOCUS_LIST_SIZE));
+        CaseQuery cq = new CaseQuery();
+        cq.setStatus("OPEN");
+        cq.setFocusOnly(true);
+        cq.setPage(1);
+        cq.setSize(1);
+        vo.setFocusCase(page(cq).getTotal());
+        vo.setFocusOverdue(vo.getFocusList().stream()
+                .filter(c -> "OVERDUE".equals(c.getDueLevel()))
+                .count());
+    }
+
+    /** 工作台重点案件清单最多列几条（与其它两个清单同量级） */
+    private static final int FOCUS_LIST_SIZE = 10;
 
     private List<CaseVO> pendingList(int limit) {
         CaseQuery q = new CaseQuery();
@@ -1091,6 +1152,8 @@ public class CaseService {
         vo.setDueSoonList(reminders("D7", 10));
         vo.setPendingList(pendingList(8));
         vo.setRecentLogs(Collections.emptyList());
+        // 重点案件同样走 page()，scopeToSelf 会把范围收敛到本人名下，口径与上面三个清单一致
+        fillFocus(vo);
         return vo;
     }
 
