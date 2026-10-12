@@ -167,7 +167,9 @@ def base_command(port: int) -> list:
 
 def wait_ready(port: int, seconds: int = 90) -> bool:
     import urllib.request
-    url = f"http://127.0.0.1:{port}/api/auth/dict"
+    # 用 /api/auth/roles（登录拦截器放行名单内、无需 X-Token、返回 200）。
+    # 不要用 /api/auth/dict：它需要登录，会返回 401，导致这里永远等不到就绪。
+    url = f"http://127.0.0.1:{port}/api/auth/roles"
     for _ in range(seconds):
         try:
             with urllib.request.urlopen(url, timeout=2) as r:

@@ -15,6 +15,10 @@
       <span class="cf-gatebar__tip">退回上一级或换类型，请用顶部类型条右侧的按钮</span>
     </div>
 
+    <!-- 只看重点：与「到期提醒」同一个位置、同一句提示（2026-10-12 从筛选行提到这里）。
+         放在趋势图上面，勾选后顶部"当前共 N 件"与列表一起只数重点案件 -->
+    <FocusOnlyToggle v-model="query.focusOnly" @change="load" />
+
     <div class="cf-toolbar">
       <el-input v-model="query.keyword" placeholder="案件名 / 编号 / 备注" clearable style="width: 220px" @keyup.enter="load" />
       <el-select v-model="query.status" placeholder="状态" clearable style="width: 120px" @change="load">
@@ -71,8 +75,7 @@
         <el-option label="7天内" value="D7" />
         <el-option label="未设期限" value="NONE" />
       </el-select>
-      <!-- 只看重点关注：列表上的星标要能反过来把标过的案件筛出来（2026-10-09） -->
-      <el-checkbox v-model="query.focusOnly" style="margin: 0 2px" @change="load">只看重点</el-checkbox>
+      <!-- 只看重点已提到页面顶部（FocusOnlyToggle，与「到期提醒」同一位置），筛选行里不再重复放 -->
       <el-button @click="reset">重置</el-button>
       <span class="cf-spacer" />
       <el-button type="primary" @click="onCreate">新建案件</el-button>
@@ -161,6 +164,7 @@ import CaseTable from '../components/CaseTable.vue'
 import CaseFormDialog from '../components/CaseFormDialog.vue'
 import AssignDialog from '../components/AssignDialog.vue'
 import CaseDetailDrawer from '../components/CaseDetailDrawer.vue'
+import FocusOnlyToggle from '../components/FocusOnlyToggle.vue'
 import ChartPanel from '../components/ChartPanel.vue'
 import EChart from '../components/EChart.vue'
 import { CHART, lineOption, barOption } from '../utils/chart'

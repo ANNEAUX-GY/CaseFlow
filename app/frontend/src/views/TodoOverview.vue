@@ -6,6 +6,10 @@
         <span class="cf-panel__head-tip">查看各案件待办的完成状态与对应佐证材料</span>
       </div>
 
+      <!-- 只看重点：与「到期提醒」同一个位置、同一句提示（2026-10-12 从筛选行提到这里）。
+           放在汇总数字上面，勾选后汇总卡片与列表一起只数重点案件的待办 -->
+      <FocusOnlyToggle v-model="focusOnly" @change="load" />
+
       <div class="cf-panel__body">
         <!-- 汇总数字 -->
         <div class="cf-todo-stats">
@@ -43,11 +47,7 @@
           >
             <template #prefix><el-icon><Search /></el-icon></template>
           </el-input>
-          <!-- 只看重点（2026-10-10）：与案件管理/盯办同一个勾选框。
-               跟星标列一样按权限收敛——普通民警看不到星标，给了也是永远筛空的 -->
-          <el-checkbox v-if="canFocus" v-model="focusOnly" size="small" style="margin: 0 2px" @change="load">
-            只看重点
-          </el-checkbox>
+          <!-- 只看重点已提到页面顶部（FocusOnlyToggle，与「到期提醒」同一位置），筛选行里不再重复放 -->
           <el-button size="small" @click="load">刷新</el-button>
         </div>
 
@@ -109,6 +109,7 @@ import { fileApi, todoApi } from '../api'
 import { withCaseType } from '../store/caseType'
 import { useUserStore } from '../store/user'
 import FocusStar from '../components/FocusStar.vue'
+import FocusOnlyToggle from '../components/FocusOnlyToggle.vue'
 
 // 与盯办一致：标注重点是管理端能力，普通民警不渲染星标
 const userStore = useUserStore()

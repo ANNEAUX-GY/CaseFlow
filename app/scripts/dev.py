@@ -28,8 +28,17 @@ NODE_BIN = TOOLS_DIR / "node"
 JDK_DIR = TOOLS_DIR / "jdk8"
 REQUIREMENTS = ROOT / "requirements.txt"
 
-# dev 模式后端健康检查地址用 /api/auth/dict（无需登录、永远 200）
-HEALTH_PATH = "/api/auth/dict"
+# dev 模式后端健康检查地址：必须挑一个「登录拦截器放行名单里」的接口。
+#
+# 这里原本写的是 /api/auth/dict，注释还留着"无需登录、永远 200"。
+# 但 WebConfig 后来把 /auth/** 的整体放行收窄成了逐个列举，
+# /auth/dict 不在名单里 → 未带 X-Token 请求它会拿到 401。
+# 健康检查只认 200，于是 wait_backend 会一路空轮询 180 秒，
+# 最后报「后端启动失败」并 terminate——而此时后端明明活得很好，
+# 表现为「终端停在 Started CaseFlowApplication 后不动」。
+#
+# /auth/roles 在放行名单里、返回 200、不碰数据库，是可靠的心跳。
+HEALTH_PATH = "/api/auth/roles"
 
 
 

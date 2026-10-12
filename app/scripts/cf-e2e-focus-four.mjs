@@ -222,6 +222,49 @@ const run = async () => {
     })
   }
 
+  // ================= F. 「只看重点」必须放在页面顶部（2026-10-12） =================
+  // 起因：用户反馈「这三个栏目没有只看重点」。实际不是没做，是勾选框塞在筛选行里
+  // （一排下拉框挤在一起），根本发现不了。现在四个栏目共用 FocusOnlyToggle，
+  // 位置、文案与「到期提醒」完全一致——本节把"位置"也钉死，防止又被打回筛选行。
+  console.log('\n=== F. 「只看重点」在页面顶部，且只有一个 ===')
+  for (const [label, hash, anchorSel] of [
+    ['案件管理', '/cases', '.cf-toolbar'],
+    ['案件盯办', '/watch', '.cf-watch__board'],
+    ['待办总览', '/todos', '.cf-todo-stats'],
+    ['到期提醒', '/reminders', '.el-row']
+  ]) {
+    await openPage(hash)
+    const r = await p.evaluate((sel) => {
+      const t = document.querySelector('.cf-focus-toggle')
+      const a = document.querySelector(sel)
+      const boxes = [...document.querySelectorAll('.el-checkbox')]
+        .filter((x) => x.offsetParent !== null && x.innerText.includes('只看重点'))
+      return {
+        exists: !!t,
+        count: boxes.length,
+        aboveAnchor: !!(t && a && t.getBoundingClientRect().bottom <= a.getBoundingClientRect().top + 1),
+        toggleTop: t ? Math.round(t.getBoundingClientRect().top) : null,
+        anchorTop: a ? Math.round(a.getBoundingClientRect().top) : null
+      }
+    }, anchorSel)
+    check(`F · ${label} 有且只有一个「只看重点」`, [r.exists, r.count], [true, 1])
+    checkTrue(`F · ${label} 开关在主要内容（卡片/图表）上方`,
+      r.aboveAnchor, `toggleTop=${r.toggleTop} anchorTop=${r.anchorTop}`)
+  }
+
+  // ================= G. 勾选后给出提示文案 =================
+  console.log('\n=== G. 勾选后有「仅显示已标为重点的案件」提示 ===')
+  for (const [label, hash] of [['案件管理', '/cases'], ['案件盯办', '/watch'], ['待办总览', '/todos']]) {
+    await openPage(hash)
+    await tickFocus()
+    await sleep(1500)
+    const hint = await p.evaluate(() => {
+      const t = document.querySelector('.cf-focus-toggle')
+      return t ? t.innerText.replace(/\s+/g, ' ').trim() : ''
+    })
+    checkTrue(`G · ${label} 提示文案出现`, hint.includes('仅显示已标为重点的案件'), hint)
+  }
+
   const realErrs = errs.filter((e) => !e.includes('Failed to load resource'))
   console.log('\n非资源类控制台错误：' + (realErrs.length ? realErrs.join('\n  ') : 'none'))
   check('E0 全程无 JS 异常', realErrs, [])
