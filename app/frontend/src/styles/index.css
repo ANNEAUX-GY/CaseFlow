@@ -222,7 +222,9 @@ body {
 .cf-star.is-on { color: #c8a45c !important; }
 
 /* 「只看重点」开关（2026-10-12）：默认独占一行放在页面顶部；
-   inline 变体放进筛选条里，右侧对齐用分隔线与左边筛选区划开（不再塞进一排下拉框中间） */
+   inline 变体放进筛选条里，右侧对齐用分隔线与左边筛选区划开（不再塞进一排下拉框中间）；
+   lead 变体排在筛选条最左端，做成可点的「星标筛选片」——
+   勾选后整片镀金，和下面重点行的金色高亮同一个色，一眼能对上。 */
 .cf-focus-toggle { margin: -6px 0 10px; }
 .cf-focus-toggle.is-inline {
   margin: 0;
@@ -231,6 +233,44 @@ body {
   display: inline-flex;
   align-items: center;
 }
+.cf-focus-toggle.is-lead {
+  margin: 0;
+  padding-right: 12px;
+  border-right: 1px solid var(--cf-border);
+  display: inline-flex;
+  align-items: center;
+}
+.cf-focus-toggle.is-lead .cf-focus-toggle__hint { margin-left: 10px; }
+
+.cf-focus-lead {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid var(--cf-border);
+  border-radius: 15px;
+  background: #fff;
+  color: var(--cf-text-2);
+  font-size: 13px;
+  font-family: inherit;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+.cf-focus-lead .el-icon { color: #b9c0cb; }
+.cf-focus-lead:hover {
+  border-color: var(--cf-gold);
+  color: var(--cf-text);
+}
+.cf-focus-lead:hover .el-icon { color: var(--cf-gold); }
+.cf-focus-lead.is-on {
+  border-color: var(--cf-gold);
+  background: rgba(200, 164, 92, 0.16);
+  color: #8a6a1f;
+  font-weight: 600;
+}
+.cf-focus-lead.is-on .el-icon { color: var(--cf-gold); }
 
 /* 详情抽屉标题行：案件编号 + 重点星标并排（2026-10-09） */
 .cf-drawer__head { display: flex; align-items: center; gap: 8px; }

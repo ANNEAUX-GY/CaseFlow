@@ -6,9 +6,7 @@
         <span class="cf-panel__head-tip">查看各案件待办的完成状态与对应佐证材料</span>
       </div>
 
-      <!-- 只看重点（2026-10-12）：放在筛选条右端、与「刷新」同组。
-           曾经挂在面板标题和汇总数字之间，像个孤儿；挪到筛选行右侧对齐后，
-           靠一条竖线与左边筛选区分开，既不挤中间那排控件，又一眼看得见。 -->
+      <!-- 只看重点见下方筛选条首项（lead 筛选片）。 -->
 
       <div class="cf-panel__body">
         <!-- 汇总数字 -->
@@ -33,6 +31,12 @@
 
         <!-- 筛选 -->
         <div class="cf-filter-bar">
+          <!-- 只看重点（2026-10-12）：排在最左端的星标筛选片。
+               位置改了三轮：塞在一排控件中间没人看见 → 独占一行吊在标题下像孤儿 →
+               挪到条内最右端又贴着「刷新」像附属按钮。现在提到条首，做成一枚带星标的
+               筛选片：它是筛选条件里最"重"的一个（整个列表只剩重点案件），
+               该占第一眼；镀金态与下面重点行的金色高亮同色，所见即所得。 -->
+          <FocusOnlyToggle v-model="focusOnly" @change="load" lead />
           <el-radio-group v-model="status" size="small" @change="load">
             <el-radio-button value="">全部</el-radio-button>
             <el-radio-button value="PENDING">待完成</el-radio-button>
@@ -47,11 +51,7 @@
           >
             <template #prefix><el-icon><Search /></el-icon></template>
           </el-input>
-          <!-- 只看重点（2026-10-12）：右对齐并用竖线与左边筛选区分开。
-               早先塞在中间那排控件里没人看得见；后来又独占一行吊在标题下面，
-               像孤儿（用户反馈"位置不好看"）。现在这里既有分隔、又不占整行。 -->
           <span class="cf-spacer"></span>
-          <FocusOnlyToggle v-model="focusOnly" @change="load" inline />
           <el-button size="small" @click="load">刷新</el-button>
         </div>
 

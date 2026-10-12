@@ -93,7 +93,11 @@ const run = async () => {
   const focusRows = () => p.evaluate(() => document.querySelectorAll('.el-table__row.cf-row--focus').length)
 
   /** 勾「只看重点」：Element Plus 的 label 包着原生 input，点 label 即可 */
+  // 勾选入口有两种形态：默认/inline 是 el-checkbox，lead 是 .cf-focus-lead 按钮
   const tickFocus = async () => p.evaluate(() => {
+    const btn = [...document.querySelectorAll('.cf-focus-lead')]
+      .filter((x) => x.offsetParent !== null)[0]
+    if (btn) { btn.click(); return 'ok' }
     const box = [...document.querySelectorAll('.el-checkbox')]
       .filter((x) => x.offsetParent !== null)
       .find((x) => x.innerText.includes('只看重点'))
@@ -223,27 +227,39 @@ const run = async () => {
   }
 
   // ================= F. 「只看重点」不能被埋在人堆里（2026-10-12） =================
-  // 用户两次反馈：第一次「这三个栏目没有只看重点」（塞在筛选行中间没人看见），
-  // 第二次「待办总览那个位置不好看」（独占一行吊在标题下面像孤儿）。
-  // 现在的约定：**有工具条/筛选条的就放条里右对齐（is-inline），没有的才独占一行放顶部。**
-  // 本节把两种约定都钉死，防止又被打回中间那排控件里。
-  console.log('\n=== F. 「只看重点」的落位（有筛选条→条内右对齐；无→页面顶部） ===')
+  // 用户三次反馈：第一次「这三个栏目没有只看重点」（塞在筛选行中间没人看见），
+  // 第二次「待办总览那个位置不好看」（独占一行吊在标题下面像孤儿），
+  // 第三次「放在左边」（贴着「刷新」像附属按钮，不像一个筛选条件）。
+  // 现在的约定：**待办总览排条首（lead 筛选片），其余三页独占一行放页面顶部。**
+  // 本节把落位钉死，防止又被打回中间那排控件里或右端贴「刷新」。
+  console.log('\n=== F. 「只看重点」的落位（待办总览=条首筛选片；其余=页面顶部） ===')
   for (const [label, hash, mode] of [
     ['案件管理', '/cases', 'top'],
     ['案件盯办', '/watch', 'top'],
-    ['待办总览', '/todos', 'inline'],
+    ['待办总览', '/todos', 'lead'],
     ['到期提醒', '/reminders', 'top']
   ]) {
     await openPage(hash)
     const r = await p.evaluate((mode) => {
       const t = document.querySelector('.cf-focus-toggle')
       const inline = !!(t && t.classList.contains('is-inline'))
-      const visible = [...document.querySelectorAll('.el-checkbox')]
-        .filter((x) => x.offsetParent !== null && x.innerText.includes('只看重点'))
-      const out = { exists: !!t, inline, count: visible.length }
+      const lead = !!(t && t.classList.contains('is-lead'))
+      const visible = [...document.querySelectorAll('.el-checkbox, .cf-focus-lead')]
+        .filter((x) => x.offsetParent !== null
+          && (x.innerText || '').includes('只看重点'))
+      const out = { exists: !!t, inline, lead, count: visible.length }
       if (!t) return out
-      if (inline) {
-        // 条内模式：必须落在筛选条里，且在搜索框右侧（不是挤在中间那排控件里）
+      if (mode === 'lead') {
+        // 条首筛选片：必须在筛选条里，且排在状态切换与搜索框左侧
+        const bar = t.closest('.cf-filter-bar, .cf-toolbar')
+        const group = bar && bar.querySelector('.el-radio-group')
+        out.inBar = !!bar
+        out.leftOfGroup = !!(bar && group
+          && t.getBoundingClientRect().right <= group.getBoundingClientRect().left + 1)
+        const table = document.querySelector('.el-table')
+        out.aboveTable = !!(table && t.getBoundingClientRect().bottom <= table.getBoundingClientRect().top + 1)
+      } else if (inline) {
+        // inline 模式：必须落在筛选条里，且在搜索框右侧（不是挤在中间那排控件里）
         const bar = t.closest('.cf-filter-bar, .cf-toolbar')
         const search = bar && bar.querySelector('.el-input')
         out.inBar = !!bar
@@ -259,8 +275,11 @@ const run = async () => {
       return out
     }, mode)
     check(`F · ${label} 有且只有一个「只看重点」`, [r.exists, r.count], [true, 1])
-    check(`F · ${label} 落位方式符合约定（${mode}）`, r.inline, mode === 'inline')
-    if (r.inline) {
+    check(`F · ${label} 落位方式符合约定（${mode}）`, mode === 'lead' ? r.lead : r.inline, mode !== 'top')
+    if (mode === 'lead') {
+      checkTrue(`F · ${label} 在筛选条里、且排在状态切换左侧`, r.inBar && r.leftOfGroup, JSON.stringify(r))
+      checkTrue(`F · ${label} 在表格上方`, r.aboveTable, JSON.stringify(r))
+    } else if (r.inline) {
       checkTrue(`F · ${label} 在筛选条里、且排在搜索框右侧`, r.inBar && r.rightOfSearch, JSON.stringify(r))
       checkTrue(`F · ${label} 在表格上方`, r.aboveTable, JSON.stringify(r))
     } else {
