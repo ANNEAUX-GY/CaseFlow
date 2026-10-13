@@ -376,6 +376,153 @@ const run = async () => {
       await p.evaluate(() => !document.querySelector('.cf-focus-head')))
   }
 
+  // ================= I. 图表必须跟随重点筛选 =================
+  // 用户要求：「点击『只看重点』时，echarts 图也要跟着筛选数据」。
+  // 图表走的是独立的 /cases/stats 接口，历史上只传了 days 与案卷类型，
+  // 于是出现"列表只剩 3 条、柱状图还是 12 条"这种用户看不懂的错位。
+  //
+  // 断言方式：**抓 /cases/stats 的实际请求与响应**。
+  // 不用 window.__cfCharts 之类钩子——那要求往生产组件里塞调试字段，
+  // 测试不该为它污染运行时；而请求层断言恰好就是用户看得见的那条链路。
+  console.log('\n=== I. 图表跟随重点筛选（列表与图表同一口径） ===')
+
+  // H 组末尾为了验「普通民警看不到」把本地用户态降级成了 STAFF，这里必须先恢复回去：
+  // 焦点开关对普通民警是隐藏的（FocusOnlyToggle 内部按 isFullAccess 收敛），
+  // 不恢复就会 point-not-found，然后所有「点了有没有重新取数」的断言集体假失败。
+  await p.evaluate(() => {
+    const u = JSON.parse(localStorage.getItem('cf_user') || '{}')
+    u.role = 'BOSS'
+    u.isFullAccess = true
+    localStorage.setItem('cf_user', JSON.stringify(u))
+  })
+
+  // 记录最近一次 /cases/stats 的查询串与响应体
+  const statCalls = []
+  p.on('response', async (res) => {
+    const u = res.url()
+    if (!u.includes('/api/cases/stats')) return
+    const entry = { url: u, status: res.status(), body: null }
+    statCalls.push(entry)
+    try { entry.body = await res.json() } catch (e) { /* 非 JSON 忽略 */ }
+  })
+  const lastStats = () => statCalls[statCalls.length - 1]
+  const qHas = (entry, key) => new URL(entry.url).searchParams.get(key)
+
+  // --- 接口层：focusOnly / 到期桶 / 优先级 三个条件都要被 stats 接受 ---
+  {
+    const sum = (d) => (d.statusDist || []).reduce((a, x) => a + x.value, 0)
+    const all = (await apiGet('/cases/stats?days=14')).data
+    const foc = (await apiGet('/cases/stats?days=14&focusOnly=true')).data
+    const expAll = sum(all)
+    const expFoc = sum(foc)
+    const listFoc = (await apiGet('/cases?size=1&focusOnly=true')).data.total
+
+    checkTrue('I1 接口层：focusOnly 让 stats 合计收窄', expFoc < expAll, `${expFoc} vs ${expAll}`)
+    check('I2 接口层：只看重点的 stats 合计 = 列表 focusOnly 条数', expFoc, listFoc)
+    // 优先级 / 到期桶：这两个维度历史上**根本没接**，接口早支持但前端从不传，
+    // 于是图表与列表早就对不上。本次一并接上，所以这里钉住"接了之后确实收窄"。
+    const sumUrg = sum((await apiGet('/cases/stats?days=14&priorities=URGENT')).data)
+    checkTrue('I3 接口层：优先级筛选生效（特急数 ≤ 特急合计）',
+      sumUrg > 0 && sumUrg <= expAll, `${sumUrg} / ${expAll}`)
+    const sumOver = sum((await apiGet('/cases/stats?days=14&dueBuckets=OVERDUE')).data)
+    checkTrue('I4 接口层：到期桶筛选生效（逾期数 ≤ 全量）',
+      sumOver > 0 && sumOver <= expAll, `${sumOver} / ${expAll}`)
+  }
+
+  // --- 案件管理：勾「只看重点」后，前端必须重新拉带 focusOnly 的 stats ---
+  await openPage('/cases')
+  await sleep(1500)
+  statCalls.length = 0
+  await tickFocus()
+  await sleep(2200)
+  {
+    const e = lastStats()
+    checkTrue('I5 案件管理：勾选后重新请求了 stats', !!e, JSON.stringify(statCalls.map((x) => x.url)))
+    checkTrue('I6 案件管理：该请求带上了 focusOnly=true', !!e && qHas(e, 'focusOnly') === 'true',
+      e ? e.url : 'no call')
+    checkTrue('I7 案件管理：响应为 200 且带图表数据', !!e && e.status === 200 && !!e.body?.data?.statusDist,
+      e ? JSON.stringify({ status: e.status, has: !!e.body?.data?.statusDist }) : '')
+    const bodySum = !!e && e.body?.data
+      ? e.body.data.statusDist.reduce((a, x) => a + x.value, 0) : -1
+    const listTotal = (await apiGet('/cases?size=1&focusOnly=true')).data.total
+    check('I8 案件管理：图表合计 = 列表条数（同口径）', bodySum, listTotal)
+  }
+
+  // 再点一次取消勾选：请求必须回到不带 focusOnly，否则取消不掉就永远只剩重点
+  statCalls.length = 0
+  await tickFocus()
+  await sleep(2200)
+  {
+    const e = lastStats()
+    checkTrue('I9 案件管理：取消勾选后请求不再带 focusOnly', !!e && !qHas(e, 'focusOnly'), e ? e.url : 'no call')
+    const bodySum = !!e && e.body?.data
+      ? e.body.data.statusDist.reduce((a, x) => a + x.value, 0) : -1
+    const listAll = (await apiGet('/cases?size=1')).data.total
+    check('I10 案件管理：取消后图表回到全量', bodySum, listAll)
+  }
+
+  // 优先级与到期桶下拉同样要走 reload（只刷列表会把图表落在旧口径）
+  // 注意：Element Plus 的 option 元素上**没有 data-value**（实测为 null），
+  // 只能按可见文本匹配。原来写成 `data-value === vv || textContent.trim()`，
+  // 兜底的 truthy 判断让 find 永远返回第一个可见项，于是点到了「特急」以外的东西、静默失败。
+  for (const [label, optText, q, val] of [
+    ['优先级', '特急', 'priorities', 'URGENT'],
+    ['到期', '已逾期', 'dueBuckets', 'OVERDUE']
+  ]) {
+    await openPage('/cases')
+    await sleep(1500)
+    statCalls.length = 0
+    await p.evaluate((lab) => {
+      const sel = [...document.querySelectorAll('.cf-toolbar .el-select')]
+        .find((s) => s.textContent.includes(lab))
+      if (sel) sel.querySelector('input').click()
+    }, label)
+    await sleep(900)
+    await p.evaluate((txt) => {
+      const li = [...document.querySelectorAll('.el-select-dropdown__item')]
+        .filter((x) => x.offsetParent !== null)
+        .find((x) => x.textContent.trim() === txt)
+      li && li.click()
+    }, optText)
+    await sleep(2200)
+    const e = lastStats()
+    checkTrue(`I11 案件管理：改「${label}」后重新请求了 stats`, !!e, JSON.stringify(statCalls.map((x) => x.url)))
+    checkTrue(`I12 案件管理：该请求带上了 ${q}=${val}`, !!e && qHas(e, q) === val, e ? e.url : 'no call')
+  }
+
+  // --- 到期提醒：那页的账龄图与未来到期图同样要跟随 ---
+  await openPage('/reminders')
+  await sleep(1500)
+  statCalls.length = 0
+  await p.evaluate(() => {
+    const cb = [...document.querySelectorAll('.el-checkbox')]
+      .filter((x) => x.offsetParent !== null)
+      .find((x) => x.textContent.includes('只看重点'))
+    cb && cb.click()
+  })
+  await sleep(2200)
+  {
+    const e = lastStats()
+    checkTrue('I13 到期提醒：勾选后重新请求了 stats', !!e, '')
+    checkTrue('I14 到期提醒：该请求带上了 focusOnly=true', !!e && qHas(e, 'focusOnly') === 'true',
+      e ? e.url : 'no call')
+    const bodySum = !!e && e.body?.data?.overdueAgeDist
+      ? e.body.data.overdueAgeDist.reduce((a, x) => a + x.value, 0) : -1
+    const expAge = ((await apiGet('/cases/stats?days=14&focusOnly=true')).data.overdueAgeDist || [])
+      .reduce((a, x) => a + x.value, 0)
+    check('I15 到期提醒：账龄图合计 = 接口 focusOnly 口径', bodySum, expAge)
+  }
+
+  // --- 案件盯办：看板三张图的数据来自 /watch/board，本就带 focusOnly，钉住别退化 ---
+  await openPage('/watch')
+  await sleep(1500)
+  await tickFocus()
+  await sleep(2200)
+  {
+    const board = await p.evaluate(() => document.querySelectorAll('.cf-watch__card').length)
+    checkTrue('I16 案件盯办：勾选后看板卡片仍在（/watch/board 本就带 focusOnly）', board > 0, `cards=${board}`)
+  }
+
   const realErrs = errs.filter((e) => !e.includes('Failed to load resource'))
   console.log('\n非资源类控制台错误：' + (realErrs.length ? realErrs.join('\n  ') : 'none'))
   check('E0 全程无 JS 异常', realErrs, [])

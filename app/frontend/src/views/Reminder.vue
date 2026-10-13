@@ -11,7 +11,7 @@
     <!-- 只看重点（2026-10-12 起与另外三个栏目共用 FocusOnlyToggle）：
          四个栏目（案件管理 / 案件盯办 / 待办总览 / 到期提醒）都要能把标过星的重点案件筛出来。
          跟星标列同一条件按权限收敛 -->
-    <FocusOnlyToggle v-model="focusOnly" @change="load" />
+    <FocusOnlyToggle v-model="focusOnly" @change="reload" />
 
     <!-- 可视化：账龄 + 未来 7 天到期量 -->
     <el-row :gutter="12">
@@ -113,8 +113,18 @@ const load = async () => {
 const stats = ref({})
 const ageType = ref('bar')
 const upcomingType = ref('line')
+/** 与案件管理同一个口径：勾了「只看重点」，账龄图与未来 7 天到期图都必须只统计重点案件 */
 const loadStats = async () => {
-  stats.value = await caseApi.stats(withCaseType({ days: 14 }))
+  stats.value = await caseApi.stats(withCaseType({
+    days: 14,
+    focusOnly: focusOnly.value || undefined
+  }))
+}
+
+/** 筛选变了：清单与图表一起刷 */
+const reload = () => {
+  load()
+  loadStats()
 }
 
 const ageData = computed(() => stats.value.overdueAgeDist || [])

@@ -209,11 +209,13 @@ public class CaseController {
     public Result<com.caseflow.vo.StatsVO> stats(@RequestParam(required = false) Integer days,
                                                  @RequestParam(required = false) String caseTypes,
                                                  @RequestParam(required = false) String dueBuckets,
-                                                 @RequestParam(required = false) String priorities) {
+                                                 @RequestParam(required = false) String priorities,
+                                                 @RequestParam(required = false) Boolean focusOnly) {
         // 非全权限角色（普通民警）恒收敛到本人名下案件，避免图表泄出全所数据
         Set<Long> restrict = AuthContext.isFullAccess() ? null : caseService.myVisibleCaseIds();
         return Result.ok(statsService.stats(days == null ? 14 : days,
-                csvToSet(caseTypes), csvToSet(dueBuckets), csvToSet(priorities), restrict));
+                csvToSet(caseTypes), csvToSet(dueBuckets), csvToSet(priorities), restrict,
+                Boolean.TRUE.equals(focusOnly)));
     }
 
     /** "CRIMINAL,ADMINISTRATIVE" -> Set；null/空返回 null 表示该维度不限 */

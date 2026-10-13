@@ -20,9 +20,9 @@
            位置改过两轮：先在筛选行中间（没人看见）、再提到页面顶部独占一行（像孤儿），
            现在贴回检索条最左端——它是这里最"重"的筛选条件（勾上后整个列表只剩重点案件），
            该占第一眼；镀金态与下面重点行的金色高亮同色。 -->
-      <FocusOnlyToggle v-model="query.focusOnly" @change="load" lead />
+      <FocusOnlyToggle v-model="query.focusOnly" @change="reload" lead />
       <el-input v-model="query.keyword" placeholder="案件名 / 编号 / 备注" clearable style="width: 220px" @keyup.enter="load" />
-      <el-select v-model="query.status" placeholder="状态" clearable style="width: 120px" @change="load">
+      <el-select v-model="query.status" placeholder="状态" clearable style="width: 120px" @change="reload">
         <el-option label="未办结" value="OPEN" />
         <el-option label="待指派" value="PENDING_ASSIGN" />
         <el-option label="已指派" value="ASSIGNED" />
@@ -30,7 +30,7 @@
         <el-option label="已办结" value="DONE" />
         <el-option label="已撤销" value="CANCELLED" />
       </el-select>
-      <el-select v-model="query.priority" placeholder="优先级" clearable style="width: 110px" @change="load">
+      <el-select v-model="query.priority" placeholder="优先级" clearable style="width: 110px" @change="reload">
         <el-option label="特急" value="URGENT" />
         <el-option label="紧急" value="HIGH" />
         <el-option label="普通" value="NORMAL" />
@@ -69,7 +69,7 @@
         <el-option label="有嫌疑人" value="YES" />
         <el-option label="无嫌疑人" value="NO" />
       </el-select>
-      <el-select v-model="query.dueBucket" placeholder="到期" clearable style="width: 130px" @change="load">
+      <el-select v-model="query.dueBucket" placeholder="到期" clearable style="width: 130px" @change="reload">
         <el-option label="已逾期" value="OVERDUE" />
         <el-option label="今天到期" value="TODAY" />
         <el-option label="3天内" value="D3" />
@@ -299,13 +299,35 @@ const load = async () => {
   }
 }
 
-// ---- 图表（同样锁定类型） ----
+// ---- 图表（同样锁定类型 + 跟随重点/到期桶/优先级筛选） ----
 const stats = ref({})
 const trendType = ref('line')
 const distDim = ref('statusDist')
 const distType = ref('bar')
+
+/**
+ * 图表取数：**必须与上方列表同一口径**，否则会出现"列表只剩 3 条重点、柱状图还是全量"
+ * 这种用户看不懂的错位（2026-10-13 用户反馈：点「只看重点」图表不跟着筛）。
+ *
+ * <p>只接三个条件：focusOnly、到期桶、优先级——都是**聚合语义仍然成立**的维度。
+ * 关键字/经办人/案件分类不接：接了趋势图会退化成孤零零一个点，可读性反而变差。
+ *
+ * <p>注意参数名是复数（dueBuckets/priorities），后端按逗号分隔多值；
+ * 列表那边是单值字段，这里按「只有一个值」的写法转过去，行为一致。
+ */
 const loadStats = async () => {
-  stats.value = await caseApi.stats(withCaseType({ days: 14 }))
+  stats.value = await caseApi.stats(withCaseType({
+    days: 14,
+    dueBuckets: query.dueBucket || undefined,
+    priorities: query.priority || undefined,
+    focusOnly: query.focusOnly || undefined
+  }))
+}
+
+/** 筛选条件变了：列表与图表必须一起刷。只改其中一个就会口径错位。 */
+const reload = () => {
+  load()
+  loadStats()
 }
 
 const trendData = computed(() => stats.value.trend || [])
@@ -367,7 +389,8 @@ const onDistClick = (p) => {
   query.page = 1
   // 分类相关柱体点击后，把条件同步回级联选择器的显示
   if (key === 'caseType' || key === 'category') syncCascade()
-  load()
+  // 点「优先级」柱体等于改了 priorities，图表口径随之变化，必须一起刷
+  reload()
 }
 
 const reset = () => {
@@ -385,7 +408,8 @@ const reset = () => {
     focusOnly: false
   })
   cascadeFilter.value = []
-  load()
+  // 重置同时清了重点与到期桶，图表必须跟着回全量，否则图表还停在筛选态
+  reload()
 }
 
 const onCreate = () => {

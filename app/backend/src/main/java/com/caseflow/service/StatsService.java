@@ -53,7 +53,7 @@ public class StatsService {
      * 全量统计（不带筛选——保持旧调用行为不变）。
      */
     public StatsVO stats(int days) {
-        return stats(days, null, null, null, null);
+        return stats(days, null, null, null, null, false);
     }
 
     /**
@@ -64,7 +64,7 @@ public class StatsService {
      * @param priorities 优先级多选（URGENT/HIGH/NORMAL/LOW），空 = 全部
      */
     public StatsVO stats(int days, Set<String> caseTypes, Set<String> dueBuckets, Set<String> priorities) {
-        return stats(days, caseTypes, dueBuckets, priorities, null);
+        return stats(days, caseTypes, dueBuckets, priorities, null, false);
     }
 
     /**
@@ -72,9 +72,10 @@ public class StatsService {
      *
      * @param restrictCaseIds 非 null 时只统计这些案件（普通民警传自己名下案件的 id），
      *                        null = 不限范围（管理层）。传空集合即"名下无案件"，各图表全为 0。
+     * @param focusOnly       只统计标了重点关注的案件（focus = 1），与案件管理页「只看重点」同一判据。
      */
     public StatsVO stats(int days, Set<String> caseTypes, Set<String> dueBuckets, Set<String> priorities,
-                         Set<Long> restrictCaseIds) {
+                         Set<Long> restrictCaseIds, boolean focusOnly) {
         int n = days <= 0 ? 14 : Math.min(days, 90);
         LocalDateTime now = LocalDateTime.now();
         LocalDate today = now.toLocalDate();
@@ -98,6 +99,9 @@ public class StatsService {
                 .filter(c -> ct.isEmpty() || ct.contains(c.getCaseType()))
                 .filter(c -> pr.isEmpty() || pr.contains(c.getPriority()))
                 .filter(c -> db.isEmpty() || db.contains(dueBucketOf(c, now)))
+                // 「只看重点」：与 CaseService.buildWrapper 同判据（等于 1，不写 <> 0，
+                // 免得存量 NULL 行被算成重点）。图表不跟随重点，列表只剩 3 条而柱状图还是全量。
+                .filter(c -> !focusOnly || Integer.valueOf(1).equals(c.getFocus()))
                 .collect(Collectors.toList());
 
         StatsVO vo = new StatsVO();
