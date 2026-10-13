@@ -75,9 +75,10 @@
                  与 FeedbackDialog 的录入口径一致；字段名沿用 upload* 不动。 -->
             <div v-if="f.uploadPlatform || f.uploadFile" class="cf-td__fb-declare">
               <span class="cf-td__fb-declare-k">执行记录</span>
-              <span v-if="f.uploadTime" class="cf-td__fb-declare-i">时间 {{ f.uploadTime }}</span>
-              <span v-if="f.uploadPlatform" class="cf-td__fb-declare-i">系统 {{ f.uploadPlatform }}</span>
-              <span v-if="f.uploadFile" class="cf-td__fb-declare-i">操作 {{ f.uploadFile }}</span>
+              <!-- 标签与取值之间加全角冒号，读起来是「标签：值」而不是两个词挤一起 -->
+              <span v-if="f.uploadTime" class="cf-td__fb-declare-i">时间：{{ f.uploadTime }}</span>
+              <span v-if="f.uploadPlatform" class="cf-td__fb-declare-i">系统：{{ f.uploadPlatform }}</span>
+              <span v-if="f.uploadFile" class="cf-td__fb-declare-i">操作：{{ f.uploadFile }}</span>
             </div>
           </li>
         </ul>
@@ -668,7 +669,7 @@ watch(visible, (v) => { if (!v) onClosed() })
 /* 修订痕迹：改过反馈就常驻标注（禁悬浮提示），区分「谁交的」与「谁改的」 */
 .cf-td__fb-edited { color: #a8620a; font-size: 12px }
 /* 执行记录块：三要素分行。独立成块而不是拼进说明里，
-   用户才能一眼看出「时间/平台/文件」各自是什么，改单项时也知道在改哪一项。 */
+   用户才能一眼看出「时间/系统/操作」各自是什么，改单项时也知道在改哪一项。 */
 .cf-td__fb-declare {
   margin-top: 5px; padding: 5px 8px;
   background: #f4f8fd; border-left: 3px solid #7d9bcd; border-radius: 3px;
