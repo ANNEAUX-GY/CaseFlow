@@ -1075,6 +1075,17 @@ html { scrollbar-gutter: stable; }
 /* 删除按钮推到行末，多余宽度由前面的控件吃掉 */
 .cf-form-node-del { margin-left: auto; }
 
+/* ---- 建案表单里的待办区块（2026-10-13） ----
+   表格本体样式在 TodoBatchEditor.vue，这里只管它在灰色区块里的落位：
+   去掉编辑器自带的上下留白（区块本身已有 padding），并把行区限高，
+   否则填满 10 条会把整个建案弹窗撑到需要滚动才能看见「创建」按钮。 */
+.cf-form-todo .cf-bt__hint { margin-bottom: 8px }
+.cf-form-todo .cf-bt__rows { max-height: 26vh; overflow-y: auto }
+.cf-form-todo__foot {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin-top: 8px; padding-top: 8px; border-top: 1px dashed #dfe4ea;
+}
+
 /* ---- 面板头：标题与操作区左右对齐基线，高一致 ---- */
 .cf-panel__head { gap: var(--cf-gap-3); }
 .cf-panel__head > span:first-child { font-size: 14px; }
@@ -1262,28 +1273,49 @@ html { scrollbar-gutter: stable; }
   color: var(--cf-text-2);
 }
 
-/* 指派弹窗里的待办编辑器 */
-.cf-todo-editor { width: 100%; }
-.cf-todo-editor__row {
-  display: flex;
-  align-items: center;
-  gap: var(--cf-gap-2);
-  margin-bottom: var(--cf-gap-2);
+/* ==========================================================
+   ABC 三档单选（.cf-abc）
+   ------------------------------------------------------------
+   Element 的 el-radio-button 选中态统一是主题蓝，A/B/C 三档看不出差别。
+   这里覆盖 .is-active 的背景/边框/文字色：A 红=最重要、B 橙=重要、C 蓝=一般，
+   配色沿用项目警情色板（#c62a2a 危险红 / #d98a0b 警告橙 / #1b4a8c 警蓝）。
+   钩子比 .is-active 稍深，选中时白字压在上面保证对比度 ≥ 4.5:1。
+
+   放在全局而不是 CaseTodoPanel 里（2026-10-13）：待办批量编辑器现在有
+   案件详情、指派、建案三个入口都用这一套三档，藏在某个面板里会让
+   另外两处"恰好因为加载了那个面板"才生效。
+   ========================================================== */
+.cf-abc .el-radio-button__inner {
+  border-left: none !important;
+  border-right: none !important;
 }
-.cf-todo-editor__no {
-  flex: none;
-  width: 20px;
-  text-align: right;
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  color: var(--cf-text-3);
+.cf-abc .el-radio-button:first-child .el-radio-button__inner { border-left: 1px solid var(--el-border) !important; border-radius: 4px 0 0 4px; }
+.cf-abc .el-radio-button:last-child .el-radio-button__inner { border-right: 1px solid var(--el-border) !important; border-radius: 0 4px 4px 0; }
+
+.cf-abc .el-radio-button.is-a.is-active .el-radio-button__inner {
+  background: #c62a2a; border-color: #c62a2a !important; box-shadow: -1px 0 0 0 #c62a2a;
 }
-.cf-todo-editor__ops {
-  display: flex;
-  gap: var(--cf-gap-1);
-  flex: none;
+.cf-abc .el-radio-button.is-b.is-active .el-radio-button__inner {
+  background: #d98a0b; border-color: #d98a0b !important; box-shadow: -1px 0 0 0 #d98a0b;
 }
-.cf-todo-editor__ops .el-button + .el-button { margin-left: 0; }
+.cf-abc .el-radio-button.is-c.is-active .el-radio-button__inner {
+  background: #1b4a8c; border-color: #1b4a8c !important; box-shadow: -1px 0 0 0 #1b4a8c;
+}
+/* 悬停时用浅色底提示可点。
+   注意：悬停文字色不能盖在 .is-active 上——Element 的默认 hover 规则是
+   "文字变主题色"，若不排除 active 态，点中后鼠标仍悬停在按钮上时
+   会出现「红底红字」这种看不清的情况（实测踩过）。
+   所以用 :hover:not(.is-active)。 */
+.cf-abc .el-radio-button.is-a:hover:not(.is-active) .el-radio-button__inner { color: #c62a2a; }
+.cf-abc .el-radio-button.is-b:hover:not(.is-active) .el-radio-button__inner { color: #d98a0b; }
+.cf-abc .el-radio-button.is-c:hover:not(.is-active) .el-radio-button__inner { color: #1b4a8c; }
+/* 选中态文字必须是白的（浅色底上的深色字）——显式声明，不依赖继承 */
+.cf-abc .el-radio-button.is-active .el-radio-button__inner { color: #fff; }
+
+/* 指派弹窗里的待办编辑器：已于 2026-10-13 移除。
+   原来是一套"每行一个纯文本框 + 上移/下移/删除"的清单，与案件详情的
+   表格式批量录入（可设截止时间与 A/B/C）行为不一致，用户要求两者统一。
+   现在三个入口共用 components/TodoBatchEditor.vue，样式在组件内。 */
 
 /* ==========================================================
    待办总览（管理员）

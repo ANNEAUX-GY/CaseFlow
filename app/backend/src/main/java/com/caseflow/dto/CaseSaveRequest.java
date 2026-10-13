@@ -108,4 +108,16 @@ public class CaseSaveRequest {
      * 「最近节点」派生回写 case_info 的期限三列，于是列表/提醒/统计照常工作。
      */
     private java.util.List<TimeNodeSaveRequest> timeNodes;
+
+    /**
+     * 待办事项（2026-10-13 建案时一并录入，选填）。
+     *
+     * <p><b>只用于新建</b>。落库路径与案件详情「添加待办」完全一致：
+     * 写成 {@code case_leader_opinion} 再派生 {@code case_todo}，
+     * 所以带截止时间、重要程度、常用待办记忆——不是另造一套"手工待办"。
+     *
+     * <p>空数组 = 不添加待办（建案不带待办是完全合法的，不报错）。
+     * 空行（无内容）直接跳过。
+     */
+    private java.util.List<TodoDraftRequest> todos;
 }

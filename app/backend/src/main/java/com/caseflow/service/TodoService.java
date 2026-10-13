@@ -1012,72 +1012,22 @@ public class TodoService {
     }
 
     // ------------------------------------------------------------------
-    // 指派时批量创建（由 CaseService.assign 调用，权限已在那边校验）
+    // 待办的创建入口说明（2026-10-13）
+    //
+    // 这里原本有 addAll(List<String>) 与 syncForAssign(...) 两个「指派时批量建待办」的方法，
+    // 现已整体移除，原因是它们的语义已被否决：
+    //
+    // 1) 它们造的是 opinion_id = NULL 的「手工待办」，与案件详情「添加待办」产出的
+    //    「意见派生待办」是两种数据形态——同一个"待办"概念有两套来源、
+    //    一套有截止时间/重要程度/阶段章、另一套全没有，列表展示与阶段进度都会漂移。
+    // 2) syncForAssign 会按内容匹配删除"清单里没有的未完成待办"。待办现在带反馈、
+    //    佐证与阶段归属，删除一条待办必须走「移除意见 → 级联删派生待办」这条
+    //    有日志可撤的路，在指派弹窗里按内容猜着删已经不成立。
+    //
+    // 现在唯一的创建路径是 OpinionService.add / addBatch / addDraftsQuietly：
+    // 先写 case_leader_opinion，再由 StaffTodoService.deriveFromOpinion 派生 case_todo。
+    // 单条待办也不再有直接插入的接口——包括「添加待办」弹窗的单条提交。
     // ------------------------------------------------------------------
-
-    /** 指派案件时一并写入待办项（空/空白项自动忽略） */
-    public void addAll(Long caseId, List<String> contents) {
-        if (contents == null || contents.isEmpty()) {
-            return;
-        }
-        int sort = nextSort(caseId);
-        int created = 0;
-        for (String raw : contents) {
-            if (!StringUtils.hasText(raw) || created >= MAX_PER_CASE) {
-                continue;
-            }
-            CaseTodo t = new CaseTodo();
-            t.setCaseId(caseId);
-            t.setContent(raw.trim().length() > 500 ? raw.trim().substring(0, 500) : raw.trim());
-            t.setStatus("PENDING");
-            t.setSort(sort++);
-            t.setCreatedBy(AuthContext.userId());
-            t.setCreatedAt(LocalDateTime.now());
-            t.setUpdatedAt(t.getCreatedAt());
-            flowService.stampStage(t);
-            todoMapper.insert(t);
-            created++;
-        }
-    }
-
-    /**
-     * 覆盖式同步待办（指派弹窗一次提交整份清单时用）：
-     * 保留已有项（按内容匹配，避免删掉别人已上传的佐证），删除不在新清单里的未完成项。
-     */
-    @Transactional(rollbackFor = Exception.class)
-    public void syncForAssign(Long caseId, List<String> contents) {
-        List<CaseTodo> existing = todoMapper.selectList(new LambdaQueryWrapper<CaseTodo>()
-                .eq(CaseTodo::getCaseId, caseId).orderByAsc(CaseTodo::getSort).orderByAsc(CaseTodo::getId));
-        List<String> want = new ArrayList<>();
-        if (contents != null) {
-            for (String s : contents) {
-                if (StringUtils.hasText(s)) {
-                    want.add(s.trim());
-                }
-            }
-        }
-        // 已完成且带佐证的项永不自动删除——那是留痕
-        for (CaseTodo t : existing) {
-            boolean stillWanted = want.contains(t.getContent());
-            // 意见派生的待办只「认领」内容避免重复创建，但绝不参与删除——
-            // 它是领导要求的留痕，不能因为指派清单没抄到就被静默清掉
-            if (t.getOpinionId() != null) {
-                if (stillWanted) {
-                    want.remove(t.getContent());
-                }
-                continue;
-            }
-            if (stillWanted) {
-                want.remove(t.getContent()); // 认领一条，重复内容也能一一对应
-                continue;
-            }
-            if ("DONE".equals(t.getStatus()) || fileService.countOfTodo(t.getId()) > 0) {
-                continue;
-            }
-            todoMapper.deleteById(t.getId());
-        }
-        addAll(caseId, want);
-    }
 
     // ------------------------------------------------------------------
     // 内部

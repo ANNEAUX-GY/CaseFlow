@@ -161,6 +161,53 @@
         </div>
       </div>
 
+      <!-- 待办事项（2026-10-13 建案时一并录入，选填）。
+           用户要求：建案时可以自行决定是否添加待办，且录入体验与案件详情
+           「添加待办」完全一致——同一个 TodoBatchEditor、同一套 Enter 续行 /
+           截止时间 / A-B-C 重要程度 / 常用待办，提交后落库路径也一致
+           （写 case_leader_opinion 再派生 case_todo，见 OpinionService.addDraftsQuietly）。
+
+           为什么要"建案时就能填"：立案当场就知道要办什么，等建完案再切到详情页
+           补一遍，等于让人把同一批话打两遍。表格默认折叠、空着不占空间，
+           不填就完全不传（建案不带待办是完全合法的）。 -->
+      <div v-if="!isEdit" class="cf-form-block cf-form-todo">
+        <div class="cf-form-block-head">
+          <span>待办事项<span class="cf-muted">（选填，可多条）</span></span>
+          <el-button v-if="!todoRows.length" link type="primary" @click="openTodo">
+            + 添加待办
+          </el-button>
+        </div>
+
+        <div v-if="!todoRows.length" class="cf-muted cf-form-block-empty">
+          暂无待办。不填也可以——建案后到<b>案件详情 → 案件待办</b>随时添加。
+        </div>
+
+        <template v-else>
+          <TodoBatchEditor
+            ref="todoRef"
+            v-model:rows="todoRows"
+            scope="cf-form-todo"
+            preset-mode="fill"
+            :max="MAX_TODO_BATCH"
+            :presets="todoPresets"
+            :preset-saving="presetSaving"
+            hint="填完一行按 <b>Enter</b> 直接写下一行，最多 10 条。截止时间与重要程度都是选填，不填按「C 一般」处理。"
+          />
+          <div class="cf-bt__foot cf-form-todo__foot">
+            <el-button link type="primary" :disabled="todoRows.length >= MAX_TODO_BATCH" @click="todoRef?.addRow()">
+              <el-icon><Plus /></el-icon>再添一条
+            </el-button>
+            <span class="cf-bt__count cf-form-todo__count">
+              已填 <b>{{ filledTodoCount }}</b> 条<template v-if="todoRows.length >= MAX_TODO_BATCH">（一次最多 {{ MAX_TODO_BATCH }} 条）</template>
+            </span>
+          </div>
+          <div class="cf-form-tip">
+            写下的每一条都会成为承办人的待办，<b>标记完成前必须先提交反馈说明</b>。
+            建案后可在案件详情里逐条增删改。
+          </div>
+        </template>
+      </div>
+
       <el-form-item label="备注">
         <el-input v-model="form.description" type="textarea" :rows="2" placeholder="案件要点（选填）" />
       </el-form-item>
@@ -188,8 +235,10 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import { Plus } from '@element-plus/icons-vue'
 import EmployeePicker from './EmployeePicker.vue'
-import { caseApi } from '../api'
+import TodoBatchEditor from './TodoBatchEditor.vue'
+import { caseApi, watchApi } from '../api'
 import { useCategoryStore } from '../store/category'
 import {
   MEASURE_CHOICES, REMIND_DAY_PRESETS, TIME_NODE_PRESETS
@@ -300,6 +349,43 @@ const buildSuspects = () => suspectRows.value
     address: (r.address || '').trim() || null
   }))
 
+// ---- 待办（2026-10-13 建案时可选录入）----
+// 与案件详情「添加待办」共用 TodoBatchEditor，所以上限与后端 MAX_BATCH 一致（10）。
+// 建案与详情两处各存一份上限是这类"魔法数字"的经典漂移方式，改动必须同步。
+const MAX_TODO_BATCH = 10
+const todoRef = ref(null)
+const todoRows = ref([])
+const todoPresets = ref([])
+const presetSaving = ref(false)
+
+const filledTodoCount = computed(() => todoRows.value.filter((r) => (r.content || '').trim()).length)
+
+/** 点「+ 添加待办」才展开表格——保持"要填才占地方"，建案表单本来就很长 */
+const openTodo = async () => {
+  todoRows.value = [{ key: 1, content: '', deadline: '', importance: 'C' }]
+  await todoRef.value?.focusFirst()
+  loadTodoPresets()
+}
+
+const loadTodoPresets = async () => {
+  try {
+    todoPresets.value = await watchApi.todoPresets(8)
+  } catch (e) {
+    todoPresets.value = []   // 拉不到就当没有：快捷入口是锦上添花
+  }
+}
+
+/** 提交用：只取填了内容的行（空行跳过，不打断建案） */
+const buildTodos = () => (todoRef.value
+  ? todoRef.value.items()
+  : todoRows.value
+    .filter((r) => (r.content || '').trim())
+    .map((r) => ({
+      content: (r.content || '').trim(),
+      deadline: r.deadline || '',
+      importance: r.importance || 'C'
+    })))
+
 // ---- 强制措施：是否采取 ----
 const measureTaken = ref(false)
 const onMeasureToggle = (v) => {
@@ -327,6 +413,7 @@ watch(() => props.modelValue, async (v) => {
   assignNow.value = false
   nodeRows.value = []
   suspectRows.value = []
+  todoRows.value = []
   measureTaken.value = false
   if (props.caseId) {
     const d = await caseApi.detail(props.caseId)
@@ -404,15 +491,25 @@ const submit = async () => {
       payload.clearDeadline = true
       await caseApi.update(props.caseId, payload)
     } else {
-      // 新建：把节点与嫌疑人随案件一并落库
+      // 新建：把节点、嫌疑人、待办随案件一并落库
       const nodes = buildTimeNodes()
       // 记住这次选的提醒档位，下次建案直接给到（"根据用户的常用选择"）
       nodeRows.value.forEach((r) => recordRemindDays(r.remindDays))
+      // 待办：没点「+ 添加待办」就是空数组，后端直接跳过（建案不带待办合法）
+      const todos = buildTodos()
+      if (todos.length > MAX_TODO_BATCH) {
+        ElMessage.warning(`待办一次最多 ${MAX_TODO_BATCH} 条，请删掉多余的再提交`)
+        return
+      }
       await caseApi.create({
         ...payload,
         timeNodes: nodes,
-        suspects: buildSuspects()
+        suspects: buildSuspects(),
+        todos
       })
+      if (todos.length) {
+        ElMessage.success(`案件已创建，并生成 ${todos.length} 条待办`)
+      }
     }
     ElMessage.success(props.caseId ? '已保存' : '案件已创建')
     visible.value = false

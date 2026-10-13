@@ -320,6 +320,7 @@
       :case-id="currentId"
       :case-name="currentName"
       :current-deadline="currentDeadline"
+      :case-measure="currentMeasure"
       @done="load"
     />
     <OperationLogDrawer
@@ -395,6 +396,7 @@ const assignVisible = ref(false)
 const currentId = ref(null)
 const currentName = ref('')
 const currentDeadline = ref(null)
+const currentMeasure = ref(null)
 
 // 操作日志：点击「最近操作」任一条打开详情抽屉
 const logVisible = ref(false)
@@ -660,6 +662,7 @@ const openAssign = (row) => {
   currentId.value = row.id
   currentName.value = row.name
   currentDeadline.value = row.deadline || null
+  currentMeasure.value = row.caseMeasure || null
   assignVisible.value = true
 }
 

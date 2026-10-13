@@ -3,6 +3,7 @@ package com.caseflow.support;
 import com.caseflow.entity.CaseAssignee;
 import com.caseflow.entity.CaseFile;
 import com.caseflow.entity.CaseInfo;
+import com.caseflow.entity.CaseLeaderOpinion;
 import com.caseflow.entity.CasePlan;
 import com.caseflow.entity.CaseSuspect;
 import com.caseflow.entity.CaseTimeNode;
@@ -33,4 +34,14 @@ public class CaseSnapshot implements Serializable {
     private List<CasePlan> plans;
     /** 案件待办（to do）。佐证材料不在此列——它是 case_file，随 files 一并快照。 */
     private List<CaseTodo> todos;
+    /**
+     * 领导意见（2026-10-13 纳入）。
+     *
+     * <p><b>为什么必须一起快照</b>：待办现在是「意见派生」的（{@code case_todo.opinion_id}），
+     * 指派 / 建案时录入的待办同样走意见链路。若只快照 todos 不快照 opinions，
+     * 撤回建案会删掉 todo 却把 opinion 留成孤儿——
+     * 而 {@code StaffTodoService.backfillFromOpinions()} 可能把孤儿意见重新派生出待办，
+     * 表现为「案件已经撤了，待办却又冒出来」。
+     */
+    private List<CaseLeaderOpinion> opinions;
 }

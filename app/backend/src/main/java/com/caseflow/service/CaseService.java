@@ -136,6 +136,15 @@ public class CaseService {
     /** 删案件时连信箱里的信件一起清（否则「查看案件」点进去是条死链） */
     @Resource
     private NotificationService notificationService;
+    /** 「我的案件」口径的实现（依赖链末端）；对外仍走 {@link #myVisibleCaseIds()} */
+    @Resource
+    private CaseScopeService caseScopeService;
+    /**
+     * 「提意见即派待办」的唯一落点。指派 / 建案要一并录入待办时也走它，
+     * 保证待办只有一种产生方式（带 opinion_id、截止时间、重要程度、常用待办记忆）。
+     */
+    @Resource
+    private OpinionService opinionService;
     // ------------------------------------------------------------------
     // 查询
     // ------------------------------------------------------------------
@@ -163,25 +172,18 @@ public class CaseService {
      * 当前登录人「名下案件」的 id 集合，是列表 / 提醒 / 看板 / 图表的统一口径，
      * 避免各处各写一套筛选而出现口径不一致。
      *
-     * <p>已绑定员工账号 -> 取该员工在办指派的案件（case_assignee.status = ACTIVE）；
-     * 未绑定员工的账号（存量 boss / test1 之类）-> 退回「本人创建的案件」，
-     * 至少不会看到别人的数据。
+     * <p><b>本方法是唯一对外门面</b>，实现已下沉到 {@link CaseScopeService}
+     * （2026-10-13）——因为「指派 / 建案时一并录入待办」要求本服务反过来调用
+     * {@code OpinionService}，而 {@code OpinionService} / {@code StaffTodoService}
+     * 都要用「我的案件」口径。若它们仍注入本服务，依赖就成了环。
+     * 抽离后依赖链是单向的：
+     * <pre>
+     * CaseService -&gt; OpinionService / StaffTodoService -&gt; CaseScopeService -&gt; Mapper
+     * </pre>
+     * 新增「按人取案件」的功能请继续调本方法，不要另写一套。
      */
     public Set<Long> myVisibleCaseIds() {
-        com.caseflow.security.CurrentUser u = AuthContext.get();
-        if (u == null) {
-            return Collections.emptySet();
-        }
-        Long empId = u.getEmployeeId();
-        if (empId != null) {
-            return assigneeMapper.selectList(new LambdaQueryWrapper<CaseAssignee>()
-                            .eq(CaseAssignee::getEmployeeId, empId)
-                            .eq(CaseAssignee::getStatus, "ACTIVE"))
-                    .stream().map(CaseAssignee::getCaseId).collect(Collectors.toSet());
-        }
-        return caseMapper.selectList(new LambdaQueryWrapper<CaseInfo>()
-                        .eq(CaseInfo::getCreatedBy, u.getUserId()))
-                .stream().map(CaseInfo::getId).collect(Collectors.toSet());
+        return caseScopeService.myVisibleCaseIds();
     }
 
     /**
@@ -677,6 +679,16 @@ public class CaseService {
         if (req.getTimeNodes() != null && !req.getTimeNodes().isEmpty()) {
             timeNodeService.addAllQuietly(c.getId(), req.getTimeNodes());
         }
+        // 待办同样选填（2026-10-13）。落库路径与案件详情「添加待办」一致：
+        // 意见 → 派生待办，所以带截止时间、重要程度，也进「常用待办」记忆。
+        //
+        // 为什么排在快照之前：case_todo 已在快照范围内，但 case_leader_opinion
+        // 也要一并进快照（见 CaseSnapshot#opinions），否则撤回建案后
+        // 意见会残留成孤儿，而 StaffTodoService.backfillFromOpinions()
+        // 可能把这些孤儿意见重新派生出待办，出现"案件没了但待办还在"。
+        if (req.getTodos() != null && !req.getTodos().isEmpty()) {
+            opinionService.addDraftsQuietly(c.getId(), req.getTodos());
+        }
         // 建案不铺任何任务（2026-10-12）：阶段任务 = 案件待办，
         // 由领导提意见派生，不在系统里另造一套"标准任务清单"与待办并行。
         // 快照写在最后：这样 after 里连指派关系、嫌疑人、时间节点一起带上，
@@ -936,9 +948,12 @@ public class CaseService {
                     .set(CaseInfo::getDeadline, null));
         }
 
-        // 指派时可一并提交待办清单（todos=null 表示不改动既有待办）
+        // 指派时可一并录入待办（todos=null 表示不添加）
+        // 路径与案件详情「添加待办」一致：意见 → 派生待办，所以带截止时间与重要程度。
+        // 放在指派关系写完之后：派生待办要按现职承办人算阶段与归属。
+        int addedTodos = 0;
         if (req.getTodos() != null) {
-            todoService.syncForAssign(c.getId(), req.getTodos());
+            addedTodos = opinionService.addDraftsQuietly(c.getId(), req.getTodos()).size();
         }
 
         Map<Long, OrgEmployee> empMap = employeeService.employeeMap();
@@ -950,8 +965,8 @@ public class CaseService {
         if (deadlineText != null) {
             sb.append("；").append(deadlineText);
         }
-        if (req.getTodos() != null) {
-            sb.append("；待办 ").append(todoService.countsOf(c.getId())[1]).append(" 项");
+        if (addedTodos > 0) {
+            sb.append("；一并添加待办 ").append(addedTodos).append(" 项");
         }
         logService.log("CASE", "ASSIGN", "CASE", c.getId(), sb.toString(),
                 beforeSnapshot, snapshotService.capture(c.getId()));

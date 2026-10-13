@@ -33,9 +33,19 @@ public class AssignRequest {
     private boolean deadlineTouched;
 
     /**
-     * 指派时一并添加的待办（to do）备注项。
-     * null = 不改动既有待办；传数组则按「覆盖式同步」处理（见 TodoService.syncForAssign）：
-     * 新清单里没有的**未完成且无佐证**的项会被删除，已完成的项保留留痕。
+     * 指派时一并添加的待办（选填）。
+     *
+     * <p><b>null = 不添加待办</b>（绝大多数指派都不带待办，保持原样不动）；
+     * 传数组则逐条落库，路径与案件详情「添加待办」完全一致：
+     * 写 {@code case_leader_opinion} 再派生 {@code case_todo}，
+     * 因而带截止时间、重要程度、常用待办记忆。
+     *
+     * <p><b>语义由「覆盖式同步」改为「只追加」</b>（2026-10-13）：
+     * 旧实现按内容匹配认领并删除「清单里没有的未完成待办」，
+     * 那套逻辑建立在「待办是一份可整体替换的清单」假设上。
+     * 既然待办现在是意见派生的（带 opinion_id、有反馈与佐证、有阶段章），
+     * 删除一条待办必须走「移除意见 → 级联删派生待办」这条有日志可撤的路，
+     * 在指派弹窗里按内容猜着删已经不成立。既有待办要改，去案件详情里操作。
      */
-    private List<String> todos;
+    private List<TodoDraftRequest> todos;
 }

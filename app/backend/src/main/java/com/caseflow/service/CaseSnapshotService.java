@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.caseflow.entity.CaseAssignee;
 import com.caseflow.entity.CaseFile;
 import com.caseflow.entity.CaseInfo;
+import com.caseflow.entity.CaseLeaderOpinion;
 import com.caseflow.entity.CasePlan;
 import com.caseflow.entity.CaseSuspect;
 import com.caseflow.entity.CaseTimeNode;
@@ -15,6 +16,7 @@ import com.caseflow.exception.BizException;
 import com.caseflow.mapper.CaseAssigneeMapper;
 import com.caseflow.mapper.CaseFileMapper;
 import com.caseflow.mapper.CaseInfoMapper;
+import com.caseflow.mapper.CaseLeaderOpinionMapper;
 import com.caseflow.mapper.CasePlanMapper;
 import com.caseflow.mapper.CaseSuspectMapper;
 import com.caseflow.mapper.CaseTodoMapper;
@@ -64,6 +66,9 @@ public class CaseSnapshotService {
     private CaseTodoMapper todoMapper;
     @Resource
     private CaseTimeNodeMapper timeNodeMapper;
+    /** 领导意见（2026-10-13 纳入快照）：待办是意见派生的，两者必须成对还原 */
+    @Resource
+    private CaseLeaderOpinionMapper opinionMapper;
     @Resource
     private EmployeeService employeeService;
     @Resource
@@ -104,6 +109,8 @@ public class CaseSnapshotService {
                 .eq(CaseTodo::getCaseId, caseId).orderByAsc(CaseTodo::getId)));
         s.setTimeNodes(timeNodeMapper.selectList(new LambdaQueryWrapper<CaseTimeNode>()
                 .eq(CaseTimeNode::getCaseId, caseId).orderByAsc(CaseTimeNode::getId)));
+        s.setOpinions(opinionMapper.selectList(new LambdaQueryWrapper<CaseLeaderOpinion>()
+                .eq(CaseLeaderOpinion::getCaseId, caseId).orderByAsc(CaseLeaderOpinion::getId)));
         return toJson(s);
     }
 
@@ -137,7 +144,9 @@ public class CaseSnapshotService {
             suspectMapper.delete(new LambdaQueryWrapper<CaseSuspect>().eq(CaseSuspect::getCaseId, caseId));
             planMapper.delete(new LambdaQueryWrapper<CasePlan>().eq(CasePlan::getCaseId, caseId));
             timeNodeMapper.delete(new LambdaQueryWrapper<CaseTimeNode>().eq(CaseTimeNode::getCaseId, caseId));
+            // 先删待办再删意见：待办的 opinion_id 指向意见，顺序反了会短暂出现"待办指向已删意见"
             todoMapper.delete(new LambdaQueryWrapper<CaseTodo>().eq(CaseTodo::getCaseId, caseId));
+            opinionMapper.delete(new LambdaQueryWrapper<CaseLeaderOpinion>().eq(CaseLeaderOpinion::getCaseId, caseId));
             caseMapper.deleteById(caseId);
             return;
         }
@@ -161,6 +170,8 @@ public class CaseSnapshotService {
         restoreSuspects(caseId, snap.getSuspects());
         restoreTimeNodes(caseId, snap.getTimeNodes());
         restorePlans(caseId, snap.getPlans());
+        // 顺序要紧：意见先还原，待办里的 opinion_id 才指得到东西
+        restoreOpinions(caseId, snap.getOpinions());
         restoreTodos(caseId, snap.getTodos());
         alignSourceFile(caseId, info.getSourceFileId(), currentSourceFileId);
     }
@@ -277,11 +288,34 @@ public class CaseSnapshotService {
     }
 
     /**
+     * 领导意见按快照整体替换：先清空本案意见，再按快照逐行写回（含原有主键）。
+     *
+     * <p>必须在 {@link #restoreTodos} 之前调用——待办的 opinion_id 指向意见，
+     * 顺序反了会写出一批指向已删意见的孤儿待办。
+     *
+     * <p><b>顺序提醒</b>：撤回到"意见较少"的状态时也要按意见 id 升序插入，
+     * 否则自增主键可能被后面的行占用导致主键冲突。
+     */
+    private void restoreOpinions(Long caseId, List<CaseLeaderOpinion> snap) {
+        opinionMapper.delete(new LambdaQueryWrapper<CaseLeaderOpinion>().eq(CaseLeaderOpinion::getCaseId, caseId));
+        if (snap == null || snap.isEmpty()) {
+            return;
+        }
+        for (CaseLeaderOpinion o : snap) {
+            o.setCaseId(caseId);
+            if (o.getId() == null) {
+                opinionMapper.insert(o);
+            } else {
+                opinionMapper.insertWithId(o);
+            }
+        }
+    }
+
+    /**
      * 待办按快照整体替换：先清空本案待办，再按快照逐行写回（含原有主键）。
      * 佐证材料本身是 case_file，不在这里动——撤回不会删掉已上传的材料（与附件的既有约定一致）。
      */
-    private void restoreTodos(Long caseId, List<CaseTodo> snap) {
-        todoMapper.delete(new LambdaQueryWrapper<CaseTodo>().eq(CaseTodo::getCaseId, caseId));
+    private void restoreTodos(Long caseId, List<CaseTodo> snap) {        todoMapper.delete(new LambdaQueryWrapper<CaseTodo>().eq(CaseTodo::getCaseId, caseId));
         if (snap == null || snap.isEmpty()) {
             return;
         }
@@ -374,6 +408,7 @@ public class CaseSnapshotService {
         compare(out, "members", "协办人", names(b, "MEMBER"), names(a, "MEMBER"));
         compare(out, "suspects", "嫌疑人", suspectNames(b), suspectNames(a));
         compare(out, "timeNodes", "时间节点", timeNodeNames(b), timeNodeNames(a));
+        compare(out, "todos", "待办", todoTexts(b), todoTexts(a));
         compare(out, "files", "附件", fileNames(b), fileNames(a));
         return out;
     }
@@ -397,6 +432,7 @@ public class CaseSnapshotService {
         add(out, "sourceType", "来源", null, dict("SOURCE_TYPE", i.getSourceType()), "ADD");
         add(out, "owner", "主办人", null, names(a, "OWNER"), "ADD");
         add(out, "members", "协办人", null, names(a, "MEMBER"), "ADD");
+        add(out, "todos", "待办", null, todoTexts(a), "ADD");
         add(out, "files", "附件", null, fileNames(a), "ADD");
     }
 
@@ -471,6 +507,21 @@ public class CaseSnapshotService {
         return s.getTimeNodes().stream()
                 .map(n -> n.getNodeName() + "("
                         + (n.getNodeTime() == null ? "-" : n.getNodeTime().toLocalDate().toString()) + ")")
+                .collect(Collectors.joining("、"));
+    }
+
+    /**
+     * 快照里的待办摘要（内容+重要程度），用于撤回预览「改了什么」。
+     *
+     * <p>2026-10-13 起入列：待办现在可以随建案 / 指派一次性录多条，
+     * 撤回预览里看不到它们会让用户以为「撤了但待办还在」。
+     */
+    private String todoTexts(CaseSnapshot s) {
+        if (s == null || s.getTodos() == null || s.getTodos().isEmpty()) {
+            return null;
+        }
+        return s.getTodos().stream()
+                .map(t -> t.getContent() + (t.getImportance() == null ? "" : "[" + t.getImportance() + "]"))
                 .collect(Collectors.joining("、"));
     }
 

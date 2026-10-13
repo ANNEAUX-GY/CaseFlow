@@ -66,7 +66,7 @@ public class StaffTodoService {
     @Resource
     private com.caseflow.mapper.SysUserMapper userMapper;
     @Resource
-    private CaseService caseService;
+    private CaseScopeService caseScopeService;
     @Resource
     private FlowService flowService;
     @Resource
@@ -196,7 +196,7 @@ public class StaffTodoService {
      */
     public List<CaseTodoVO> myTodos(String status, String sortBy, String urgencyOrder,
                                     String importanceOrder, String keyword) {
-        java.util.Set<Long> mine = caseService.myVisibleCaseIds();
+        java.util.Set<Long> mine = caseScopeService.myVisibleCaseIds();
         if (mine == null || mine.isEmpty()) {
             return new ArrayList<>();
         }
@@ -331,7 +331,7 @@ public class StaffTodoService {
      */
     public java.util.Map<String, Object> welcomeSummary() {
         java.util.Map<String, Object> m = new HashMap<>();
-        java.util.Set<Long> mine = caseService.myVisibleCaseIds();
+        java.util.Set<Long> mine = caseScopeService.myVisibleCaseIds();
         if (mine == null || mine.isEmpty()) {
             m.put("todayTodoCount", 0);
             m.put("dueSoonCount", 0);
@@ -474,7 +474,7 @@ public class StaffTodoService {
         if (AuthContext.isFullAccess()) {
             return;
         }
-        java.util.Set<Long> mine = caseService.myVisibleCaseIds();
+        java.util.Set<Long> mine = caseScopeService.myVisibleCaseIds();
         if (mine == null || !mine.contains(caseId)) {
             throw new BizException(403, "只能操作本人相关案件的待办");
         }

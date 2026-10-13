@@ -60,6 +60,7 @@
       :case-id="currentId"
       :case-name="currentName"
       :current-deadline="currentDeadline"
+      :case-measure="currentMeasure"
       @done="load"
     />
     <CaseDetailDrawer v-model="detailVisible" :case-id="currentId" @done="load" />
@@ -91,6 +92,7 @@ const detailVisible = ref(false)
 const currentId = ref(null)
 const currentName = ref('')
 const currentDeadline = ref(null)
+const currentMeasure = ref(null)
 
 const loading = ref(false)
 // 只看重点（2026-10-10）：与案件管理同一个字段，后端走同一个 page() 查询，口径天然一致
@@ -172,6 +174,7 @@ const openAssign = (row) => {
   currentId.value = row.id
   currentName.value = row.name
   currentDeadline.value = row.deadline || null
+  currentMeasure.value = row.caseMeasure || null
   assignVisible.value = true
 }
 const onRemove = async (row) => {

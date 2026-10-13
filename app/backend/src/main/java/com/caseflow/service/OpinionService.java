@@ -63,7 +63,7 @@ public class OpinionService {
     private CaseOpinionReadMapper opinionReadMapper;
     /** 案件可见范围（myVisibleCaseIds：意见收件箱与 welcomeSummary 共用同一收敛口径） */
     @Resource
-    private CaseService caseService;
+    private CaseScopeService caseScopeService;
     @Resource
     private LogService logService;
     /**
@@ -196,6 +196,19 @@ public class OpinionService {
       + (o.getDeadline() != null ? "（截止 " + o.getDeadline() + "）" : "")
         + "（重要性 " + o.getImportance() + "）");
 
+        afterInsert(o);
+        return o;
+    }
+
+    /**
+     * 落库之后的连带动作：常用待办记忆 + 自动派生民警待办。
+     *
+     * <p>抽出来是为了让「静默批量」复用同一套连带逻辑——
+     * 建案 / 指派时一并录入的待办也必须记入「常用待办」，
+     * 否则用户在详情页添加待办时看不到自己刚在建案时用过的内容，
+     * 记忆就断在第一条上，这显然不对。
+     */
+    private void afterInsert(CaseLeaderOpinion o) {
         // 常用待办记忆（2026-10-11）：这条内容本人又写了一次。
         // 只累加、不因后续删除/编辑而回退——记忆回答的是「你常写什么」，
         // 把它跟某条具体意见绑定会在删意见时把习惯也一起删掉，那不是用户想要的。
@@ -206,7 +219,50 @@ public class OpinionService {
         //（这里刻意不 catch：部门反查等软失败已在 deriveFromOpinion 内部兜底，
         //  能抛出来的都是真故障，吞掉反而制造漏项）。
         staffTodoService.deriveFromOpinion(o);
-        return o;
+    }
+
+    /**
+     * 静默批量提意见：供<b>指派 / 建案</b>时随主操作一并录入待办。
+     *
+     * <p><b>与 {@link #addBatch} 的唯一区别是不打 {@code OPINION_ADD} 日志</b>
+     * （与 {@code SuspectService#addAllQuietly} 同款理由）：
+     * 建案本身有一条 {@code CASE.CREATE}、指派本身有一条 {@code CASE.ASSIGN}，
+     * 日志都带完整 before/after 快照。若这里再逐条打日志，会多出 N 条
+     * {@code OPINION_ADD} 占据「案件最新一步」，
+     * 用户点撤回时撤掉的是第一条待办而不是建案/指派本身，与直觉相反。
+     *
+     * <p>其余行为（整批一个事务 / 空行跳过 / 派生待办 / 记常用待办）与
+     * {@link #addBatch} 完全一致——待办只有一种产生方式。
+     *
+     * @return 实际新建的意见（空行已跳过）
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public List<CaseLeaderOpinion> addDraftsQuietly(Long caseId, List<com.caseflow.dto.TodoDraftRequest> drafts) {
+        if (drafts == null || drafts.isEmpty()) {
+            return Collections.emptyList();
+        }
+        requireCase(caseId);
+        requireManager();
+
+        List<CaseLeaderOpinion> out = new ArrayList<>();
+        for (com.caseflow.dto.TodoDraftRequest d : drafts) {
+            if (d == null || !StringUtils.hasText(d.getContent())) {
+                continue;
+            }
+            CaseLeaderOpinion o = new CaseLeaderOpinion();
+            o.setCaseId(caseId);
+            o.setContent(d.getContent().trim());
+            o.setCreatorId(AuthContext.userId());
+            o.setCreatorName(AuthContext.userName());
+            o.setCreatedAt(LocalDateTime.now());
+            o.setDeadline(parseDeadline(d.getDeadline()));
+            o.setImportance(normalizeImportance(d.getImportance()));
+            o.setSortOrder(nextSortOrder(caseId));
+            opinionMapper.insert(o);
+            afterInsert(o);
+            out.add(o);
+        }
+        return out;
     }
 
     /** 下一条意见的排序位次：现有最大值 + 1；无记录则 1。 */
@@ -535,7 +591,7 @@ public class OpinionService {
      * 历史协办人（已转手）不收。
      */
     public List<OpinionInboxVO> unreadForMe() {
-        Set<Long> mine = caseService.myVisibleCaseIds();
+        Set<Long> mine = caseScopeService.myVisibleCaseIds();
         if (mine == null || mine.isEmpty()) {
             return new ArrayList<>();
         }
@@ -606,7 +662,7 @@ public class OpinionService {
     /** 全部标为已读：把当前未读的一次清空（收件箱的「全部已读」按钮） */
     @Transactional(rollbackFor = Exception.class)
     public int markAllRead() {
-        Set<Long> mine = caseService.myVisibleCaseIds();
+        Set<Long> mine = caseScopeService.myVisibleCaseIds();
         if (mine == null || mine.isEmpty()) {
             return 0;
         }

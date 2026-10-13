@@ -265,7 +265,9 @@
     <!-- ============ 添加待办：一次可填多条（批量） ============
          原来是「一条一弹窗」，领导一次交代三件事就得开关三次。现在改成表格式批量录入：
          列头只说一次列义，行里只放控件，十几条也不会每行重复一遍标签、把弹窗撑爆。
-         提交走 POST /watch/cases/{id}/opinions/batch，整批一个事务（要么全成、要么全不留）。 -->
+         提交走 POST /watch/cases/{id}/opinions/batch，整批一个事务（要么全成、要么全不留）。
+         表格本体由 TodoBatchEditor 提供——指派 / 建案两个入口共用同一份，
+         用户要求三处「添加待办」逻辑完全一致，抽出来才不会改一处漏一处。 -->
     <el-dialog
       v-model="addVisible"
       title="添加待办"
@@ -274,96 +276,25 @@
       append-to-body
       destroy-on-close
     >
-      <div class="cf-btodo">
-        <div class="cf-btodo__hint">
-          <el-icon><InfoFilled /></el-icon>
-          <span>
-            一次可以连着写多条：填完一行按 <b>Enter</b> 直接写下一行。
-            截止时间与重要程度都是选填，不填按「C 一般」处理。
-          </span>
-        </div>
-
-        <div class="cf-btodo__grid cf-btodo__grid--head">
-          <span>序号</span>
-          <span>待办内容（必填）</span>
-          <span>截止时间（选填）</span>
-          <span>重要程度</span>
-          <span></span>
-        </div>
-
-        <div ref="rowsEl" class="cf-btodo__rows">
-          <div v-for="(r, i) in rows" :key="r.key" class="cf-btodo__grid cf-btodo__row">
-            <span class="cf-btodo__no">{{ i + 1 }}</span>
-            <el-input
-              v-model="r.content"
-              class="cf-btodo__content"
-              maxlength="500"
-              placeholder="写清要办的事，如：72 小时内完成受害人走访"
-              @keyup.enter="onEnter(i)"
-            />
-            <el-date-picker
-              v-model="r.deadline"
-              class="cf-btodo__date"
-              type="datetime"
-              size="small"
-              format="YYYY-MM-DD HH:mm"
-              value-format="YYYY-MM-DDTHH:mm:ss"
-              placeholder="选填"
-              :clearable="true"
-            />
-            <el-radio-group v-model="r.importance" size="small" class="cf-abc cf-btodo__abc">
-              <el-radio-button value="A" class="is-a">A</el-radio-button>
-              <el-radio-button value="B" class="is-b">B</el-radio-button>
-              <el-radio-button value="C" class="is-c">C</el-radio-button>
-            </el-radio-group>
-            <el-button
-              link
-              type="danger"
-              class="cf-btodo__del"
-              :title="rows.length === 1 ? '清空这一行' : '删除这一行'"
-              @click="removeRow(i)"
-            >
-              <el-icon><Delete /></el-icon>
-            </el-button>
-          </div>
-        </div>
-
-        <!-- 常用待办：后台按「本人写过几次」记下来的，点一下就直接加一条，
-             不用把天天写的那几句再手打一遍（次数越多排越前） -->
-        <div v-if="presets.length" class="cf-btodo__preset">
-          <div class="cf-btodo__preset-label">
-            常用待办
-            <span class="cf-btodo__preset-tip">点一下就直接加一条，不用手打</span>
-          </div>
-          <div class="cf-btodo__chips">
-            <button
-              v-for="p in presets"
-              :key="p.id"
-              type="button"
-              class="cf-btodo__chip"
-              :disabled="presetSaving"
-              :title="`点击直接添加：${p.content}`"
-              @click="applyPreset(p)"
-            >
-              <span class="cf-btodo__chip-plus">＋</span>
-              <span class="cf-btodo__chip-text">{{ p.content }}</span>
-              <span v-if="p.useCount > 1" class="cf-btodo__chip-n">{{ p.useCount }}</span>
-            </button>
-          </div>
-        </div>
-
-        <div class="cf-btodo__legend">
-          重要程度：<b class="is-a">A</b> 最重要 · <b class="is-b">B</b> 重要 · <b class="is-c">C</b> 一般
-        </div>
-      </div>
+      <TodoBatchEditor
+        ref="batchRef"
+        v-model:rows="rows"
+        scope="cf-btodo"
+        preset-mode="submit"
+        :max="MAX_BATCH"
+        :presets="presets"
+        :preset-saving="presetSaving"
+        hint="一次可以连着写多条：填完一行按 <b>Enter</b> 直接写下一行。截止时间与重要程度都是选填，不填按「C 一般」处理。"
+        @preset-click="applyPreset"
+      />
 
       <template #footer>
-        <div class="cf-btodo__foot">
-          <div class="cf-btodo__foot-left">
-            <el-button link type="primary" :disabled="rows.length >= MAX_BATCH" @click="addRow()">
+        <div class="cf-bt__foot cf-btodo__foot">
+          <div class="cf-bt__foot-left cf-btodo__foot-left">
+            <el-button link type="primary" :disabled="rows.length >= MAX_BATCH" @click="batchRef?.addRow()">
               <el-icon><Plus /></el-icon>再添一条
             </el-button>
-            <span class="cf-btodo__count">
+            <span class="cf-bt__count cf-btodo__count">
               已填 <b>{{ filledCount }}</b> 条<template v-if="rows.length >= MAX_BATCH">（一次最多 {{ MAX_BATCH }} 条）</template>
             </span>
           </div>
@@ -419,7 +350,7 @@
  */
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Bell, View, Plus, ArrowDown, ArrowUp, User, Clock, AlarmClock, InfoFilled, ChatLineSquare, Delete } from '@element-plus/icons-vue'
+import { Bell, View, Plus, ArrowDown, ArrowUp, User, Clock, AlarmClock, InfoFilled, ChatLineSquare } from '@element-plus/icons-vue'
 import Sortable from 'sortablejs'
 import { todoApi, watchApi } from '../api'
 import { useUserStore } from '../store/user'
@@ -434,6 +365,7 @@ import {
 } from '../utils/format'
 import TodoDetailDialog from './TodoDetailDialog.vue'
 import FeedbackDialog from './FeedbackDialog.vue'
+import TodoBatchEditor from './TodoBatchEditor.vue'
 
 const props = defineProps({
   caseId: { type: [Number, String], required: true },
@@ -762,33 +694,26 @@ const onDetailChanged = async () => {
 }
 
 // ---- 管理层维护 ----
-/* ============ 批量添加待办（2026-10-11） ============
+/* ============ 批量添加待办（2026-10-11 建，2026-10-13 抽成公共组件） ============
  * 一次可以填多条，提交走 addOpinions（整批一个事务）。
  * 空行不发；到上限就停住「再添一条」并给出说明，不做无限追加。
- * ================================================== */
+ *
+ * 行的新增/续行/删行都在 TodoBatchEditor 内部（Enter 续行、新行沿用上一行重要程度、
+ * 上限 10、只剩一行时删除=清空），这里只管「打开时给一行」和「提交」。
+ * ======================================================================== */
 const MAX_BATCH = 10
 const addVisible = ref(false)
 const batchSaving = ref(false)
 const rows = ref([])
-const rowsEl = ref(null)
-let rowSeq = 0
-
-const newRow = (importance = 'C') => ({ key: ++rowSeq, content: '', deadline: '', importance })
-
-const focusRow = (i) => {
-  // 定位到行的内容输入框。用容器 ref 而不是 document 查询：
-  // 详情抽屉与盯办抽屉各挂一份本组件时，全局查询会点错面板。
-  const el = rowsEl.value?.children?.[i]?.querySelector('input')
-  el?.focus()
-}
+const batchRef = ref(null)
 
 const filledCount = computed(() => rows.value.filter((r) => (r.content || '').trim()).length)
 
 /** 打开「添加待办」：先给一行并把光标放好，少点一次鼠标 */
 const openAdd = () => {
-  rows.value = [newRow('C')]
+  rows.value = [{ key: 1, content: '', deadline: '', importance: 'C' }]
   addVisible.value = true
-  nextTick(() => focusRow(0))
+  batchRef.value?.focusFirst()
   loadPresets()
 }
 
@@ -832,35 +757,8 @@ const applyPreset = async (p) => {
 }
 
 /** Enter = 接着写下一行；已在最后一行就追加一行（到上限则原地不动） */
-const onEnter = (i) => {
-  if (i < rows.value.length - 1) {
-    focusRow(i + 1)
-    return
-  }
-  addRow(i)
-}
-
-/**
- * 追加一行。after 为空即加到末尾。
- * 新行沿用上一行的重要程度——一批待办常常是同一档，省得每条都点一遍。
- */
-const addRow = (after) => {
-  if (rows.value.length >= MAX_BATCH) return
-  const at = after == null ? rows.value.length - 1 : after
-  const prev = rows.value[at]
-  rows.value.splice(at + 1, 0, newRow(prev ? prev.importance : 'C'))
-  nextTick(() => focusRow(at + 1))
-}
-
-/** 只剩一行时不清空整个列表，只把这一行恢复成空白——按钮语义仍是「这条不要了」 */
-const removeRow = (i) => {
-  if (rows.value.length === 1) {
-    rows.value = [newRow('C')]
-    nextTick(() => focusRow(0))
-    return
-  }
-  rows.value.splice(i, 1)
-}
+// ↑ 已移入 TodoBatchEditor（2026-10-13）：指派 / 建案两个新入口也要同一套续行行为，
+//   留一份在这里就会出现"详情能连着写、指派不能"的不一致。
 
 /**
  * 提交批量添加。
@@ -869,13 +767,15 @@ const removeRow = (i) => {
  * 用户改正后直接再点一次即可，不用重填（这也是把校验放在提交前的原因）。
  */
 const submitBatch = async () => {
-  const items = rows.value
-    .filter((r) => (r.content || '').trim())
-    .map((r) => ({
-      content: r.content.trim(),
-      deadline: r.deadline || '',
-      importance: r.importance || 'C'
-    }))
+  const items = batchRef.value
+    ? batchRef.value.items()
+    : rows.value
+      .filter((r) => (r.content || '').trim())
+      .map((r) => ({
+        content: r.content.trim(),
+        deadline: r.deadline || '',
+        importance: r.importance || 'C'
+      }))
   if (!items.length) {
     ElMessage.warning('请至少填写一条待办内容')
     return
@@ -1155,37 +1055,9 @@ onBeforeUnmount(() => {
 }
 .cf-todo__meta-edit-label { font-size: 12px; color: #8a929e; flex: none }
 
-/* ABC 三档选中色（需求：点选时各自显示不同颜色）
-   Element 的 el-radio-button 选中态统一是主题蓝，三档看不出差别。
-   这里覆盖 .is-active 的背景/边框/文字色：A 红=最重要、B 橙=重要、C 蓝=一般，
-   配色沿用项目警情色板（#c62a2a 危险红 / #d98a0b 警告橙 / #1b4a8c 警蓝）。
-   钩子比 .is-active 稍深，选中时白字压在上面保证对比度 ≥ 4.5:1。 */
-.cf-abc .el-radio-button__inner {
-  border-left: none !important;
-  border-right: none !important;
-}
-.cf-abc .el-radio-button:first-child .el-radio-button__inner { border-left: 1px solid var(--el-border) !important; border-radius: 4px 0 0 4px; }
-.cf-abc .el-radio-button:last-child .el-radio-button__inner { border-right: 1px solid var(--el-border) !important; border-radius: 0 4px 4px 0; }
-
-.cf-abc .el-radio-button.is-a.is-active .el-radio-button__inner {
-  background: #c62a2a; border-color: #c62a2a !important; box-shadow: -1px 0 0 0 #c62a2a;
-}
-.cf-abc .el-radio-button.is-b.is-active .el-radio-button__inner {
-  background: #d98a0b; border-color: #d98a0b !important; box-shadow: -1px 0 0 0 #d98a0b;
-}
-.cf-abc .el-radio-button.is-c.is-active .el-radio-button__inner {
-  background: #1b4a8c; border-color: #1b4a8c !important; box-shadow: -1px 0 0 0 #1b4a8c;
-}
-/* 悬停时用浅色底提示可点。
-   注意：悬停文字色不能盖在 .is-active 上——Element 的默认 hover 规则是
-   "文字变主题色"，若不排除 active 态，点中后鼠标仍悬停在按钮上时
-   会出现「红底红字」这种看不清的情况（实测踩过）。
-   所以用 :hover:not(.is-active)。 */
-.cf-abc .el-radio-button.is-a:hover:not(.is-active) .el-radio-button__inner { color: #c62a2a; }
-.cf-abc .el-radio-button.is-b:hover:not(.is-active) .el-radio-button__inner { color: #d98a0b; }
-.cf-abc .el-radio-button.is-c:hover:not(.is-active) .el-radio-button__inner { color: #1b4a8c; }
-/* 选中态文字必须是白的（浅色底上的深色字）——显式声明，不依赖继承 */
-.cf-abc .el-radio-button.is-active .el-radio-button__inner { color: #fff; }
+/* ABC 三档选中色（.cf-abc）已移到 styles/index.css：
+   待办批量编辑器（2026-10-13）现在有三个入口共用这套三档，
+   藏在 CaseTodoPanel 里会让另外两处的样式依赖"恰好加载过这个面板"。 */
 
 /* 操作区 */
 .cf-todo__card-actions {
@@ -1197,103 +1069,9 @@ onBeforeUnmount(() => {
 .cf-todo__menu-danger { color: #c62a2a }
 
 /* ============ 添加待办：批量录入弹窗 ============
-   列宽一套变量统一管：序号 / 内容 / 截止时间 / 重要程度 / 删除。
-   表头只说一次列义，行里只放控件——这是它比"每行一套 label"更省地方的关键。 */
-.cf-btodo { --cf-btodo-cols: 36px minmax(0, 1fr) 182px 124px 30px; }
-
-.cf-btodo__hint {
-  display: flex; align-items: flex-start; gap: 6px;
-  margin-bottom: 12px; padding: 8px 12px; border-radius: 6px;
-  background: #f2f6fc; color: #1b4a8c; font-size: 12.5px; line-height: 1.6;
-}
-.cf-btodo__hint .el-icon { margin-top: 2px; flex: none; color: #1b4a8c }
-.cf-btodo__hint b { color: #12294a }
-
-.cf-btodo__grid {
-  display: grid;
-  grid-template-columns: var(--cf-btodo-cols);
-  gap: 10px;
-  align-items: center;
-}
-/* 表头：加粗一点、贴一条底边线，把"这是列名"和"这是数据"分开 */
-.cf-btodo__grid--head {
-  padding: 0 8px 6px;
-  font-size: 12px; font-weight: 600; color: #5a6472;
-  border-bottom: 1px solid #e4e8ee;
-}
-.cf-btodo__rows { max-height: 46vh; overflow-y: auto; padding: 0 8px }
-.cf-btodo__row { padding: 7px 0; border-bottom: 1px dashed #eef1f6 }
-.cf-btodo__row:last-child { border-bottom: none }
-.cf-btodo__row:hover { background: #fafcff }
-.cf-btodo__row .el-date-editor { width: 100% }
-/* 注意：Element 的日期选择器根元素同时带 el-input 类，所以移动端排版
-   必须按自己的类定位（.cf-btodo__content / .cf-btodo__date），
-   用 .el-input 会连日期框一起命中、两个控件叠到同一个栅格区里。 */
-.cf-btodo__no {
-  width: 22px; height: 22px; line-height: 22px; text-align: center;
-  background: #eef3fa; color: #1b4a8c; border-radius: 50%;
-  font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums;
-}
-.cf-btodo__del { padding: 0 !important; height: 22px }
-/* 常用待办：一排可点的标签，点一下就加一条。
-   用原生 button 而不是 el-tag——它天生带 disabled 与键盘可达，
-   而 el-tag 是纯展示组件，点击语义要靠额外的 tabindex 补。 */
-.cf-btodo__preset { margin-top: 12px; padding: 10px 8px 0; border-top: 1px dashed #e4e8ee }
-.cf-btodo__preset-label {
-  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-  font-size: 12.5px; font-weight: 600; color: #1b2430;
-}
-.cf-btodo__preset-tip { font-weight: 400; color: #8a929e }
-.cf-btodo__chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px }
-.cf-btodo__chip {
-  display: inline-flex; align-items: center; gap: 4px; max-width: 100%;
-  padding: 4px 10px; border: 1px solid #c9d8ec; border-radius: 999px;
-  background: #f5f9ff; color: #1b4a8c; font-size: 12.5px; line-height: 1.5;
-  cursor: pointer; transition: background .15s, border-color .15s;
-}
-.cf-btodo__chip:hover:not(:disabled) { background: #e6effb; border-color: #93b4df }
-.cf-btodo__chip:disabled { opacity: .55; cursor: not-allowed }
-.cf-btodo__chip-plus { flex: none; font-weight: 700 }
-/* 内容过长时截断：标签是"一眼认出来"，完整内容在 title 与添加后的列表里都有 */
-.cf-btodo__chip-text {
-  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.cf-btodo__chip-n {
-  flex: none; min-width: 16px; padding: 0 4px; border-radius: 999px;
-  background: #1b4a8c; color: #fff; font-size: 11px; text-align: center;
-  font-variant-numeric: tabular-nums;
-}
-.cf-btodo__legend { padding: 10px 8px 0; font-size: 12px; color: #8a929e }
-.cf-btodo__legend b { font-weight: 700 }
-.cf-btodo__legend .is-a { color: #c62a2a }
-.cf-btodo__legend .is-b { color: #d98a0b }
-.cf-btodo__legend .is-c { color: #1b4a8c }
-
-.cf-btodo__foot {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-}
-.cf-btodo__foot-left { display: flex; align-items: center; gap: 12px }
-.cf-btodo__count { font-size: 12px; color: #8a929e }
-.cf-btodo__count b { color: #1b4a8c; font-size: 13px; font-variant-numeric: tabular-nums }
-
-/* 窄屏：栅格改成三条竖排（序号+内容+删除 / 截止时间 / 重要程度），
-   否则固定列宽加起来会比屏幕还宽，内容框被压成一条缝。 */
-@media (max-width: 760px) {
-  .cf-btodo__grid--head { display: none }
-  .cf-btodo__row {
-    grid-template-columns: 26px minmax(0, 1fr) 26px;
-    grid-template-areas:
-      'no  content del'
-      '.   date    date'
-      '.   abc     abc';
-    row-gap: 6px;
-  }
-  .cf-btodo__no { grid-area: no }
-  .cf-btodo__content { grid-area: content }
-  .cf-btodo__del { grid-area: del }
-  .cf-btodo__date { grid-area: date }
-  .cf-btodo__abc { grid-area: abc }
-}
+   表格本体的样式（.cf-bt__*）已随编辑器本体搬到 TodoBatchEditor.vue，
+   三处共用一份，避免"改了一处忘了另一处"。
+   本面板特有的只剩下面这条实时提醒条。 */
 
 /* 实时提醒条 */
 .cf-todo__notice {
