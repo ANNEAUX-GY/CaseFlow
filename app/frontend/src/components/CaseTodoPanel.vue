@@ -631,7 +631,7 @@ const submitFeedback = async ({ status, note, uploadTime, uploadPlatform, upload
   fbDlg.loading = true
   try {
     // 字段名必须是 content（后端 TodoSaveRequest），传 note 后端收不到——上一轮踩过
-    // 上传声明三要素单独传（2026-10-08 拆列），不再拼成一句话
+    // 执行记录三要素单独传（2026-10-08 拆列），不再拼成一句话
     await todoApi.addFeedback(t.id, { status, content: note, uploadTime, uploadPlatform, uploadFile })
     ElMessage.success('反馈已提交')
     fbDlg.visible = false
@@ -715,7 +715,7 @@ const openSubsAndFocus = async (t) => {
 
 const toggleSub = async (t, s, checked) => {
   if (checked) {
-    // 勾选子任务 = 打开与主任务同一套的汇报弹窗（落实状态+说明+上传声明），
+    // 勾选子任务 = 打开与主任务同一套的汇报弹窗（落实状态+说明+执行记录），
     // 选「完成」才真正勾上——不能在列表里直接勾掉（用户明确的交互要求）。
     detailRef.value?.openCompleteSub(t.id, s.id)
     return

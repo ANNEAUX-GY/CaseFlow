@@ -22,12 +22,15 @@
       </el-form-item>
     </el-form>
 
-    <!-- 上传声明：替代原"佐证材料"上传。填了平台/文件即视为作出声明。
-         三要素（时间/平台/文件名）各自独立入库，所以修改时能只改其中一项，
-         不必把整句重写——2026-10-08 拆列的原因。 -->
+    <!-- 执行记录：记录「在哪个系统执行了什么操作」。填了平台/操作即视为作出记录。
+         三要素（时间/平台/操作名）各自独立入库，所以修改时能只改其中一项，
+         不必把整句重写——2026-10-08 拆列的原因。
+         2026-10-13：原文案是「上传了…文件」，与实际用法不符（多数是系统里做了个操作、
+         并没有上传文件），改为「执行了…操作」。字段名沿用 upload* 不动，
+         改列名要动 schema + 迁移，收益不抵风险。 -->
     <div class="cf-fb__declare">
       <div class="cf-fb__declare-title">
-        上传声明<span class="cf-muted">（代替上传佐证材料，选填）</span>
+        执行记录<span class="cf-muted">（记录在哪个系统做了什么操作，选填）</span>
       </div>
       <div class="cf-fb__declare-tip">
         请输入：于<el-date-picker v-model="declareTime" type="datetime" size="small"
@@ -35,12 +38,12 @@
           placeholder="点击选择时间" :clearable="false"
           class="cf-fb__slot-time" style="width: 190px" />（不选则默认当前时间，精确到秒）在
         <el-input v-model="declarePlatform" class="cf-fb__slot-input" size="small"
-          placeholder="平台名称，如：一体化办案平台" maxlength="100" style="width: 180px" /> 上传了
+          placeholder="系统/平台名称，如：一体化办案平台" maxlength="100" style="width: 180px" /> 执行了
         <el-input v-model="declareFile" class="cf-fb__slot-input" size="small"
-          placeholder="文件名称，如：调取监控情况说明.docx" maxlength="200" style="width: 200px" /> 。
+          placeholder="操作名称，如：调取监控情况说明" maxlength="200" style="width: 200px" /> 操作。
       </div>
       <div class="cf-fb__declare-quick">
-        常用平台：
+        常用系统：
         <el-link v-for="p in COMMON_PLATFORMS" :key="p" type="primary" :underline="false"
           style="font-size: 12px; margin-right: 10px" @click="declarePlatform = p">{{ p }}</el-link>
       </div>
@@ -61,7 +64,7 @@
 <script setup>
 /**
  * 落实反馈弹窗（图二口径，主任务/子任务/修改已有反馈共用）：
- * 落实状态（完成/进行中/未完成）+ 落实说明 + 上传声明三要素。
+ * 落实状态（完成/进行中/未完成）+ 落实说明 + 执行记录三要素。
  *
  * 弹窗本身不调接口：submit 事件把
  * {@code { status, note, uploadTime, uploadPlatform, uploadFile }} 交给父组件，
@@ -132,7 +135,7 @@ const nowText = () => {
 
 // 打开时重置：新建则状态取 defaultStatus、说明留空、声明时间默认当前；
 // 修改则回填 initial 里的四项。
-// 注意：修改时**不补当前时间**——这条反馈本来没有上传声明，
+// 注意：修改时**不补当前时间**——这条反馈本来没有执行记录，
 // 硬塞「现在」进去会让人以为当时真在那个时刻传的。
 watch(visible, (v) => {
   if (!v) return
@@ -152,26 +155,32 @@ watch(visible, (v) => {
   state.declareFile = ''
 })
 
-/** 声明句：平台/文件任一填写即生成；时间留空则取提交时刻 */
+/**
+ * 记录句预览：平台/操作任一填写即生成；时间留空则取提交时刻。
+ *
+ * <p><b>占位符必须与后端 FeedbackDeclare.sentence 完全一致</b>——后端会把
+ * 这句话拼进 content，修改反馈时再拆回来；两边占位符不同就拆不回来，
+ * 回填会丢内容。后端 parse 时会把占位符还原成空串，不会当真实值存库。
+ */
 const declareSentence = computed(() => {
   const platform = (state.declarePlatform || '').trim()
   const file = (state.declareFile || '').trim()
   if (!platform && !file) return ''
   const time = state.declareTime || nowText()
-  return `于 ${time} 在 ${platform || '（待填平台）'} 上传了 ${file || '（待填文件）'}。`
+  return `于 ${time || '（未填时间）'} 在 ${platform || '（待填平台）'} 执行了 ${file || '（待填操作）'} 操作。`
 })
 
 const submit = () => {
-  // 平台与文件必须成对：声明句里出现"（待填）"就提交不出去，避免留下残缺声明
+  // 平台与操作必须成对：声明句里出现"（待填）"就提交不出去，避免留下残缺声明
   const platform = (state.declarePlatform || '').trim()
   const file = (state.declareFile || '').trim()
   if ((platform && !file) || (!platform && file)) {
-    ElMessage.warning('上传声明的平台名称与文件名称需填写完整，或两项都留空')
+    ElMessage.warning('请填写完整的执行平台与操作名称，或两项都留空')
     return
   }
   const hasDeclare = !!(platform && file)
   if (!state.note.trim() && !hasDeclare) {
-    ElMessage.warning('请填写落实说明或上传声明')
+    ElMessage.warning('请填写落实说明或执行记录')
     return
   }
   if (!state.status) {

@@ -31,7 +31,7 @@
       </div>
 
       <!-- 反馈记录（累积，时间正序；带落实状态标签）。
-           上传声明三要素（时间/平台/文件名）独立成块展示并可逐项修改
+           执行记录三要素（时间/系统/操作）独立成块展示并可逐项修改
            ——原先三者是拼在说明里的一句话，改一个字得整句重写（2026-10-08）。 -->
       <div class="cf-td__sec">
         <div class="cf-td__sec-head">
@@ -70,12 +70,14 @@
                 class="cf-td__fb-op" @click.stop="openEditFeedback(f)">修改</el-button>
             </div>
             <div v-if="f.content" class="cf-td__fb-text">{{ f.content }}</div>
-            <!-- 上传声明块：三要素分行展示，各自可改（改一项不影响其余两项） -->
+            <!-- 执行记录块：三要素分行展示，各自可改（改一项不影响其余两项）。
+                 文案 2026-10-13 由「上传声明/文件」改为「执行记录/操作」，
+                 与 FeedbackDialog 的录入口径一致；字段名沿用 upload* 不动。 -->
             <div v-if="f.uploadPlatform || f.uploadFile" class="cf-td__fb-declare">
-              <span class="cf-td__fb-declare-k">上传声明</span>
+              <span class="cf-td__fb-declare-k">执行记录</span>
               <span v-if="f.uploadTime" class="cf-td__fb-declare-i">时间 {{ f.uploadTime }}</span>
-              <span v-if="f.uploadPlatform" class="cf-td__fb-declare-i">平台 {{ f.uploadPlatform }}</span>
-              <span v-if="f.uploadFile" class="cf-td__fb-declare-i">文件 {{ f.uploadFile }}</span>
+              <span v-if="f.uploadPlatform" class="cf-td__fb-declare-i">系统 {{ f.uploadPlatform }}</span>
+              <span v-if="f.uploadFile" class="cf-td__fb-declare-i">操作 {{ f.uploadFile }}</span>
             </div>
           </li>
         </ul>
@@ -154,7 +156,7 @@
         </template>
       </div>
 
-      <!-- 提交反馈入口：走落实反馈弹窗（状态+说明+上传声明）。
+      <!-- 提交反馈入口：走落实反馈弹窗（状态+说明+执行记录）。
            仅普通用户（承办人）显示——反馈是承办人的汇报动作，
            管理层只查阅上方的「反馈记录」，不代提交（2026-10-06 需求） -->
       <div v-if="!isAdmin" class="cf-td__sec">
@@ -344,7 +346,7 @@ const openComplete = async (id) => {
 /**
  * 勾选子任务时打开「完成子任务」的反馈弹窗。
  *
- * <p>与主任务同一套汇报形式（落实状态 + 落实说明 + 上传声明）——
+ * <p>与主任务同一套汇报形式（落实状态 + 落实说明 + 执行记录）——
  * 用户明确要求：**每个子任务完成后都要走这个汇报弹窗**，
  * 不能在列表里直接勾上。先加载主任务详情（子任务列表要能对上号），
  * 再弹出以该子任务为对象的反馈弹窗。
@@ -436,7 +438,7 @@ const openFeedbackDlg = ({ target = 'main', subId = null, complete = false }) =>
  * <p>回填四项：落实状态、落实说明、上传时间/平台/文件名。
  * 三要素各自独立，用户只改平台名就只改平台名。
  *
- * <p><b>上传时间留空不补当前时间</b>：这条反馈本来就没有上传声明，
+ * <p><b>操作时间留空不补当前时间</b>：这条反馈本来就没有执行记录，
  * 硬塞一个「现在」进去会让人以为当时真在那个时刻传的。
  * FeedbackDialog 里只在「新建」场景才默认当前时间。
  */
@@ -665,7 +667,7 @@ watch(visible, (v) => { if (!v) onClosed() })
 .cf-td__fb-op { font-size: 12px; padding: 0 2px; margin-left: 4px }
 /* 修订痕迹：改过反馈就常驻标注（禁悬浮提示），区分「谁交的」与「谁改的」 */
 .cf-td__fb-edited { color: #a8620a; font-size: 12px }
-/* 上传声明块：三要素分行。独立成块而不是拼进说明里，
+/* 执行记录块：三要素分行。独立成块而不是拼进说明里，
    用户才能一眼看出「时间/平台/文件」各自是什么，改单项时也知道在改哪一项。 */
 .cf-td__fb-declare {
   margin-top: 5px; padding: 5px 8px;
