@@ -201,12 +201,10 @@ CREATE TABLE IF NOT EXISTS todo_preset (
     updated_at      DATETIME     DEFAULT CURRENT_TIMESTAMP COMMENT '更新时间'
 );
 
--- 5.1.3 疑问问答（2026-10-04）
+-- 5.1.3 疑问问答（2026-10-04）——【已下线 2026-10-13】
 --
--- 普通员工办任务遇到不懂的，在此提问；管理层看到后回答。
--- **独立于待办与任务**：不派生待办、不影响任何完成规则、不进反馈流——
--- 它只是一问一答的沟通记录。todo_id 可空，仅记录提问时所在的任务上下文
--- （展示「关于哪个任务的疑问」用），删除任务不级联删问答（沟通记录要留档）。
+-- 疑问问答功能整体移除（Controller/Service/Entity 均已删除，前端无任何入口）。
+-- 建表语句保留：库里的历史问答数据留档不删，且保证老库/新库结构一致。
 CREATE TABLE IF NOT EXISTS case_question (
     id              BIGINT        AUTO_INCREMENT PRIMARY KEY COMMENT '主键',
     case_id         BIGINT        NOT NULL COMMENT '案件 ID',
@@ -354,7 +352,7 @@ CREATE TABLE IF NOT EXISTS case_notification (
     case_id    BIGINT       DEFAULT NULL COMMENT '关联案件（可空，非案件类操作）',
     log_id     BIGINT       DEFAULT NULL COMMENT '来源操作日志 ID（可空）',
     anchor_todo_id     BIGINT  DEFAULT NULL COMMENT '定位锚点-待办 ID（可空）：点通知直达该任务详情',
-    anchor_question_id BIGINT  DEFAULT NULL COMMENT '定位锚点-疑问 ID（可空）：点通知直达该条疑问/回答',
+    anchor_question_id BIGINT  DEFAULT NULL COMMENT '定位锚点-疑问 ID（已下线，历史数据留档，新数据恒 NULL）',
     anchor_subtask_id  BIGINT  DEFAULT NULL COMMENT '定位锚点-子任务 ID（可空）：点通知直达该子任务',
     type       VARCHAR(32)  DEFAULT NULL COMMENT '通知类型：OPINION/ASSIGN/STATUS/TODO/FILE/OTHER',
     title      VARCHAR(128) DEFAULT NULL COMMENT '摘要标题',

@@ -105,11 +105,13 @@ public class SchemaMigration implements ApplicationRunner {
             // 回答修订痕迹（2026-10-08）：管理层答错可改答，但**不覆盖**首次回答人/时间
             // （answerBy/answeredAt 保持原样），另存三列记录谁在何时改过，责任可追溯。
             // 存量数据全为 NULL = 从未修订，界面不显示修订标记。
+            // 【已下线 2026-10-13】以下两列属疑问问答功能，表已无任何代码写入，
+            // 保留登记只是为了让老库补齐后与 schema.sql 结构一致（数据留档，不删列）。
             {"case_question", "answer_edited_by", "BIGINT NULL"},
             {"case_question", "answer_edited_by_name", "VARCHAR(64) NULL"},
             {"case_question", "answer_edited_at", "DATETIME NULL"},
             // 通知定位锚点（2026-10-08）：业务侧埋点时告知目标对象ID，
-            // 点通知可直达待办详情/某条疑问，而不只跳案件详情页。
+            // 点通知可直达待办详情/子任务，而不只跳案件详情页。
             // 存量通知三列皆 NULL = 降级为案件级定位，行为不变。
             {"case_notification", "anchor_todo_id", "BIGINT NULL"},
             {"case_notification", "anchor_question_id", "BIGINT NULL"},

@@ -181,7 +181,7 @@ const locateAnchor = ref(null)
 
 /**
  * 信箱跳转的定位锚点（2026-10-08）。
- * 路由 query：?caseId=12&todoId=34&questionId=8
+ * 路由 query：?caseId=12&todoId=34&subtaskId=9
  * 锚点用完即从地址栏抹掉（与 caseId 同一约定），否则刷新会重复定位。
  */
 const consumeOpenCase = () => {
@@ -191,14 +191,13 @@ const consumeOpenCase = () => {
   currentId.value = Number(cid)
   const anchor = {
     todoId: q0.todoId ? Number(q0.todoId) : null,
-    questionId: q0.questionId ? Number(q0.questionId) : null,
     subtaskId: q0.subtaskId ? Number(q0.subtaskId) : null
   }
-  locateAnchor.value = anchor.todoId || anchor.questionId || anchor.subtaskId ? anchor : null
+  locateAnchor.value = anchor.todoId || anchor.subtaskId ? anchor : null
   detailVisible.value = true
   // 抹掉定位参数（caseId 一并抹，避免刷新重复弹抽屉）
   const q = { ...q0 }
-  delete q.caseId; delete q.todoId; delete q.questionId; delete q.subtaskId
+  delete q.caseId; delete q.todoId; delete q.subtaskId
   router.replace({ path: '/my-cases', query: q })
 }
 

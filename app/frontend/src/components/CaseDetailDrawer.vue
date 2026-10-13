@@ -282,7 +282,7 @@ const props = defineProps({
   caseId: { type: [Number, null], default: null },
   /**
    * 定位锚点（2026-10-08 信箱「查看案件」用）。
-   * { todoId, questionId, subtaskId }——由路由 query 透传，逐层下传到待办面板去定位高亮。
+   * { todoId, subtaskId }——由路由 query 透传，逐层下传到待办面板去定位高亮。
    */
   anchor: { type: Object, default: null }
 })

@@ -67,7 +67,7 @@
               <span class="cf-spacer"></span>
               <!-- 修改反馈：提交人本人或管理层（后端二次校验，前端只控显隐） -->
               <el-button v-if="canEditFeedback(f)" link type="primary" size="small"
-                class="cf-td__q-op" @click.stop="openEditFeedback(f)">修改</el-button>
+                class="cf-td__fb-op" @click.stop="openEditFeedback(f)">修改</el-button>
             </div>
             <div v-if="f.content" class="cf-td__fb-text">{{ f.content }}</div>
             <!-- 上传声明块：三要素分行展示，各自可改（改一项不影响其余两项） -->
@@ -154,92 +154,6 @@
         </template>
       </div>
 
-      <!-- 疑问问答：员工遇到不懂的在此提问，管理层回答。
-           独立于待办与任务——不派生待办、不影响完成规则，纯沟通记录。
-           折叠（默认展开？否，与反馈/子任务一致默认收起，点区头展开）+ 增删改。 -->
-      <div class="cf-td__sec">
-        <div class="cf-td__sec-head cf-td__sec-head--click" @click="qExpanded = !qExpanded">
-          <el-icon class="cf-td__fold-icon" :class="{ 'is-open': qExpanded }"><ArrowRight /></el-icon>
-          <span>疑问</span>
-          <span class="cf-muted">共 {{ questions.length }} 条</span>
-          <span v-if="!qExpanded && questions.length" class="cf-td__block">
-            {{ questions.filter(q => !q.answer).length }} 条待回答
-          </span>
-          <span class="cf-spacer"></span>
-        </div>
-        <template v-if="qExpanded">
-        <ul v-if="questions.length" class="cf-td__q-list">
-          <li v-for="q in questions" :key="q.id" class="cf-td__q" :data-cf-qid="q.id">
-            <div class="cf-td__fb-meta">
-              <span class="cf-td__fb-time">{{ fmt(q.createdAt) }}</span>
-              <span class="cf-td__fb-by">{{ q.questionByName || '-' }}</span>
-              <el-tag v-if="!q.answer" size="small" type="warning" effect="plain">待回答</el-tag>
-              <el-tag v-else size="small" type="success" effect="plain">已回答</el-tag>
-              <span class="cf-spacer"></span>
-              <!-- 增删改：编辑/删除（提问人本人或管理层；后端二次校验） -->
-              <el-button v-if="canEditQuestion(q)" link type="primary" size="small"
-                class="cf-td__q-op" @click.stop="startEditQuestion(q)">编辑</el-button>
-              <el-button v-if="canEditQuestion(q)" link type="danger" size="small"
-                class="cf-td__q-op" @click.stop="removeQuestion(q)">删除</el-button>
-            </div>
-            <!-- 编辑态：问题就地改 -->
-            <template v-if="editingQuestionId === q.id">
-              <el-input v-model="editingQuestionText" size="small" maxlength="500"
-                class="cf-td__sub-edit" @keyup.enter="commitEditQuestion(q)" @keyup.esc="cancelEditQuestion" />
-              <el-button link type="primary" size="small" @click="commitEditQuestion(q)">存</el-button>
-              <el-button link size="small" @click="cancelEditQuestion">取消</el-button>
-            </template>
-            <div v-else class="cf-td__fb-text">{{ q.content }}</div>
-            <!-- 回答块：管理层看到未回答的显示行内输入框；
-     已回答的可修订（2026-10-08，答错了要能改）——修订不覆盖首次回答人/时间，
-     另存修订痕迹并在块内常驻标注，避免「谁答的」与「谁改的」混淆。 -->
-            <div v-if="q.answer" class="cf-td__q-answer">
-              <span class="cf-td__q-answer-by">
-                {{ q.answerByName || '-' }} · {{ fmt(q.answeredAt) }} 回答
-                <span v-if="q.answerEditedAt" class="cf-td__q-answer-edited">
-                  （{{ q.answerEditedByName || '-' }} 于 {{ fmt(q.answerEditedAt) }} 修订）
-                </span>
-                <span class="cf-spacer"></span>
-                <template v-if="editingAnswerId !== q.id">
-                  <el-button v-if="isAdmin" link type="primary" size="small"
-                    class="cf-td__q-op" @click.stop="startEditAnswer(q)">修改回答</el-button>
-                </template>
-              </span>
-              <template v-if="editingAnswerId === q.id">
-                <el-input v-model="editingAnswerText" type="textarea" :rows="2" size="small" maxlength="500"
-                  @keyup.ctrl.enter="commitEditAnswer(q)" />
-                <div class="cf-td__q-edit-actions">
-                  <el-button type="primary" size="small" :loading="answeringId === q.id"
-                    :disabled="!(editingAnswerText || '').trim()" @click="commitEditAnswer(q)">保存</el-button>
-                  <el-button link size="small" @click="cancelEditAnswer">取消</el-button>
-                  <span class="cf-muted cf-td__q-edit-tip">Ctrl+Enter 保存，Esc 取消</span>
-                </div>
-              </template>
-              <div v-else class="cf-td__fb-text">{{ q.answer }}</div>
-            </div>
-            <div v-else-if="isAdmin" class="cf-td__q-answer cf-td__q-answer--input">
-              <el-input v-model="answerText[q.id]" size="small" maxlength="500"
-                placeholder="填写回答…" @keyup.enter="submitAnswer(q)" />
-              <el-button type="primary" size="small" :loading="answeringId === q.id"
-                :disabled="!(answerText[q.id] || '').trim()" @click="submitAnswer(q)">
-                回答
-              </el-button>
-            </div>
-          </li>
-        </ul>
-        <div v-else class="cf-muted cf-td__empty">暂无疑问。遇到不懂的，直接在下方提问</div>
-        <div class="cf-td__add-row">
-          <el-input v-model="newQuestion" size="small" maxlength="500"
-            placeholder="遇到不懂的？写下你的问题，管理层会回答"
-            @keyup.enter="submitQuestion" />
-          <el-button type="primary" size="small" :loading="asking"
-            :disabled="!newQuestion.trim()" @click="submitQuestion">
-            提交问题
-          </el-button>
-        </div>
-        </template>
-      </div>
-
       <!-- 提交反馈入口：走落实反馈弹窗（状态+说明+上传声明）。
            仅普通用户（承办人）显示——反馈是承办人的汇报动作，
            管理层只查阅上方的「反馈记录」，不代提交（2026-10-06 需求） -->
@@ -297,7 +211,7 @@
 <script setup>
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { todoApi, questionApi } from '../api'
+import { todoApi } from '../api'
 import { useUserStore } from '../store/user'
 import FeedbackDialog from './FeedbackDialog.vue'
 
@@ -340,7 +254,6 @@ const subTitleOf = (f) => {
 /* ---- 折叠（反馈/子任务多时默认收起，避免撑爆弹窗没法滚动看） ---- */
 const FB_PREVIEW = 3   // 反馈默认预览条数（时间正序，最后 3 条即最新）
 const fbExpanded = ref(false)
-const qExpanded = ref(false)
 const subExpanded = ref(false)
 const visibleFeedbacks = computed(() =>
   fbExpanded.value ? feedbacks.value : feedbacks.value.slice(-FB_PREVIEW))
@@ -376,133 +289,11 @@ const canDone = computed(() => {
   return feedbacks.value.length > 0
 })
 
-/** 疑问问答：只看本任务上下文的（todoId 过滤）；数据独立，不影响任务状态 */
-const questions = ref([])
-const newQuestion = ref('')
-const asking = ref(false)
-const answerText = reactive({})
-const answeringId = ref(null)
-const editingQuestionId = ref(null)
-const editingQuestionText = ref('')
-/** 正在修订回答的疑问 id；与 editingQuestionId 互斥（避免同时两处输入框） */
-const editingAnswerId = ref(null)
-const editingAnswerText = ref('')
-
-const loadQuestions = async () => {
-  if (!todoId.value) { questions.value = []; return }
-  // 按当前任务过滤（接口返回全案，浮窗只看本任务上下文的疑问）
-  try {
-    const all = await questionApi.listOfCase(data.value.caseId) || []
-    questions.value = all.filter((q) => String(q.todoId) === String(todoId.value))
-  }
-  catch (e) { questions.value = [] }
-}
-
-const submitQuestion = async () => {
-  const content = (newQuestion.value || '').trim()
-  if (!content) return
-  asking.value = true
-  try {
-    await questionApi.ask(data.value.caseId, todoId.value, content)
-    newQuestion.value = ''
-    ElMessage.success('问题已提交，管理层会在此回答')
-    await loadQuestions()
-    emit('changed')
-  } finally { asking.value = false }
-}
-
-const submitAnswer = async (q) => {
-  const content = (answerText[q.id] || '').trim()
-  if (!content) return
-  answeringId.value = q.id
-  try {
-    await questionApi.answer(q.id, content)
-    answerText[q.id] = ''
-    ElMessage.success('已回答')
-    await loadQuestions()
-    emit('changed')
-  } finally { answeringId.value = null }
-}
-
-/* ---- 修订已给出的回答（仅管理层，2026-10-08）----
- * 与「首次回答」分开两个入口：answer 的「一问一答」是防重复刷答，
- * 改答是纠错，两者语义不同。回答人/首次回答时间不变（后端另存修订痕迹）。
- */
-const startEditAnswer = (q) => {
-  editingAnswerId.value = q.id
-  editingAnswerText.value = q.answer || ''
-  // 问题与回答的编辑互斥，避免同时出现两处输入框
-  cancelEditQuestion()
-}
-const cancelEditAnswer = () => {
-  editingAnswerId.value = null
-  editingAnswerText.value = ''
-}
-const commitEditAnswer = async (q) => {
-  const text = (editingAnswerText.value || '').trim()
-  if (!text) { ElMessage.warning('请填写回答内容'); return }
-  if (text === (q.answer || '').trim()) { cancelEditAnswer(); return }
-  answeringId.value = q.id
-  try {
-    await questionApi.updateAnswer(q.id, text)
-    cancelEditAnswer()
-    ElMessage.success('回答已修订')
-    await loadQuestions()
-    emit('changed')
-  } finally { answeringId.value = null }
-}
-
-/** 能否编辑/删除这条疑问：提问人本人或管理层（后端二次校验，前端只控按钮显隐） */
-const canEditQuestion = (q) => isAdmin.value || String(q.questionBy) === String(userStore.userInfo?.userId)
-
-const startEditQuestion = (q) => {
-  editingQuestionId.value = q.id
-  editingQuestionText.value = q.content || ''
-}
-const cancelEditQuestion = () => {
-  editingQuestionId.value = null
-  editingQuestionText.value = ''
-}
-const commitEditQuestion = async (q) => {
-  const text = (editingQuestionText.value || '').trim()
-  if (!text) { ElMessage.warning('请填写问题内容'); return }
-  if (text === (q.content || '').trim()) { cancelEditQuestion(); return }
-  const prev = q.content
-  q.content = text
-  editingQuestionId.value = null
-  try {
-    await questionApi.update(q.id, text)
-    ElMessage.success('已保存')
-    await loadQuestions()
-    emit('changed')
-  } catch (e) {
-    q.content = prev
-    ElMessage.error('保存失败，已恢复原文')
-  }
-}
-const removeQuestion = async (q) => {
-  try {
-    await ElMessageBox.confirm(`确认删除这条疑问「${(q.content || '').slice(0, 20)}…」？`, '删除疑问',
-      { type: 'warning', confirmButtonText: '确认删除', cancelButtonText: '取消' })
-  } catch { return }
-  try {
-    await questionApi.remove(q.id)
-    ElMessage.success('已删除')
-    await loadQuestions()
-    emit('changed')
-  } catch (e) {
-    ElMessage.error('删除失败')
-  }
-}
-
 const load = async () => {
   if (!todoId.value) return
   loading.value = true
   try {
     data.value = await todoApi.detail(todoId.value) || {}
-    // 疑问问答必须在这里加载——上一轮插入丢失，导致「打开浮窗永远 0 条，
-    // 发一条问题才刷出来」（只有提交路径调了 loadQuestions）。
-    await loadQuestions()
   } catch (e) {
     data.value = {}
   } finally {
@@ -515,16 +306,10 @@ const open = async (id, anchor) => {
   newSub.value = ''
   fbExpanded.value = false
   subExpanded.value = false
-  qExpanded.value = false
-  // 编辑态重置：否则上次没保存完的输入框会带到下一个任务
-  editingQuestionId.value = null
-  editingQuestionText.value = ''
-  editingAnswerId.value = null
-  editingAnswerText.value = ''
   visible.value = true
   await load()
   // 定位到具体内容（信箱跳转用）：等下一帧让列表渲染完再滚+高亮
-  if (anchor && (anchor.questionId || anchor.subtaskId)) {
+  if (anchor && anchor.subtaskId) {
     await locateAnchor(anchor)
   }
 }
@@ -532,22 +317,18 @@ const open = async (id, anchor) => {
 /**
  * 定位到指定锚点并短暂高亮（2026-10-08 信箱精确定位）。
  *
- * <p><b>为什么高亮而不是只滚动</b>：任务详情里反馈/子任务/疑问可能有十几条，
+ * <p><b>为什么高亮而不是只滚动</b>：任务详情里反馈/子任务可能有十几条，
  * 滚到位置只说明"大概在这"，用户还得自己找。短暂高亮一眼就能认出目标。
  *
  * <p><b>降级</b>：目标已被删除/查不到时什么都不做（浮窗照常打开），
  * 由调用方决定是否提示——不在这里报错，免得打断跳转。
  */
 const locateAnchor = async (anchor) => {
-  // 疑问区默认折叠，定位到疑问时先展开
-  if (anchor.questionId) qExpanded.value = true
   await nextTick()
   await new Promise((r) => setTimeout(r, 120))
-  const raw = anchor.questionId || anchor.subtaskId
-  const key = String(raw)
+  const key = String(anchor.subtaskId)
   // CSS.escape：id 虽是数字，但选择器拼接仍走属性选择器更稳
-  const el = document.querySelector(`[data-cf-qid="${key}"]`) ||
-    document.querySelector(`[data-cf-subid="${key}"]`)
+  const el = document.querySelector(`[data-cf-subid="${key}"]`)
   if (!el) return    // 目标已删除：静默降级
   el.scrollIntoView({ block: 'center', behavior: 'smooth' })
   el.classList.add('is-cf-flash')
@@ -866,7 +647,6 @@ watch(visible, (v) => { if (!v) onClosed() })
 .cf-td__sec-head--click { cursor: pointer; user-select: none }
 .cf-td__fold-icon { transition: transform .15s; color: #8a929e }
 .cf-td__fold-icon.is-open { transform: rotate(90deg) }
-/* 疑问问答：列表限高滚动（项目约定：列表类容器写死高度），回答块缩进区分 */
 /* 信箱跳转定位高亮：短暂闪一下帮用户认出目标（2.6s 后由 JS 移除） */
 .is-cf-flash {
   animation: cf-flash 2.6s ease-out;
@@ -877,29 +657,12 @@ watch(visible, (v) => { if (!v) onClosed() })
   30%, 70%  { background: #fff9e6; box-shadow: 0 0 0 2px #f5d78e inset; }
   100%      { background: transparent;   box-shadow: 0 0 0 2px transparent inset; }
 }
-.cf-td__q-list { list-style: none; margin: 0; padding: 0; max-height: 240px; overflow-y: auto }
-.cf-td__q { padding: 6px 0; border-bottom: 1px dotted #eef1f5 }
-.cf-td__q-answer {
-  margin-top: 4px; padding: 6px 10px; background: #f4f8f2;
-  border-left: 3px solid var(--cf-ok, #1e8e58); border-radius: 3px;
-}
-/* 疑问行的编辑/删除操作按钮 */
-.cf-td__q-op { font-size: 12px; padding: 0 2px; margin-left: 4px }
-.cf-td__q-answer--input { display: flex; gap: 8px; align-items: center; background: #fbfcfe; border-left-color: #dfe4ea }
-.cf-td__q-answer-by {
-  font-size: 12px; color: #1e8e58;
-  /* 「修改回答」按钮与修订痕迹排在同一行的两端 */
-  display: flex; align-items: center; gap: 6px;
-}
-/* 修订痕迹：常驻可见（项目约定：禁悬浮提示，说明要一直看得见） */
-.cf-td__q-answer-edited { color: #a8620a }
-/* 修订回答的操作区 */
-.cf-td__q-edit-actions { display: flex; align-items: center; gap: 8px; margin-top: 4px }
-.cf-td__q-edit-tip { font-size: 12px }
 .cf-td__block { flex: 0 1 auto; min-width: 0; font-size: 12px; line-height: 1.4;
   color: #a8620a; background: #fdf6ec; border: 1px solid #f0dcc0;
   padding: 1px 7px; border-radius: 3px; overflow-wrap: anywhere }
 .cf-td__fb-time { font-variant-numeric: tabular-nums }
+/* 反馈行内的操作按钮（修改） */
+.cf-td__fb-op { font-size: 12px; padding: 0 2px; margin-left: 4px }
 /* 修订痕迹：改过反馈就常驻标注（禁悬浮提示），区分「谁交的」与「谁改的」 */
 .cf-td__fb-edited { color: #a8620a; font-size: 12px }
 /* 上传声明块：三要素分行。独立成块而不是拼进说明里，

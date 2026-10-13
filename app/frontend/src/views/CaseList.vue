@@ -272,7 +272,7 @@ const assignVisible = ref(false)
 const detailVisible = ref(false)
 const editId = ref(null)
 const currentId = ref(null)
-/** 信箱跳转的定位锚点（todoId/questionId/subtaskId）；null=无定位 */
+/** 信箱跳转的定位锚点（todoId/subtaskId）；null=无定位 */
 const locateAnchor = ref(null)
 const currentName = ref('')
 // 本案强制措施：指派弹窗据此推导要求的办案组别（刑拘在办→清案组）
@@ -455,15 +455,14 @@ const consumeOpenCase = () => {
   if (!q.caseId) return
   currentId.value = Number(q.caseId)
   const anchor = {
-    todoId: q.todoId ? Number(q.todoId) : null,
-    questionId: q.questionId ? Number(q.questionId) : null,
+ todoId: q.todoId ? Number(q.todoId) : null,
     subtaskId: q.subtaskId ? Number(q.subtaskId) : null
   }
-  locateAnchor.value = anchor.todoId || anchor.questionId || anchor.subtaskId ? anchor : null
+  locateAnchor.value = anchor.todoId || anchor.subtaskId ? anchor : null
   detailVisible.value = true
   // 抹掉定位参数，否则刷新会重复打开（与 MyCases 同一约定）
   const rest = { ...q }
-  delete rest.caseId; delete rest.todoId; delete rest.questionId; delete rest.subtaskId
+  delete rest.caseId; delete rest.todoId; delete rest.subtaskId
   router.replace({ path: '/cases', query: rest })
 }
 

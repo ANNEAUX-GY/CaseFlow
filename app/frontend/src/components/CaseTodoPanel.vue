@@ -439,7 +439,7 @@ const props = defineProps({
   caseId: { type: [Number, String], required: true },
   /**
    * 定位锚点（2026-10-08 信箱「查看案件」用）。
-   * 由路由 query 透传下来：{ todoId, questionId, subtaskId }。
+   * 由路由 query 透传下来：{ todoId, subtaskId }。
    * 挂载后自动打开对应任务的详情浮窗并高亮目标；目标已删除则静默降级（仅开案件详情）。
    */
   anchor: { type: Object, default: null }
@@ -537,7 +537,7 @@ watch(() => props.caseId, load)
  * <ul>
  *   <li>无 todoId → 不做任何事（调用方已开了案件详情，抽窗本身就是落点）；</li>
  *   <li>todoId 存在但查不到 → 提示一句「该任务已被删除」，停在案件详情；</li>
- *   <li>questionId / subtaskId 查不到 → 浮窗照常打开，只是不高亮（TodoDetailDialog 内处理）。</li>
+ *   <li>subtaskId 查不到 → 浮窗照常打开，只是不高亮（TodoDetailDialog 内处理）。</li>
  * </ul>
  */
 const consumeAnchor = async () => {

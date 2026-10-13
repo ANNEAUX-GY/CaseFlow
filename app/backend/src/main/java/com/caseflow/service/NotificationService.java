@@ -67,9 +67,8 @@ public class NotificationService {
         NOTIFY_ACTIONS.add("CASE_TODO_DELETE");
         NOTIFY_ACTIONS.add("CASE_TODO_SUBTASK_ADD");
         NOTIFY_ACTIONS.add("CASE_TODO_SUBTASK_REOPEN");
-        // 疑问
-        NOTIFY_ACTIONS.add("CASE_QUESTION_ASK");
-        NOTIFY_ACTIONS.add("CASE_QUESTION_ANSWER");
+        // 疑问功能已下线（2026-10-13）：不再把疑问动作派生为通知。
+        // 历史信件里已存的 QUESTION 类型仍能正常展示（前端有兜底标签）。
         // 计划 / 措施 / 侦查
         NOTIFY_ACTIONS.add("CASE_PLAN_ADD");
         NOTIFY_ACTIONS.add("CASE_PLAN_DONE");
@@ -103,7 +102,7 @@ public class NotificationService {
      * 由 LogService 在日志落库后调用（唯一埋点）。
      * 幂等：logId 相同不会重复派生（用 log_id 去重）。
      *
-     * @param anchor 定位锚点（可空）：让点通知能直达待办详情/某条疑问，
+     * @param anchor 定位锚点（可空）：让点通知能直达待办详情，
      *               而不只跳到案件详情页。为空则降级为案件级定位。
      */
     public void onLog(OperationLog log) {
@@ -143,7 +142,6 @@ public class NotificationService {
             // 定位锚点：业务侧告知目标对象ID，使点通知能直达具体内容
             if (anchor != null) {
                 n.setAnchorTodoId(anchor.todoId);
-                n.setAnchorQuestionId(anchor.questionId);
                 n.setAnchorSubtaskId(anchor.subtaskId);
             }
             n.setType(type);
@@ -299,7 +297,6 @@ public class NotificationService {
         if (key.contains("STATUS") || key.contains("MEASURE") || key.contains("INVESTIGATION")
                 || key.contains("PLAN") || key.contains("FLOW")) return "STATUS";
         if (key.contains("TODO")) return "TODO";
-        if (key.contains("QUESTION")) return "QUESTION";
         if (key.contains("SUSPECT") || key.contains("COMMENT")) return "OTHER";
         if (key.startsWith("FILE_")) return "FILE";
         return "OTHER";
@@ -325,7 +322,6 @@ public class NotificationService {
         if (key.contains("STATUS") || key.contains("FLOW")) return "更新了案件状态";
         if (key.contains("OPINION")) return "更新了领导意见";
         if (key.contains("TODO")) return "更新了待办";
-        if (key.contains("QUESTION")) return "更新了疑问";
         if (key.contains("PLAN")) return "更新了办理计划";
         if (key.contains("MEASURE") || key.contains("INVESTIGATION")) return "更新了案件进度";
         if (key.contains("SUSPECT")) return "更新了嫌疑人信息";
@@ -405,7 +401,6 @@ public class NotificationService {
         event.put("caseId", n.getCaseId());
         // 定位锚点一并下发：实时到达的通知也能直达具体内容
         event.put("anchorTodoId", n.getAnchorTodoId());
-        event.put("anchorQuestionId", n.getAnchorQuestionId());
         event.put("anchorSubtaskId", n.getAnchorSubtaskId());
         event.put("type", n.getType());
         event.put("title", n.getTitle());

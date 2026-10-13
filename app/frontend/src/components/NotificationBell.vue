@@ -101,6 +101,7 @@ const current = computed(() => (box.value === 'unread' ? unreadList.value : read
 const isRead = (n) => !!n.readAt
 const fmt = (s) => (s ? String(s).replace('T', ' ').slice(0, 16) : '-')
 
+/** QUESTION 仅作历史信件的显示兜底（疑问功能已下线，不会再产生新的疑问信件） */
 const typeLabel = (t) => ({
   OPINION: '意见', ASSIGN: '指派', STATUS: '状态',
   TODO: '待办', QUESTION: '疑问', FILE: '文件', OTHER: '其他'
@@ -150,7 +151,6 @@ const read = async (n) => {
  * <ul>
  *   <li>{@code caseId} —— 必带，落点案件；</li>
  *   <li>{@code todoId} —— 待办锚点，落点任务详情浮窗；</li>
- *   <li>{@code questionId} —— 疑问锚点，落点该条疑问/回答并高亮；</li>
  *   <li>{@code subtaskId} —— 子任务锚点，落点该子任务并高亮。</li>
  * </ul>
  *
@@ -164,7 +164,6 @@ if (n.caseId) {
   const path = userStore.isFullAccess ? '/cases' : '/my-cases'
   const query = { caseId: n.caseId }
   if (n.anchorTodoId) query.todoId = n.anchorTodoId
-  if (n.anchorQuestionId) query.questionId = n.anchorQuestionId
   if (n.anchorSubtaskId) query.subtaskId = n.anchorSubtaskId
   router.push({ path, query })
 }
@@ -197,7 +196,6 @@ const onEvent = (e) => {
     id: e.id, caseId: e.caseId, type: e.type,
     // 定位锚点一并带上：实时到达的通知也能直达具体内容
     anchorTodoId: e.anchorTodoId,
-    anchorQuestionId: e.anchorQuestionId,
     anchorSubtaskId: e.anchorSubtaskId,
     title: e.title, content: e.content, createdAt: e.createdAt
   }, ...unreadList.value.filter((x) => x.id !== e.id)]
@@ -252,6 +250,7 @@ onBeforeUnmount(() => {
 .cf-notif__item.is-assign .cf-notif__dot { background: #1b4a8c }
 .cf-notif__item.is-status .cf-notif__dot { background: #d98a0b }
 .cf-notif__item.is-todo .cf-notif__dot { background: #1e8e58 }
+/* 历史遗留的疑问信件仍按原色显示（疑问功能已下线，不再产生新的） */
 .cf-notif__item.is-question .cf-notif__dot { background: #8a5cd6 }
 /* 已读条目：置灰（放在类型配色之后，已读优先于类型） */
 .cf-notif__item.is-read { opacity: .78 }

@@ -108,7 +108,7 @@ public class OperationLogService {
                 .orderByDesc(OperationLog::getId)
                 .last("limit " + n);
         if ("case".equals(type)) {
-            // 案件相关：案件本体（指派/状态/待办/意见/疑问/计划）+ 案件材料
+            // 案件相关：案件本体（指派/状态/待办/意见/计划）+ 案件材料
             q.in(OperationLog::getModule, "CASE", "FILE");
         } else if ("other".equals(type)) {
             // 其他：登录注册改密（AUTH）+ 员工图谱增删改导入（EMPLOYEE）
@@ -407,7 +407,8 @@ public class OperationLogService {
             case "CASE.TODO_SUBTASK_ADD":     return "新增子任务";
             case "CASE.TODO_SUBTASK_REOPEN":  return "撤销子任务完成";
 
-            // ---- 疑问问答（独立于待办与任务）----
+            // ---- 疑问问答：功能已下线（2026-10-13），这里只保留中文名映射
+            //      让库里已有的历史日志仍能正常显示，不再有代码产生这些动作 ----
             case "CASE.QUESTION_ASK":          return "提出疑问";
             case "CASE.QUESTION_ANSWER":        return "回答疑问";
             case "CASE.QUESTION_ANSWER_UPDATE": return "修订回答";

@@ -257,17 +257,6 @@ export const employeeApi = {
   templateUrl: () => `${import.meta.env.VITE_API_BASE || '/api'}/employees/template`
 }
 
-/** 疑问问答（独立于待办与任务）：员工提问、管理层回答 */
-export const questionApi = {
-  listOfCase: (caseId) => http.get(`/questions/case/${caseId}`),
-  ask: (caseId, todoId, content) => http.post('/questions', { caseId, todoId, content }),
-  answer: (id, content) => http.post(`/questions/${id}/answer`, { content }),
-  update: (id, content) => http.put(`/questions/${id}`, { content }),
-  /** 修订已给出的回答（仅管理层，答错了要能改） */
-  updateAnswer: (id, content) => http.put(`/questions/${id}/answer`, { content }),
-  remove: (id) => http.delete(`/questions/${id}`)
-}
-
 /** 统一信箱（2026-10-04）：与自己有关的操作变更归集 */
 export const notificationApi = {
   unread: () => http.get('/notifications/unread'),
