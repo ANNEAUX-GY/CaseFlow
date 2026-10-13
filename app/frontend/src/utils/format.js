@@ -139,6 +139,31 @@ export const DEADLINE_LABEL_PRESETS = [
   '补充侦查期限'
 ]
 
+/**
+ * 重要时间节点的预设类型（2026-10-13）。
+ *
+ * <p>与后端 `DictHolder` 的 `TIME_NODE` 字典一一对应，改一处必须改另一处。
+ * `value` 为空串 = 自定义节点名称（不归入任何类型，便于按类型筛选统计）。
+ */
+export const TIME_NODE_PRESETS = [
+  { value: '', label: '自定义（手动填名称）' },
+  { value: 'ACCEPT', label: '受案时间' },
+  { value: 'FILING', label: '立案时间' },
+  { value: 'DETAIN_END', label: '刑事拘留期限届满' },
+  { value: 'ARREST_END', label: '逮捕期限届满' },
+  { value: 'BAIL_END', label: '取保候审期限届满' },
+  { value: 'RESIDENCE_END', label: '监视居住期限届满' },
+  { value: 'SUPP_PROBE', label: '补充侦查期限届满' },
+  { value: 'CUSTODY_CHANGE', label: '变更强制措施时间' },
+  { value: 'OTHER', label: '其他时间节点' }
+]
+
+/** 把预设 value 翻成中文名；自定义（空串）回退用填的名称 */
+export function timeNodeKeyName(key) {
+  const hit = TIME_NODE_PRESETS.find((p) => p.value === (key || ''))
+  return hit ? hit.label : (key || '')
+}
+
 /** 常用「提前提醒天数」 */
 export const REMIND_DAY_PRESETS = [1, 2, 3, 5, 7, 15, 30]
 

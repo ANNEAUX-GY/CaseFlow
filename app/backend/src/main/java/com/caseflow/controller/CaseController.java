@@ -8,6 +8,7 @@ import com.caseflow.dto.CaseSaveRequest;
 import com.caseflow.dto.FocusRequest;
 import com.caseflow.dto.StatusRequest;
 import com.caseflow.dto.SuspectSaveRequest;
+import com.caseflow.dto.TimeNodeSaveRequest;
 import com.caseflow.security.AuthContext;
 import com.caseflow.security.FullAccessOnly;
 import com.caseflow.service.CaseService;
@@ -42,6 +43,8 @@ public class CaseController {
     private CaseService caseService;
     @Resource
     private SuspectService suspectService;
+    @Resource
+    private com.caseflow.service.TimeNodeService timeNodeService;
     @Resource
     private com.caseflow.service.StatsService statsService;
     @Resource
@@ -185,6 +188,34 @@ public class CaseController {
     @DeleteMapping("/suspects/{suspectId}")
     public Result<List<com.caseflow.vo.SuspectVO>> removeSuspect(@PathVariable Long suspectId) {
         return Result.ok(suspectService.remove(suspectId));
+    }
+
+    // ------------------------------------------------------------------
+    // 重要时间节点（2026-10-13；一份案件多个关键时间点，增删改都带快照）
+    // ------------------------------------------------------------------
+
+    @GetMapping("/{id}/time-nodes")
+    public Result<List<com.caseflow.vo.TimeNodeVO>> timeNodes(@PathVariable Long id) {
+        return Result.ok(timeNodeService.listOf(id));
+    }
+
+    @PostMapping("/{id}/time-nodes")
+    public Result<List<com.caseflow.vo.TimeNodeVO>> addTimeNode(@PathVariable Long id,
+                                                                @RequestBody TimeNodeSaveRequest req) {
+        req.setCaseId(id);
+        return Result.ok(timeNodeService.add(req));
+    }
+
+    @PutMapping("/time-nodes/{nodeId}")
+    public Result<List<com.caseflow.vo.TimeNodeVO>> updateTimeNode(@PathVariable Long nodeId,
+                                                                    @RequestBody TimeNodeSaveRequest req) {
+        req.setId(nodeId);
+        return Result.ok(timeNodeService.update(req));
+    }
+
+    @DeleteMapping("/time-nodes/{nodeId}")
+    public Result<List<com.caseflow.vo.TimeNodeVO>> removeTimeNode(@PathVariable Long nodeId) {
+        return Result.ok(timeNodeService.remove(nodeId));
     }
 
     /** 到期提醒清单：OVERDUE / TODAY / D3 / D7 / NONE

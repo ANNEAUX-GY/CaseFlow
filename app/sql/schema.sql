@@ -237,6 +237,37 @@ CREATE TABLE IF NOT EXISTS case_suspect (
     updated_at    DATETIME     DEFAULT CURRENT_TIMESTAMP COMMENT '更新时间'
 );
 
+-- 5.1.1 重要时间节点（2026-10-13）
+--
+-- 一份案件不止一个关键时间点：受案、立案、拘留期限届满、取保期限届满、
+-- 补充侦查期限……每个都要盯。原先 case_info 上只有一组
+-- deadline_label/deadline/remind_days（单节点），装不下。
+--
+-- **case_info 的三列不删**：它们是列表「截止期限」、到期提醒、看板逾期、
+-- 统计的取数来源（前后端约 140 处引用）。本表是多节点的**真源**，
+-- 每次增删改后由 TimeNodeService.syncPrimary 派生回写最近节点到 case_info，
+-- 于是老逻辑一行不改、行为不变，新逻辑看本表。
+--
+-- node_key：预设节点类型（受案/立案/刑事拘留期限届满…），可为空=自定义名称。
+--   预设类型便于筛选与统计，自定义则只存名称。
+-- is_primary：主节点（列表显示的那个）。任一时刻至多一个，
+--   由 syncPrimary 按「最近未过期节点」自动定，用户不需要手动选。
+CREATE TABLE IF NOT EXISTS case_time_node (
+    id            BIGINT       AUTO_INCREMENT PRIMARY KEY COMMENT '主键',
+    case_id       BIGINT       NOT NULL COMMENT '案件 ID',
+    node_key      VARCHAR(32)  DEFAULT NULL COMMENT '预设节点类型：ACCEPT受案/FILING立案/DETAIN_END刑事拘留期限届满/BAIL_END取保期限届满/RESIDENCE_END监视居住期限届满/SUPP_PROBE补充侦查期限/ARREST_END逮捕期限届满/CUSTODY_CHANGE变更强制措施/OTHER其他；NULL=自定义名称',
+    node_name     VARCHAR(64)  NOT NULL COMMENT '节点名称（预设类型的展示名会同步写入；自定义时直接取此值）',
+    node_time     DATETIME     NOT NULL COMMENT '节点日期（按天选，落库统一为该日 23:59:59）',
+    remind_days   INT          DEFAULT NULL COMMENT '该节点提前多少天提醒（NULL/0=不提醒，各节点独立）',
+    is_primary    TINYINT      NOT NULL DEFAULT 0 COMMENT '是否主节点（列表显示/逾期判定用）：0否/1是。至多一个，由系统定',
+    sort          INT          NOT NULL DEFAULT 0 COMMENT '同级排序（录入顺序，越小越靠前）',
+    remark        VARCHAR(255) DEFAULT NULL COMMENT '备注',
+    created_by    BIGINT       DEFAULT NULL COMMENT '录入人',
+    created_at    DATETIME     DEFAULT CURRENT_TIMESTAMP COMMENT '录入时间',
+    updated_at    DATETIME     DEFAULT CURRENT_TIMESTAMP COMMENT '更新时间',
+    KEY idx_case_node (case_id)
+);
+
 -- 5.2 案件类别字典（小类 / 案由，由管理权限账户维护；前端级联选择器据此构建大类→小类树）
 CREATE TABLE IF NOT EXISTS case_category (
     id            BIGINT       AUTO_INCREMENT PRIMARY KEY COMMENT '主键',

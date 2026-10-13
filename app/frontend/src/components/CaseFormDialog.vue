@@ -105,45 +105,61 @@
         </el-col>
       </el-row>
 
-      <!-- 期限三件套（2026-10-09）：节点叫什么 + 哪一天 + 提前多久提醒。
-            原来的「+1天 / +3天 / +7天」按钮取消——期限该是哪天就填哪天，
-            快捷键只会引诱人随手一点填个不准的日期。
-            列宽 10/7/7（2026-10-12）：节点名最占地方（预设里有「取保候审期限届满时间」
-            这种十字长词），原先 8/8/8 在 760px 弹窗里被截成「变更羁押期限时」。 -->
-      <el-row :gutter="12">
-        <el-col :span="10" :xs="24">
-          <el-form-item label="时间节点">
-            <el-autocomplete
-              v-model="form.deadlineLabel"
-              :fetch-suggestions="suggestLabel"
-              placeholder="如：受案时间"
-              maxlength="64"
-              clearable
-              style="width: 100%"
-            />
-            <div class="cf-form-tip">不填则默认叫「截止期限」</div>
-          </el-form-item>
-        </el-col>
-        <el-col :span="7" :xs="24">
-          <el-form-item label="期限日期">
-            <el-date-picker
-              v-model="deadlineDay"
-              type="date"
-              value-format="YYYY-MM-DD"
-              placeholder="选择日期"
-              style="width: 100%"
-            />
-          </el-form-item>
-        </el-col>
-        <el-col :span="7" :xs="24">
-          <el-form-item label="提前提醒">
-            <el-select v-model="form.remindDays" placeholder="不提醒" clearable style="width: 100%">
-              <el-option v-for="d in REMIND_DAY_PRESETS" :key="d" :label="`提前 ${d} 天`" :value="d" />
-            </el-select>
-            <div class="cf-form-tip">{{ remindHint }}</div>
-          </el-form-item>
-        </el-col>
-      </el-row>
+<!-- 重要时间节点（2026-10-13）：一份案件不止一个关键时间点。
+           原先只有一个「时间节点 + 期限日期 + 提前提醒」三件套，
+           实际办案要同时盯受案、立案、拘留期限届满、补充侦查期限…装不下。
+           表格栅格录入：末行 Enter 续行、点「+ 添加」加行、逐行删除。
+           **只新建时可填**——已建案件走详情页的时间节点面板增删改（有单条撤回）。 -->
+      <div v-if="!isEdit" class="cf-form-block">
+        <div class="cf-form-block-head">
+          <span>重要时间节点<span class="cf-muted">（选填，可多个）</span></span>
+          <el-button link type="primary" @click="addNodeRow">+ 添加节点</el-button>
+        </div>
+        <div v-if="!nodeRows.length" class="cf-muted cf-form-block-empty">
+          暂无节点。未设置期限的案件在列表里显示「未设期限」，也不进到期提醒。
+        </div>
+        <div v-for="(row, i) in nodeRows" :key="row._k" class="cf-form-node-row"
+          @keydown.enter.prevent="addNodeRow">
+          <el-select v-model="row.nodeKey" placeholder="节点类型" style="width: 210px">
+            <el-option v-for="p in TIME_NODE_PRESETS" :key="p.value"
+              :label="p.label" :value="p.value" />
+          </el-select>
+          <el-input v-if="!row.nodeKey" v-model="row.nodeName" placeholder="节点名称，如：移送起诉期限"
+            maxlength="64" style="width: 220px" />
+          <el-date-picker v-model="row.day" type="date" value-format="YYYY-MM-DD"
+            placeholder="选择日期" style="width: 150px" />
+          <el-select v-model="row.remindDays" placeholder="不提醒" clearable style="width: 130px">
+            <el-option v-for="d in REMIND_DAY_PRESETS" :key="d" :label="`提前 ${d} 天`" :value="d" />
+          </el-select>
+          <el-button link type="danger" class="cf-form-node-del" @click="removeNodeRow(i)">删除</el-button>
+        </div>
+        <div class="cf-form-tip">
+          列表「截止期限」与到期提醒只认<b>最近的一个</b>节点，其余节点在案件详情里查看。
+        </div>
+      </div>
+
+      <!-- 嫌疑人（2026-10-13 建案时一并录入，选填）。
+           后端建案后可用详情页面板逐条增删改；这里一次录完省得建完案再补。 -->
+      <div v-if="!isEdit" class="cf-form-block">
+        <div class="cf-form-block-head">
+          <span>嫌疑人<span class="cf-muted">（选填，可多个）</span></span>
+          <el-button link type="primary" @click="addSuspectRow">+ 添加嫌疑人</el-button>
+        </div>
+        <div v-if="!suspectRows.length" class="cf-muted cf-form-block-empty">
+          暂无嫌疑人。可在建案后于案件详情里补充。
+        </div>
+        <div v-for="(row, i) in suspectRows" :key="row._k" class="cf-form-suspect-row">
+          <el-input v-model="row.name" placeholder="姓名（必填）" maxlength="64" style="width: 140px" />
+          <el-select v-model="row.gender" placeholder="性别" clearable style="width: 92px">
+            <el-option label="男" value="MALE" />
+            <el-option label="女" value="FEMALE" />
+          </el-select>
+          <el-input v-model="row.idCard" placeholder="身份证号" maxlength="32" style="width: 180px" />
+          <el-input v-model="row.phone" placeholder="联系电话" maxlength="32" style="width: 140px" />
+          <el-input v-model="row.address" placeholder="住址（选填）" maxlength="255" style="width: 200px" />
+          <el-button link type="danger" @click="removeSuspectRow(i)">删除</el-button>
+        </div>
+      </div>
 
       <el-form-item label="备注">
         <el-input v-model="form.description" type="textarea" :rows="2" placeholder="案件要点（选填）" />
@@ -176,7 +192,7 @@ import EmployeePicker from './EmployeePicker.vue'
 import { caseApi } from '../api'
 import { useCategoryStore } from '../store/category'
 import {
-  MEASURE_CHOICES, DEADLINE_LABEL_PRESETS, REMIND_DAY_PRESETS
+  MEASURE_CHOICES, REMIND_DAY_PRESETS, TIME_NODE_PRESETS
 } from '../utils/format'
 
 const categoryStore = useCategoryStore()
@@ -195,8 +211,10 @@ const uploadAction = '/api/files/upload'
 const uploadHeaders = { 'X-Token': localStorage.getItem('cf_token') || '' }
 
 // ---- 提前提醒：记住本人常用档位 ----
-// 注意：这一块必须写在 emptyForm() 之前——emptyForm 里会调 defaultRemindDays()，
-// 而 `const` 声明存在暂时性死区，写在后面会报 "Cannot access 'readUsed' before initialization"。
+// 注意：这一块必须写在节点行模型（emptyNodeRow / addNodeRow）之前——
+// addNodeRow 里会调 defaultRemindDays()，而 `const` 声明存在暂时性死区，
+// 写在后面会报 "Cannot access 'readUsed' before initialization"。
+// 2026-10-13：原先是 emptyForm() 在调，改为节点表后调用点变成 addNodeRow。
 const REMIND_USED_KEY = 'cf_remind_days_used'
 const readUsed = () => {
   try {
@@ -226,10 +244,6 @@ const emptyForm = () => ({
   filingNo: '',
   // 强制措施：'NONE'/空 = 未采取；具体取值见 MEASURE_CHOICES
   caseMeasure: 'NONE',
-  // 期限三件套：节点名称 / 日期（只到天）/ 提前提醒天数
-  deadlineLabel: '',
-  deadline: null,
-  remindDays: defaultRemindDays(),
   description: '',
   ownerId: null,
   memberIds: [],
@@ -238,29 +252,53 @@ const emptyForm = () => ({
 const form = ref(emptyForm())
 const isEdit = computed(() => props.caseId != null)
 
-// ---- 期限：按天记录 ----
-/** 日期部分单独用一个 ref（type=date），提交时补上 23:59:59 再交给后端 */
-const deadlineDay = ref('')
-/** 常用提示：把你自己的常用档位排在前面（用得多的先出现） */
-const remindHint = computed(() => {
-  const top = [...new Set(usedDays.value)].slice(-2).reverse()
-  if (!top.length) return '常用：提前 3 天 / 7 天'
-  return `你常用：${top.map((d) => '提前 ' + d + ' 天').join(' / ')}`
-})
+// ---- 重要时间节点（2026-10-13）----
+// 行模型：_k 是前端唯一键，后端不认它，提交前剔掉。
+let nodeSeq = 0
+const nodeRows = ref([])
+const emptyNodeRow = () => ({ _k: ++nodeSeq, nodeKey: '', nodeName: '', day: '', remindDays: null })
+const addNodeRow = () => {
+  // 新行沿用上一行的提醒档位：填提醒天数的动作通常是连续的几行
+  const prev = nodeRows.value[nodeRows.value.length - 1]
+  nodeRows.value.push({ ...emptyNodeRow(), remindDays: prev ? prev.remindDays : defaultRemindDays() })
+}
+const removeNodeRow = (i) => { nodeRows.value.splice(i, 1) }
+
+/** 记住本次用过的提醒档位，下次建案直接给到（"根据用户的常用选择"） */
 const recordRemindDays = (d) => {
   if (d == null) return
   usedDays.value = [...readUsed(), d].slice(-20)
   localStorage.setItem(REMIND_USED_KEY, JSON.stringify(usedDays.value))
 }
 
-/** 时间节点的输入建议：常用节点名称 + 允许自己手打 */
-const suggestLabel = (kw, cb) => {
-  const k = (kw || '').trim()
-  const list = DEADLINE_LABEL_PRESETS
-    .filter((t) => !k || t.includes(k))
-    .map((t) => ({ value: t }))
-  cb(list)
-}
+/** 把行模型转成后端要的形状：日期补 23:59:59、自定义名兜底、剔掉前端键 */
+const buildTimeNodes = () => nodeRows.value
+  .filter((r) => r.day)                       // 没选日期的半行跳过，不打断建案
+  .map((r) => ({
+    nodeKey: r.nodeKey || null,
+    nodeName: r.nodeKey ? null : (r.nodeName || '').trim(),
+    nodeTime: `${r.day} 23:59:59`,
+    remindDays: r.remindDays || null
+  }))
+
+// ---- 嫌疑人（2026-10-13 建案时一并录入）----
+let suspectSeq = 0
+const suspectRows = ref([])
+const addSuspectRow = () => suspectRows.value.push({
+  _k: ++suspectSeq, name: '', gender: '', idCard: '', phone: '', address: ''
+})
+const removeSuspectRow = (i) => { suspectRows.value.splice(i, 1) }
+
+/** 只取填了姓名的行——后端也这么收，但前端先滤一遍，少传垃圾 */
+const buildSuspects = () => suspectRows.value
+  .filter((r) => (r.name || '').trim())
+  .map((r) => ({
+    name: (r.name || '').trim(),
+    gender: r.gender || null,
+    idCard: (r.idCard || '').trim() || null,
+    phone: (r.phone || '').trim() || null,
+    address: (r.address || '').trim() || null
+  }))
 
 // ---- 强制措施：是否采取 ----
 const measureTaken = ref(false)
@@ -287,7 +325,8 @@ watch(() => props.modelValue, async (v) => {
   formCascade.value = []
   fileList.value = []
   assignNow.value = false
-  deadlineDay.value = ''
+  nodeRows.value = []
+  suspectRows.value = []
   measureTaken.value = false
   if (props.caseId) {
     const d = await caseApi.detail(props.caseId)
@@ -306,10 +345,6 @@ watch(() => props.modelValue, async (v) => {
     const m = (d.caseMeasure || '').toUpperCase()
     measureTaken.value = !!m && m !== 'NONE'
     form.value.caseMeasure = measureTaken.value ? m : 'NONE'
-    // 期限：按天回显（后端带时分，这里只取日期部分）
-    deadlineDay.value = (d.deadline || '').slice(0, 10)
-    form.value.deadlineLabel = d.deadlineLabel || ''
-    form.value.remindDays = d.remindDays || null
     form.value.description = d.description || ''
   }
 })
@@ -354,19 +389,30 @@ const submit = async () => {
   loading.value = true
   try {
     const payload = { ...form.value }
-    // 期限按天：把选到的日期落在该日 23:59:59。
-    // 不补这一下的话，当天 00:00 就已经小于此刻，整天都会被算成"已逾期"。
-    payload.deadline = deadlineDay.value ? `${deadlineDay.value} 23:59:59` : null
     if (!assignNow.value) {
       payload.ownerId = null
       payload.memberIds = []
     }
-    // 记住这次选的提醒档位，下次建案直接给到（"根据用户的常用选择"）
-    recordRemindDays(payload.remindDays)
     if (props.caseId) {
+      // 编辑：期限与嫌疑人一律不动。
+      // 时间节点改成独立面板管理（有单条快照与撤回），这里再提交会覆盖。
+      // 同时把期限三列显式清空——节点表已是唯一真源，
+      // 留着旧值会让「列表显示的期限」与「节点面板里的节点」各说各话。
+      payload.deadline = null
+      payload.deadlineLabel = null
+      payload.remindDays = null
+      payload.clearDeadline = true
       await caseApi.update(props.caseId, payload)
     } else {
-      await caseApi.create(payload)
+      // 新建：把节点与嫌疑人随案件一并落库
+      const nodes = buildTimeNodes()
+      // 记住这次选的提醒档位，下次建案直接给到（"根据用户的常用选择"）
+      nodeRows.value.forEach((r) => recordRemindDays(r.remindDays))
+      await caseApi.create({
+        ...payload,
+        timeNodes: nodes,
+        suspects: buildSuspects()
+      })
     }
     ElMessage.success(props.caseId ? '已保存' : '案件已创建')
     visible.value = false

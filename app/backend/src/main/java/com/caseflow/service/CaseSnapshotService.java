@@ -7,6 +7,8 @@ import com.caseflow.entity.CaseFile;
 import com.caseflow.entity.CaseInfo;
 import com.caseflow.entity.CasePlan;
 import com.caseflow.entity.CaseSuspect;
+import com.caseflow.entity.CaseTimeNode;
+import com.caseflow.mapper.CaseTimeNodeMapper;
 import com.caseflow.entity.CaseTodo;
 import com.caseflow.entity.OrgEmployee;
 import com.caseflow.exception.BizException;
@@ -61,6 +63,8 @@ public class CaseSnapshotService {
     @Resource
     private CaseTodoMapper todoMapper;
     @Resource
+    private CaseTimeNodeMapper timeNodeMapper;
+    @Resource
     private EmployeeService employeeService;
     @Resource
     private ObjectMapper objectMapper;
@@ -98,6 +102,8 @@ public class CaseSnapshotService {
                 .eq(CasePlan::getCaseId, caseId).orderByAsc(CasePlan::getId)));
         s.setTodos(todoMapper.selectList(new LambdaQueryWrapper<CaseTodo>()
                 .eq(CaseTodo::getCaseId, caseId).orderByAsc(CaseTodo::getId)));
+        s.setTimeNodes(timeNodeMapper.selectList(new LambdaQueryWrapper<CaseTimeNode>()
+                .eq(CaseTimeNode::getCaseId, caseId).orderByAsc(CaseTimeNode::getId)));
         return toJson(s);
     }
 
@@ -130,6 +136,7 @@ public class CaseSnapshotService {
             assigneeMapper.delete(new LambdaQueryWrapper<CaseAssignee>().eq(CaseAssignee::getCaseId, caseId));
             suspectMapper.delete(new LambdaQueryWrapper<CaseSuspect>().eq(CaseSuspect::getCaseId, caseId));
             planMapper.delete(new LambdaQueryWrapper<CasePlan>().eq(CasePlan::getCaseId, caseId));
+            timeNodeMapper.delete(new LambdaQueryWrapper<CaseTimeNode>().eq(CaseTimeNode::getCaseId, caseId));
             todoMapper.delete(new LambdaQueryWrapper<CaseTodo>().eq(CaseTodo::getCaseId, caseId));
             caseMapper.deleteById(caseId);
             return;
@@ -152,6 +159,7 @@ public class CaseSnapshotService {
         }
         restoreAssignees(caseId, snap.getAssignees());
         restoreSuspects(caseId, snap.getSuspects());
+        restoreTimeNodes(caseId, snap.getTimeNodes());
         restorePlans(caseId, snap.getPlans());
         restoreTodos(caseId, snap.getTodos());
         alignSourceFile(caseId, info.getSourceFileId(), currentSourceFileId);
@@ -222,6 +230,29 @@ public class CaseSnapshotService {
                 suspectMapper.insert(s);
             } else {
                 suspectMapper.insertWithId(s);
+            }
+        }
+    }
+
+    /**
+     * 重要时间节点按快照整体替换：先清空本案节点，再按快照逐行写回（含原有主键）。
+     *
+     * <p>快照里带的是改动前后的完整节点列表，所以撤回「新增/删除/改节点」都精确还原。
+     * {@code case_info} 的期限三列由快照里的 {@code info} 一并还原（它们本来就在
+     * 案件本体的快照里），无需在这里额外同步。
+     */
+    private void restoreTimeNodes(Long caseId, List<CaseTimeNode> snap) {
+        timeNodeMapper.delete(new LambdaQueryWrapper<CaseTimeNode>().eq(CaseTimeNode::getCaseId, caseId));
+        if (snap == null || snap.isEmpty()) {
+            // 快照里没有节点：不碰case_info 三列——它们可能是手工填的，与节点表无关
+            return;
+        }
+        for (CaseTimeNode n : snap) {
+            n.setCaseId(caseId);
+            if (n.getId() == null) {
+                timeNodeMapper.insert(n);
+            } else {
+                timeNodeMapper.insertWithId(n);
             }
         }
     }
@@ -342,6 +373,7 @@ public class CaseSnapshotService {
         compare(out, "owner", "主办人", names(b, "OWNER"), names(a, "OWNER"));
         compare(out, "members", "协办人", names(b, "MEMBER"), names(a, "MEMBER"));
         compare(out, "suspects", "嫌疑人", suspectNames(b), suspectNames(a));
+        compare(out, "timeNodes", "时间节点", timeNodeNames(b), timeNodeNames(a));
         compare(out, "files", "附件", fileNames(b), fileNames(a));
         return out;
     }
@@ -429,6 +461,17 @@ public class CaseSnapshotService {
             return null;
         }
         return s.getSuspects().stream().map(CaseSuspect::getName).collect(Collectors.joining("、"));
+    }
+
+    /** 快照里的时间节点（名称+日期），用于日志摘要「改了什么」 */
+    private String timeNodeNames(CaseSnapshot s) {
+        if (s == null || s.getTimeNodes() == null || s.getTimeNodes().isEmpty()) {
+            return null;
+        }
+        return s.getTimeNodes().stream()
+                .map(n -> n.getNodeName() + "("
+                        + (n.getNodeTime() == null ? "-" : n.getNodeTime().toLocalDate().toString()) + ")")
+                .collect(Collectors.joining("、"));
     }
 
     private String dict(String type, String code) {

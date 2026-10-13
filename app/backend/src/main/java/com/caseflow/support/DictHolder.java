@@ -39,6 +39,13 @@ public class DictHolder {
         DICT.put("ROLE", map("CHIEF", "所长", "DEPUTY_CHIEF", "副所长",
                 "LAW_OFFICER", "法制员", "STAFF", "普通民警", "BOSS", "系统管理员"));
         DICT.put("AUDIT_STATUS", map("0", "待审核", "1", "已通过", "2", "已驳回"));
+        // 重要时间节点类型（2026-10-13）：一份案件有多个关键时间点，
+        // 预设类型便于按节点筛选与统计；不在枚举内的走自定义名称（nodeKey 留空）。
+        DICT.put("TIME_NODE", map("ACCEPT", "受案时间", "FILING", "立案时间",
+                "DETAIN_END", "刑事拘留期限届满", "ARREST_END", "逮捕期限届满",
+                "BAIL_END", "取保候审期限届满", "RESIDENCE_END", "监视居住期限届满",
+                "SUPP_PROBE", "补充侦查期限届满", "CUSTODY_CHANGE", "变更强制措施时间",
+                "OTHER", "其他时间节点"));
     }
 
     private static Map<String, String> map(String... kv) {

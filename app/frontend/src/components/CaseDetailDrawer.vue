@@ -72,6 +72,49 @@
       <!-- 案件待办（含领导意见）：提意见/定级/落实反馈都在这一个面板，避免同一事项两处展示 -->
       <CaseTodoPanel :case-id="detail.id" :anchor="anchor" style="margin-top: 12px" @changed="reload" />
 
+      <!-- 重要时间节点（2026-10-13）：增删改都在这里，与建案弹窗的批量录入互补。
+           改完由后端 syncPrimary 派生回写 case_info 的期限三列，
+           列表「截止期限」/到期提醒随之变化，不需要重新配置任何东西。 -->
+      <div class="cf-panel" style="margin-top: 12px">
+        <div class="cf-panel__head">
+          <span>重要时间节点（{{ detail.timeNodes?.length || 0 }} 个）</span>
+          <el-button link type="primary" @click="openNode()">新增节点</el-button>
+        </div>
+        <div class="cf-tscroll">
+          <el-table :data="detail.timeNodes || []" size="small">
+            <el-table-column label="节点" min-width="180">
+              <template #default="{ row }">
+                {{ row.nodeName }}
+                <el-tag v-if="row.isPrimary" size="small" type="warning" effect="plain">列表显示</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="日期" width="160">
+              <template #default="{ row }">
+                {{ (row.nodeTimeText || '').slice(0, 10) }}
+                <span v-if="row.daysLeft != null"
+                  :style="{ color: row.daysLeft < 0 ? '#c0392b' : '#5a6472', marginLeft: '4px' }">
+                  {{ row.daysLeft < 0 ? `逾期 ${-row.daysLeft} 天` : `剩 ${row.daysLeft} 天` }}
+                </span>
+              </template>
+            </el-table-column>
+            <el-table-column label="提前提醒" width="100">
+              <template #default="{ row }">{{ row.remindDays ? `提前 ${row.remindDays} 天` : '不提醒' }}</template>
+            </el-table-column>
+            <el-table-column label="操作" width="90" align="right">
+              <template #default="{ row }">
+                <el-button link type="primary" @click="openNode(row)">修改</el-button>
+                <el-button link type="danger" @click="removeNode(row)">删除</el-button>
+              </template>
+            </el-table-column>
+            <template #empty><span class="cf-muted">暂无时间节点</span></template>
+          </el-table>
+        </div>
+        <div v-if="detail.timeNodes?.length > 1" class="cf-muted"
+          style="font-size: 12px; margin-top: 6px">
+          多个节点时，列表「截止期限」与到期提醒只认<b>最近的一个</b>。
+        </div>
+      </div>
+
       <div class="cf-panel" style="margin-top: 12px">
         <div class="cf-panel__head">
           <span>嫌疑人（{{ detail.suspects?.length || 0 }} 人）</span>
@@ -221,6 +264,48 @@
     </template>
   </el-drawer>
 
+  <!-- 时间节点录入：新增与修改共用（带 nodeId 即为修改） -->
+  <el-dialog
+    v-model="nodeVisible"
+    :title="nodeForm.id ? '修改时间节点' : '新增时间节点'"
+    width="520px"
+    destroy-on-close
+    class="cf-dialog"
+  >
+    <el-form :model="nodeForm" label-width="92px">
+      <el-form-item label="节点类型">
+        <el-select v-model="nodeForm.nodeKey" clearable placeholder="自定义（手动填名称）" style="width: 100%">
+          <el-option v-for="p in TIME_NODE_PRESETS" :key="p.value" :label="p.label" :value="p.value" />
+        </el-select>
+        <div class="cf-form-tip">选预设类型时名称自动用标准名，便于按类型筛选统计</div>
+      </el-form-item>
+      <el-form-item v-if="!nodeForm.nodeKey" label="节点名称" required>
+        <el-input v-model="nodeForm.nodeName" placeholder="如：移送起诉期限" maxlength="64" />
+      </el-form-item>
+      <el-form-item label="节点日期" required>
+        <el-date-picker
+          v-model="nodeDay"
+          type="date"
+          value-format="YYYY-MM-DD"
+          placeholder="选择日期"
+          style="width: 100%"
+        />
+      </el-form-item>
+      <el-form-item label="提前提醒">
+        <el-select v-model="nodeForm.remindDays" placeholder="不提醒" clearable style="width: 100%">
+          <el-option v-for="d in REMIND_DAY_PRESETS" :key="d" :label="`提前 ${d} 天`" :value="d" />
+        </el-select>
+      </el-form-item>
+      <el-form-item label="备注">
+        <el-input v-model="nodeForm.remark" type="textarea" :rows="2" maxlength="255" />
+      </el-form-item>
+    </el-form>
+    <template #footer>
+      <el-button @click="nodeVisible = false">取消</el-button>
+      <el-button type="primary" :loading="nodeSaving" @click="submitNode">保存</el-button>
+    </template>
+  </el-dialog>
+
   <!-- 嫌疑人录入：手机端全屏，避免窄屏下表单折行错位 -->
   <el-dialog
     v-model="suspectVisible"
@@ -269,10 +354,11 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElCollapseTransition } from 'element-plus'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { caseApi, fileApi, suspectApi, logApi, watchApi } from '../api'
+import { caseApi, fileApi, suspectApi, timeNodeApi, logApi, watchApi } from '../api'
 import CaseTodoPanel from './CaseTodoPanel.vue'
 import FocusStar from './FocusStar.vue'
-import { STATUS_META, PRIORITY_META, SOURCE_META, DUE_META, CASE_TYPE_META, MEASURE_META, dueText } from '../utils/format'
+import { STATUS_META, PRIORITY_META, SOURCE_META, DUE_META, CASE_TYPE_META, MEASURE_META, dueText,
+  TIME_NODE_PRESETS, REMIND_DAY_PRESETS } from '../utils/format'
 import { useUserStore } from '../store/user'
 import { useEventStore } from '../store/events'
 
@@ -451,6 +537,68 @@ const submitSuspect = async () => {
 const removeSuspect = async (row) => {
   await ElMessageBox.confirm(`确认删除嫌疑人「${row.name}」？`, '提示', { type: 'warning' })
   await suspectApi.remove(row.id)
+  ElMessage.success('已删除')
+  await reload()
+  emit('done')
+}
+
+// ---- 重要时间节点（2026-10-13）----
+const nodeVisible = ref(false)
+const nodeSaving = ref(false)
+/** 日期单独一个 ref（type=date），提交时补 23:59:59 */
+const nodeDay = ref('')
+const emptyNode = () => ({ id: null, nodeKey: '', nodeName: '', remindDays: null, remark: '' })
+const nodeForm = ref(emptyNode())
+
+/** 不传 row = 新增；传 row = 修改（回显后端给的标准名，避免用户改写成别名） */
+const openNode = (row) => {
+  nodeForm.value = row
+    ? { id: row.id, nodeKey: row.nodeKey || '', nodeName: row.nodeName || '', remindDays: row.remindDays || null, remark: row.remark || '' }
+    : emptyNode()
+  nodeDay.value = row ? (row.nodeTime || '').slice(0, 10) : ''
+  nodeVisible.value = true
+}
+
+const submitNode = async () => {
+  if (!nodeDay.value) {
+    ElMessage.warning('请选择节点日期')
+    return
+  }
+  // 自定义节点必须给名字；预设类型不需要（后端会填标准名）
+  if (!nodeForm.value.nodeKey && !(nodeForm.value.nodeName || '').trim()) {
+    ElMessage.warning('请填写节点名称，或选择一个预设节点类型')
+    return
+  }
+  nodeSaving.value = true
+  try {
+    // 按天选要落在当天 23:59:59，否则当天 00:00 就被算成"已逾期"
+    const payload = {
+      nodeKey: nodeForm.value.nodeKey || null,
+      nodeName: nodeForm.value.nodeKey ? null : (nodeForm.value.nodeName || '').trim(),
+      nodeTime: `${nodeDay.value} 23:59:59`,
+      remindDays: nodeForm.value.remindDays || null,
+      remark: nodeForm.value.remark || null
+    }
+    if (nodeForm.value.id) {
+      await timeNodeApi.update(nodeForm.value.id, payload)
+    } else {
+      await timeNodeApi.add(detail.value.id, payload)
+    }
+    ElMessage.success(nodeForm.value.id ? '时间节点已修改' : '时间节点已添加')
+    nodeVisible.value = false
+    await reload()
+    emit('done')
+  } finally {
+    nodeSaving.value = false
+  }
+}
+
+const removeNode = async (row) => {
+  await ElMessageBox.confirm(
+    `确认删除时间节点「${row.nodeName}」？${(detail.value.timeNodes?.length || 0) > 1
+      ? '删除后列表显示的截止期限会自动改为最近的其他节点。' : ''}`,
+    '提示', { type: 'warning' })
+  await timeNodeApi.remove(row.id)
   ElMessage.success('已删除')
   await reload()
   emit('done')

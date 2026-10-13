@@ -175,6 +175,14 @@ export const suspectApi = {
   remove: (id) => http.delete(`/cases/suspects/${id}`)
 }
 
+/** 重要时间节点（2026-10-13）：一份案件多个关键时间点 */
+export const timeNodeApi = {
+  list: (caseId) => http.get(`/cases/${caseId}/time-nodes`),
+  add: (caseId, data) => http.post(`/cases/${caseId}/time-nodes`, data),
+  update: (id, data) => http.put(`/cases/time-nodes/${id}`, data),
+  remove: (id) => http.delete(`/cases/time-nodes/${id}`)
+}
+
 export const categoryApi = {
   tree: () => http.get('/case-categories/tree'),
   list: () => http.get('/case-categories'),

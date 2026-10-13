@@ -92,6 +92,43 @@ public class SuspectService {
         return listOf(c.getId());
     }
 
+    /**
+     * 建案时随案件一并录入嫌疑人（2026-10-13）。
+     *
+     * <p><b>与 {@link #add} 的区别：不写日志、不单独打快照</b>。
+     * 建案本身已有一条 {@code CASE.CREATE} 日志且 after 快照里带全部嫌疑人；
+     * 若这里再调 {@code add()}，会多出一条 {@code SUSPECT_ADD} 日志占据
+     * 「案件最新一步」，导致用户点撤回时撤掉的是嫌疑人而不是建案本身——
+     * 与用户的直觉相反。
+     *
+     * <p>没填完的半行（无姓名）直接跳过，不报错打断建案。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public List<SuspectVO> addAllQuietly(Long caseId, List<SuspectSaveRequest> reqs) {
+        if (reqs == null || reqs.isEmpty()) {
+            return listOf(caseId);
+        }
+        LocalDateTime now = LocalDateTime.now();
+        for (SuspectSaveRequest r : reqs) {
+            if (r == null || !StringUtils.hasText(r.getName())) {
+                continue;
+            }
+            CaseSuspect s = new CaseSuspect();
+            s.setCaseId(caseId);
+            s.setName(r.getName().trim());
+            s.setGender(normGender(r.getGender()));
+            s.setIdCard(r.getIdCard());
+            s.setPhone(r.getPhone());
+            s.setAddress(r.getAddress());
+            s.setRemark(r.getRemark());
+            s.setCreatedBy(AuthContext.userId());
+            s.setCreatedAt(now);
+            s.setUpdatedAt(now);
+            suspectMapper.insert(s);
+        }
+        return listOf(caseId);
+    }
+
     @Transactional(rollbackFor = Exception.class)
     public List<SuspectVO> update(SuspectSaveRequest req) {
         if (req.getId() == null) {

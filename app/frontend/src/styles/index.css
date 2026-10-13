@@ -1048,6 +1048,33 @@ html { scrollbar-gutter: stable; }
 }
 .cf-form-tip { margin-top: var(--cf-gap-1); }
 
+/* ---- 建案弹窗里的「多行录入区」（重要时间节点 / 嫌疑人，2026-10-13）----
+   两块都用同一套容器样式：标题行左标题右「+添加」按钮，行用栅格排列。
+   不用 el-table 是因为它在 900px 弹窗里会挤出一堆横向滚动条，
+   而这里每行只有 4~6 个字段，flex 换行更好读。 */
+.cf-form-block {
+  margin: 4px 0 12px 0;
+  padding: 8px 10px 10px 10px;
+  background: #f7f9fc;
+  border: 1px solid #e3e9f2;
+  border-radius: var(--cf-radius-sm);
+}
+.cf-form-block-head {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 13px; font-weight: 600; color: #1b2430;
+  margin-bottom: 6px;
+}
+.cf-form-block-empty { font-size: 12px; padding: 4px 0 2px 0; }
+.cf-form-node-row,
+.cf-form-suspect-row {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.cf-form-node-row:last-child,
+.cf-form-suspect-row:last-child { margin-bottom: 0; }
+/* 删除按钮推到行末，多余宽度由前面的控件吃掉 */
+.cf-form-node-del { margin-left: auto; }
+
 /* ---- 面板头：标题与操作区左右对齐基线，高一致 ---- */
 .cf-panel__head { gap: var(--cf-gap-3); }
 .cf-panel__head > span:first-child { font-size: 14px; }

@@ -50,6 +50,8 @@ public class OperationLogService {
             "CREATE", "UPDATE", "ASSIGN", "STATUS", "DELETE", "UNDO",
             // 嫌疑人增删改：快照里带嫌疑人列表，撤回即整体还原
             "SUSPECT_ADD", "SUSPECT_UPDATE", "SUSPECT_DELETE",
+            // 重要时间节点增删改：快照里带节点列表，撤回即整体还原
+            "TIME_NODE_ADD", "TIME_NODE_UPDATE", "TIME_NODE_DELETE",
             // 侦查计划增删改/完成：快照里带计划列表，撤回即整体还原
             "PLAN_ADD", "PLAN_UPDATE", "PLAN_DONE", "PLAN_CANCEL",
             // 侦查进度流转 / 强制措施登记：快照带案件新字段，撤回即回滚
@@ -353,6 +355,9 @@ public class OperationLogService {
             case "CASE.DELETE":   return "删除案件";
             case "CASE.UNDO":     return "撤回操作";
             case "CASE.SUSPECT_ADD":    return "新增嫌疑人";
+            case "CASE.TIME_NODE_ADD":    return "新增时间节点";
+            case "CASE.TIME_NODE_UPDATE": return "修改时间节点";
+            case "CASE.TIME_NODE_DELETE": return "删除时间节点";
             case "CASE.SUSPECT_UPDATE": return "修改嫌疑人";
             case "CASE.SUSPECT_DELETE": return "删除嫌疑人";
             case "CASE.PLAN_ADD":    return "新增侦查计划";

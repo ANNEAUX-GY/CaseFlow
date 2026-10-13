@@ -5,6 +5,7 @@ import com.caseflow.entity.CaseFile;
 import com.caseflow.entity.CaseInfo;
 import com.caseflow.entity.CasePlan;
 import com.caseflow.entity.CaseSuspect;
+import com.caseflow.entity.CaseTimeNode;
 import com.caseflow.entity.CaseTodo;
 import lombok.Data;
 
@@ -27,6 +28,8 @@ public class CaseSnapshot implements Serializable {
     private List<CaseAssignee> assignees;
     private List<CaseFile> files;
     private List<CaseSuspect> suspects;
+    /** 重要时间节点（2026-10-13）：节点增删改随快照一并还原 */
+    private List<CaseTimeNode> timeNodes;
     private List<CasePlan> plans;
     /** 案件待办（to do）。佐证材料不在此列——它是 case_file，随 files 一并快照。 */
     private List<CaseTodo> todos;

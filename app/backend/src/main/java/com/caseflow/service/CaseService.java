@@ -131,6 +131,8 @@ public class CaseService {
     private com.caseflow.mapper.CaseSuspectMapper suspectMapper;
     @Resource
     private SuspectService suspectService;
+    @Resource
+    private TimeNodeService timeNodeService;
     /** 删案件时连信箱里的信件一起清（否则「查看案件」点进去是条死链） */
     @Resource
     private NotificationService notificationService;
@@ -436,6 +438,9 @@ public class CaseService {
             List<SuspectVO> fullSuspects = suspectService.listOf(c.getId());
             vo.setSuspects(fullSuspects);
             vo.setSuspectCount(fullSuspects == null ? 0 : fullSuspects.size());
+            // 重要时间节点（2026-10-13）：只在详情模式整份带出，
+            // 列表模式不带——一列里塞不进多个节点，且列表只认主节点（三列已派生回写）
+            vo.setTimeNodes(timeNodeService.listOf(c.getId()));
         }
         return vo;
     }
@@ -563,10 +568,21 @@ public class CaseService {
         // 免得表单一去掉该字段、保存时就把历史值抹成 null。列保留只为看得见老数据。
         c.setDescription(req.getDescription());
         c.setPriority(StringUtils.hasText(req.getPriority()) ? req.getPriority() : "NORMAL");
-        c.setDeadline(normalizeDeadline(req.getDeadline()));
-        // 期限节点名称与提前提醒天数：由办案人自己填（受案时间、变更羁押期限时间…）
-        c.setDeadlineLabel(StringUtils.hasText(req.getDeadlineLabel()) ? req.getDeadlineLabel().trim() : null);
-        c.setRemindDays(req.getRemindDays() != null && req.getRemindDays() > 0 ? req.getRemindDays() : null);
+        // 期限三列（2026-10-13起不再直接采信表单）：
+        // 时间节点表是唯一真源，这里只把表单填的那一个**临时**写到案件表，
+        // 待节点落库后由 TimeNodeService.syncPrimary 按「最近节点」派生回写。
+        // 换句话说：多节点时以节点表为准，只填单个时值与原来完全一致。
+        if (Boolean.TRUE.equals(req.getClearDeadline())) {
+            // 前端已废弃这三项（期限改由时间节点面板管理）：置 null，
+            // 由下面的 LambdaUpdateWrapper 显式写 null（updateById 会跳过 null）
+            c.setDeadline(null);
+            c.setDeadlineLabel(null);
+            c.setRemindDays(null);
+        } else {
+            c.setDeadline(normalizeDeadline(req.getDeadline()));
+            c.setDeadlineLabel(StringUtils.hasText(req.getDeadlineLabel()) ? req.getDeadlineLabel().trim() : null);
+            c.setRemindDays(req.getRemindDays() != null && req.getRemindDays() > 0 ? req.getRemindDays() : null);
+        }
         // 强制措施：建案表单的「是否采取强制措施」。
         // 只在前端明确传值时才写（否 = NONE → 存 null），留空表示不动——
         // 否则编辑案件会把盯办模块登记好的措施（含期限）抹掉。
@@ -631,6 +647,15 @@ public class CaseService {
                     .set(CaseInfo::getMeasureDate, null)
                     .set(CaseInfo::getDetainDeadline, null));
         }
+        // 期限三列显式清空（2026-10-13）：同上，updateById 跳过 null，必须单独 update。
+        // 节点表已是唯一真源，案件表留着旧期限会让列表与节点面板显示不一致。
+        if (!isNew && Boolean.TRUE.equals(req.getClearDeadline())) {
+            caseMapper.update(null, new LambdaUpdateWrapper<CaseInfo>()
+                    .eq(CaseInfo::getId, c.getId())
+                    .set(CaseInfo::getDeadline, null)
+                    .set(CaseInfo::getDeadlineLabel, null)
+                    .set(CaseInfo::getRemindDays, null));
+        }
 
         // 创建时直接指派
         if (req.getOwnerId() != null || (req.getMemberIds() != null && !req.getMemberIds().isEmpty())) {
@@ -641,9 +666,21 @@ public class CaseService {
             ar.setNote(req.getAssignNote());
             assign(ar);
         }
+        // 建案时一并录入嫌疑人与重要时间节点（2026-10-13）
+        //
+        // 两者都是**选填**：空数组直接跳过，不阻断建案。
+        // 放在指派之后、快照之前——快照要把这些一起带上，
+        // 否则撤回「建案」后案件还在、嫌疑人和节点却留在库里成了孤儿。
+        if (req.getSuspects() != null && !req.getSuspects().isEmpty()) {
+            suspectService.addAllQuietly(c.getId(), req.getSuspects());
+        }
+        if (req.getTimeNodes() != null && !req.getTimeNodes().isEmpty()) {
+            timeNodeService.addAllQuietly(c.getId(), req.getTimeNodes());
+        }
         // 建案不铺任何任务（2026-10-12）：阶段任务 = 案件待办，
         // 由领导提意见派生，不在系统里另造一套"标准任务清单"与待办并行。
-        // 快照写在最后：这样 after 里连指派关系一起带上，撤回时能整体回到操作前
+        // 快照写在最后：这样 after 里连指派关系、嫌疑人、时间节点一起带上，
+        // 撤回时能整体回到操作前
         String after = snapshotService.capture(c.getId());
         logService.log("CASE", isNew ? "CREATE" : "UPDATE", "CASE", c.getId(),
                 (isNew ? "创建案件：" : "更新案件：") + c.getName(), beforeSnapshot, after);

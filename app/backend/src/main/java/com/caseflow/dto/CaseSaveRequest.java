@@ -78,4 +78,34 @@ public class CaseSaveRequest {
     private java.util.List<Long> memberIds;
 
     private String assignNote;
+
+    /**
+     * 期限三列是否已被前端显式废弃（2026-10-13）。
+     *
+     * <p><b>为什么需要这个开关</b>：MyBatis-Plus 的 {@code updateById} 会<b>跳过 null 字段</b>，
+     * 所以前端把 {@code deadline=null} 传过来时，库里旧值不会被清掉。
+     * 而时间节点表成了唯一真源后，案件表里残留的旧期限会与节点面板自相矛盾
+     * （列表显示一个日期、节点面板里另一个）。
+     *
+     * <p>有了这个标志，服务端就改用 {@code LambdaUpdateWrapper} 显式 set null，
+     * 把三列真正清空。默认 false = 老前端不传此字段，行为与从前完全一致。
+     */
+    private Boolean clearDeadline = false;
+
+    /**
+     * 嫌疑人（2026-10-13 建案时一并录入，选填）。
+     *
+     * <p>只用于<b>新建</b>：编辑案件走详情页的嫌疑人面板逐条增删改
+     * （那边有单条快照与撤回，粒度更细）。建案时没有"上一条"可撤，
+     * 整批进 after 快照即可。
+     */
+    private java.util.List<SuspectSaveRequest> suspects;
+
+    /**
+     * 重要时间节点（2026-10-13 建案时一并录入，选填）。
+     *
+     * <p>只用于<b>新建</b>。落库后由TimeNodeService.syncPrimary 把
+     * 「最近节点」派生回写 case_info 的期限三列，于是列表/提醒/统计照常工作。
+     */
+    private java.util.List<TimeNodeSaveRequest> timeNodes;
 }

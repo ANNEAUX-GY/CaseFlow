@@ -14,6 +14,7 @@ import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.Timestamp;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -190,6 +191,7 @@ public class SchemaMigration implements ApplicationRunner {
             seedCategories(conn, existing);
             backfillFeedbackDeclare(conn, existing);
             retireStdPlanTasks(conn, existing);
+            migrateSingleDeadlineToTimeNodes(conn, existing);
         } catch (Exception e) {
             // 不阻断启动：库里可能只有只读权限。缺列的表现是「撤回」功能不可用，
             // 报错信息会明确指出，不会静默损坏数据。
@@ -228,6 +230,118 @@ public class SchemaMigration implements ApplicationRunner {
         } catch (Exception e) {
             log.warn("[SchemaMigration] 标准任务作废跳过：{}", e.getMessage());
         }
+    }
+
+    /**
+     * 一次性迁移：把 case_info 上的单个期限搬成一条「重要时间节点」（2026-10-13）。
+     *
+     * <p><b>背景</b>：原先一份案件只能挂一个期限（{@code deadline_label /
+     * deadline / remind_days} 三列），实际办案要盯受案、立案、拘留期限届满、
+     * 取保期限届满……所以新增 {@code case_time_node} 承载多节点。
+     *
+     * <p><b>为什么不删 case_info 三列</b>：列表截止期限、到期提醒、看板逾期、
+     * 到期分桶、排序共约 140 处引用它们，且 {@code ORDER BY deadline} 靠索引。
+     * 改为「节点表是真源、三列是主节点的派生视图」，由
+     * {@code TimeNodeService.syncPrimary} 维护，老逻辑一行不改。
+     *
+     * <p><b>节点类型怎么定</b>：存量数据的节点名是用户自己填的（如"受案时间"、
+     * "变更羁押期限时间"），按名字匹配已知预设名以归类；匹配不上的归为
+     * 自定义（{@code node_key=NULL}），保留原名。
+     *
+     * <p><b>幂等</b>：只处理"本案件在 case_time_node 里一条都没有"的行。
+     * 这样用户手动加过节点的案件不会被迁移覆盖，重复启动也不会产生重复行。
+     */
+    private void migrateSingleDeadlineToTimeNodes(Connection conn, Set<String> existing) {
+        if (!existing.contains("case_info.deadline")
+                || !existing.contains("case_info.deadline_label")) {
+            return;
+        }
+        String sql = "SELECT id, deadline, deadline_label, remind_days FROM case_info "
+                + "WHERE deadline IS NOT NULL AND id NOT IN "
+                + "(SELECT DISTINCT case_id FROM case_time_node)";
+        String ins = "INSERT INTO case_time_node "
+                + "(case_id, node_key, node_name, node_time, remind_days, is_primary, sort) "
+                + "VALUES (?,?,?,?,?,1,0)";
+        // 用 PreparedStatement 而不是拼字符串：java.sql.Timestamp.toString() 会输出
+        // "2026-09-24 18:00:00.0"（带 .0 小数秒），直接拼进 SQL 会被 H2 判为语法错误。
+        // 顺带也避免节点名里带单引号时 SQL 被打断。
+        try (Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery(sql);
+             PreparedStatement ps = conn.prepareStatement(ins)) {
+            while (rs.next()) {
+                Long caseId = rs.getLong("id");
+                Timestamp ts = rs.getTimestamp("deadline");
+                String label = rs.getString("deadline_label");
+                int remind = rs.getInt("remind_days");
+                Integer remindDays = rs.wasNull() ? null : remind;
+                // 节点名兜底：原数据没填名称就用「截止期限」，避免 node_name 为空
+                String name = (label == null || label.trim().isEmpty()) ? "截止期限" : label.trim();
+                String key = matchNodeKey(name);
+                ps.setLong(1, caseId);
+                if (key == null) {
+                    ps.setNull(2, java.sql.Types.VARCHAR);
+                } else {
+                    ps.setString(2, key);
+                }
+                ps.setString(3, name);
+                ps.setTimestamp(4, ts);
+                if (remindDays == null) {
+                    ps.setNull(5, java.sql.Types.INTEGER);
+                } else {
+                    ps.setInt(5, remindDays);
+                }
+                ps.addBatch();
+            }
+            // executeBatch 返回各批次的更新条数；全为 0 说明没有可迁移的行
+            int[] counts = ps.executeBatch();
+            int total = 0;
+            for (int n : counts) {
+                total += n;
+            }
+            if (total > 0) {
+                log.info("[SchemaMigration] 已把 {} 个案件的单个期限迁移为重要时间节点"
+                        + "（case_info 三列保留，作为主节点的派生视图）", total);
+            }
+        } catch (Exception e) {
+            log.warn("[SchemaMigration] 单期限迁移为时间节点跳过：{}", e.getMessage());
+        }
+    }
+
+    /**
+     * 按节点名匹配已知预设类型，匹配不上返回 null（自定义节点）。
+     *
+     * <p>刻意用「包含匹配」而非全等：存量数据里用户常写成"刑事拘留期限届满日"、
+     * "取保候审期限届满" 这类带后缀的说法。
+     */
+    private static String matchNodeKey(String name) {
+        if (name == null) {
+            return null;
+        }
+        if (name.contains("受案")) {
+            return "ACCEPT";
+        }
+        if (name.contains("立案")) {
+            return "FILING";
+        }
+        if (name.contains("监视居住") || name.contains("监居")) {
+            return "RESIDENCE_END";
+        }
+        if (name.contains("取保")) {
+            return "BAIL_END";
+        }
+        if (name.contains("补充侦查")) {
+            return "SUPP_PROBE";
+        }
+        if (name.contains("逮捕")) {
+            return "ARREST_END";
+        }
+        if (name.contains("拘留")) {
+            return "DETAIN_END";
+        }
+        if (name.contains("变更") || name.contains("强制措施")) {
+            return "CUSTODY_CHANGE";
+        }
+        return null;
     }
 
     /** 分类体系升级回填：旧 category 存的是大类词（如"刑事"），迁到 case_type 后小类位清空 */

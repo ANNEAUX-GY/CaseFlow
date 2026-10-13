@@ -67,6 +67,9 @@ public class CaseVO implements Serializable {
     /** 嫌疑人明细（仅详情返回） */
     private List<SuspectVO> suspects;
 
+    /** 重要时间节点全量（仅详情模式填充；列表只认主节点） */
+    private List<TimeNodeVO> timeNodes;
+
     /** 强制措施：NONE / DETENTION / BAIL / RESIDENCE（盯办模块） */
     private String caseMeasure;
     private String caseMeasureName;
