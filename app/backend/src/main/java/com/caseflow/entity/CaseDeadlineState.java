@@ -1,6 +1,7 @@
 package com.caseflow.entity;
 
 import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
@@ -22,11 +23,16 @@ public class CaseDeadlineState {
     private LocalDateTime legalSentAt;
     private LocalDateTime submittedAt;
     private LocalDateTime lastSummonsAt;
+    @TableField("admin_30_doc_at")
     private LocalDateTime admin30DocAt;
     private LocalDateTime adminExtendedAt;
+    @TableField("admin_60_doc_at")
     private LocalDateTime admin60DocAt;
+    @TableField("admin_check_3_at")
     private LocalDateTime adminCheck3At;
+    @TableField("admin_check_10_at")
     private LocalDateTime adminCheck10At;
+    @TableField("admin_check_20_at")
     private LocalDateTime adminCheck20At;
     private LocalDateTime updatedAt;
 }
