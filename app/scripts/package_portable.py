@@ -456,7 +456,14 @@ def main() -> int:
         print(f"      必需文件齐全（共 {len(names)} 项）")
 
     if not args.keep_staging:
-        shutil.rmtree(stage.parent)
+        # 清理未压缩的中间目录。这一步失败不影响交付物，只提示即可
+        # （某些环境的安全策略会拦截批量删除）。
+        try:
+            shutil.rmtree(stage.parent)
+        except Exception as exc:                                  # noqa: BLE001
+            print()
+            print(f"      [提示] 中间目录未能自动删除：{stage.parent}")
+            print(f"             不影响部署包，可稍后手工删除。原因：{exc}")
 
     # ---- 报告 ----
     size_mb = zip_path.stat().st_size / 1024 / 1024
