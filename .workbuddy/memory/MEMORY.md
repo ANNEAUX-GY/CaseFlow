@@ -46,15 +46,17 @@
 - **SSE**：`LogService.log` 是全量埋点唯一汇聚点 → SseHub → `store/events.js`。
   改埋点只动 LogService 一处。
 - **待办是意见的唯一载体**（勿回退）：`case_todo.opinion_id` 派生；`parent_id` 两级。
+  新增待办三处入口统一走「意见→派生待办」同一链路（批量录入见 `TodoBatchEditor.vue`）。
   主任务权限=管理层，子任务=承办人；`@FullAccessOnly` 在方法前拦截，Service 分层无效。
-- **案件类型门控**：5 栏目受门控（含 /case-boards）；状态双写 store+localStorage；
-  跨栏目跳转用 `gotoGated`。
-- **按类别浏览板块页**（2026-10-08）：选完类型默认落 `/case-boards`，按字典小类
-  分卡（案件数=page size=1 取 total，与列表同链路）→ 点卡进 `/cases?category=X`；
-  「未分类」走后端 `category=NONE`（IS NULL OR 空串）；OTHER 类型无小类只有全量卡。
+- **案件类型门控**：5 栏目受门控；状态双写 store+localStorage；跨栏目跳转用 `gotoGated`。
+- **三级浏览**（2026-10-09 远程定型）：大类卡片页 `/case-type` → 小类卡片页 `/case-boards`
+  （常量 `BOARDS_PATH`）→ 栏目页；选完大类一律先过小类页，最终落点含筛选用 `to` 参数带；
+  退出逐级退回（顶栏按钮按层级变形）。待办总览/到期提醒无小类维度，第 2 级只给
+  「全部」卡且不显示案件数。「未分类」=`category=NONE`（IS NULL OR 空串）。
+  已知坑：NONE 卡片进来会被级联反投影清空（CaseList/WatchView 均已修）。
 - **办案组别**：`org_employee.police_group` 为权威，NULL/非法归一「不限」，前后端口径必须一致。
-- **流程流转**：定义唯一入口 `flow/CaseFlowTemplate.java`；进度不落库实时算；
-  流转后旧任务 CANCELLED、进度归零。
+- **流程流转**：办案阶段改由**待办驱动**（FlowPanel 已删，前端 `CaseStageBar.vue`）；
+  建案即铺任务，阶段完成待领导确认流转；进度不落库实时算。
 
 ## 部署与权限
 - 访问 `http://<内网IP>:8080/api/`；防火墙放行 8080 用 `scripts/open_lan_firewall.py`；
