@@ -13,6 +13,7 @@
       <span class="cf-spacer"></span>
       <el-button link type="primary" @click="gotoBoards">选择小类</el-button>
       <span class="cf-gatebar__tip">退回上一级或换类型，请用顶部类型条右侧的按钮</span>
+      <el-button type="primary" size="small" @click="onCreate">新建案件</el-button>
     </div>
 
     <div class="cf-toolbar">
@@ -77,8 +78,6 @@
         <el-option label="未设期限" value="NONE" />
       </el-select>
       <el-button @click="reset">重置</el-button>
-      <span class="cf-spacer" />
-      <el-button type="primary" @click="onCreate">新建案件</el-button>
     </div>
 
     <!-- 可视化：随筛选条件联动统计 -->
