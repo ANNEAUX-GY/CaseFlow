@@ -8,7 +8,7 @@
         <span>类别：<b>{{ scopeCategoryLabel }}</b></span>
         <el-button link size="small" @click="clearCategory">清除</el-button>
       </template>
-      <span>当前只看{{ scopeCategory ? '这一小类' : '这一类' }}案件；看板计数、图表、页签列表与检索均限定在此范围内</span>
+      <span>{{ caseTypeStore.current === 'ALL' ? '当前查看全部案件' : '当前只看' + (scopeCategory ? '这一小类' : '这一类') + '案件' }}；看板计数、图表、页签列表与检索口径一致</span>
       <span class="cf-spacer"></span>
       <span class="cf-gatebar__tip">退回上一级或换类型，请用顶部类型条右侧的按钮</span>
     </div>
@@ -19,7 +19,7 @@
 
     <!-- 盯办看板：三大子模块 + 待审批，点击卡片跳对应页签 -->
     <el-row :gutter="12" class="cf-watch__board">
-      <el-col :span="6" v-for="card in boardCards" :key="card.key">
+      <el-col :span="isAdministrative ? 24 : 6" v-for="card in boardCards" :key="card.key">
         <div class="cf-panel cf-watch__card" :class="{ 'is-hot': card.hot }" @click="goModule(card)">
           <div class="cf-watch__card-title">{{ card.title }}</div>
           <div class="cf-watch__card-value">{{ card.value }}</div>
@@ -70,15 +70,15 @@
     <div class="cf-panel">
       <div class="cf-panel__head">
         <span>案件盯办</span>
-        <span class="cf-panel__head-tip">初查 / 刑拘在办 / 取保及监居，侦查计划执行与期限预警</span>
+        <span class="cf-panel__head-tip">{{ isAdministrative ? '行政案件初查与期限预警' : '初查 / 刑拘在办 / 取保及监居，侦查计划执行与期限预警' }}</span>
         <span class="cf-spacer"></span>
         <el-button size="small" @click="loadBoard">刷新看板</el-button>
       </div>
       <div class="cf-panel__body">
-        <el-tabs v-model="module" @tab-change="load">
+        <el-tabs v-model="module" @tab-change="onModuleTabChange">
           <el-tab-pane label="初查案件" name="INITIAL" />
-          <el-tab-pane label="刑拘在办" name="DETENTION" />
-          <el-tab-pane label="取保及监居" name="BAIL_RESIDENCE" />
+          <el-tab-pane v-if="!isAdministrative" label="刑拘在办" name="DETENTION" />
+          <el-tab-pane v-if="!isAdministrative" label="取保及监居" name="BAIL_RESIDENCE" />
         </el-tabs>
 
         <!-- 检索区：初查页签支持嫌疑人检索 -->
@@ -113,7 +113,7 @@
           >
             <el-option v-for="e in employeeOptions" :key="e.id" :label="e.name" :value="e.id" />
           </el-select>
-          <el-select v-model="query.investigationStatus" placeholder="侦查进度" clearable style="width: 120px" @change="load">
+          <el-select v-if="!isAdministrative" v-model="query.investigationStatus" placeholder="侦查进度" clearable style="width: 120px" @change="load">
             <el-option v-for="(m, code) in INVEST_STATUS_META" :key="code" :label="m.label" :value="code" />
           </el-select>
           <el-button @click="reset">重置</el-button>
@@ -152,7 +152,12 @@
                刑拘在办与取保及监居 = 当前阶段待办完成度三态。 -->
           <el-table-column :label="stateColumnLabel" width="100" align="center">
             <template #default="{ row }">
-              <template v-if="module === 'INITIAL'">
+              <template v-if="isAdministrative">
+                <el-tag size="small" :type="row.status === 'DONE' ? 'success' : 'primary'">
+                  {{ row.status === 'DONE' ? '已办结' : '已受案' }}
+                </el-tag>
+              </template>
+              <template v-else-if="module === 'INITIAL'">
                 <el-tag v-if="row.investStage" size="small"
                   :type="(INVEST_STAGE_META[row.investStage] || {}).type">
                   {{ (INVEST_STAGE_META[row.investStage] || {}).label }}
@@ -181,7 +186,7 @@
                 <span v-else class="cf-muted" style="font-size: 12px">暂无待办</span>
               </div>
               <!-- 阶段做完不自动跳：在这里标出来，领导才知道哪个案子在等他拍板 -->
-              <el-tooltip v-if="row.flowFinished" content="本阶段待办已全部完成，待领导确认转入下一阶段"
+              <el-tooltip v-if="row.flowFinished && !isAdministrative" content="本阶段待办已全部完成，待领导确认转入下一阶段"
                 placement="top">
                 <el-tag size="small" type="warning" effect="dark" style="margin-top: 4px">
                   待确认流转
@@ -234,7 +239,7 @@
 
 <script setup>
 import { computed, reactive, ref, watch, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { watchApi, employeeApi } from '../api'
 import { useCategoryStore } from '../store/category'
 import { withCaseType, useCaseTypeStore } from '../store/caseType'
@@ -250,12 +255,19 @@ import PageFooter from '../components/PageFooter.vue'
 
 const categoryStore = useCategoryStore()
 const caseTypeStore = useCaseTypeStore()
+const isAdministrative = computed(() => caseTypeStore.current === 'ADMINISTRATIVE')
 // 标注重点是管理端能力（后端 /cases/{id}/focus 是 @FullAccessOnly），
 // 普通民警这里不渲染星标，免得点下去只拿到 403
 const userStore = useUserStore()
 const canFocus = computed(() => userStore.isFullAccess)
 const route = useRoute()
+const router = useRouter()
 const module = ref('INITIAL')
+const syncModuleFromRoute = () => {
+  if (caseTypeStore.current !== 'CRIMINAL') return
+  const selected = String(route.query.module || '')
+  module.value = ['INITIAL', 'DETENTION', 'BAIL_RESIDENCE'].includes(selected) ? selected : 'INITIAL'
+}
 const rows = ref([])
 const total = ref(0)
 const loading = ref(false)
@@ -341,14 +353,32 @@ const boardCards = computed(() => [
     subs: [{ label: '滞留≥2天', value: board.value.approvalStale ?? 0,
              danger: (board.value.approvalStale ?? 0) > 0 }],
     hot: (board.value.approvalStale ?? 0) > 0 }
-])
+].filter((card) => !isAdministrative.value || card.key === 'INITIAL'))
 const goModule = (card) => {
   if (card.key === 'APPROVAL') {
-    module.value = 'DETENTION'
+    module.value = isAdministrative.value ? 'INITIAL' : 'DETENTION'
     query.investigationStatus = 'PENDING_APPROVAL'
   } else {
     module.value = card.key
     query.investigationStatus = ''
+  }
+  updateRouteModule()
+  load()
+}
+const updateRouteModule = () => {
+  if (caseTypeStore.current !== 'CRIMINAL') return
+  const next = { ...route.query, module: module.value }
+  if (module.value !== 'INITIAL') {
+    delete next.category
+    query.category = ''
+    cascadeFilter.value = []
+  }
+  router.replace({ path: route.path, query: next })
+}
+const onModuleTabChange = () => {
+  if (caseTypeStore.current === 'CRIMINAL') {
+    query.investigationStatus = ''
+    updateRouteModule()
   }
   load()
 }
@@ -378,7 +408,7 @@ const moduleData = computed(() => {
     { key: 'INITIAL', name: '初查案件', value: b.initialTotal ?? 0, color: CHART.primary },
     { key: 'DETENTION', name: '刑拘在办', value: b.detentionTotal ?? 0, color: CHART.danger },
     { key: 'BAIL_RESIDENCE', name: '取保及监居', value: b.bailTotal ?? 0, color: CHART.gold }
-  ].filter((d) => d.value > 0)
+  ].filter((d) => d.value > 0 && (!isAdministrative.value || d.key === 'INITIAL'))
 })
 
 const modulePieOption = computed(() => {
@@ -547,7 +577,7 @@ const openDrawer = (row) => { currentId.value = row.id; drawerVisible.value = tr
 // ---- 进度/预警展示规则 ----
 // 状态列名随页签（2026-10-14）：初查看「初查状态」，刑拘在办看「办理进度」，取保及监居看「追踪进度」
 const stateColumnLabel = computed(() => (
-  module.value === 'INITIAL' ? '初查状态'
+  isAdministrative.value ? '行政状态' : module.value === 'INITIAL' ? '初查状态'
     : module.value === 'DETENTION' ? '办理进度' : '追踪进度'
 ))
 /** 刑拘在办 / 取保及监居的进度三态：没铺任务=未开始，铺了没做完=进行中，全做完=已完结 */
@@ -579,6 +609,7 @@ const deadlineText = (row) => {
 
 onMounted(async () => {
   await categoryStore.load()
+  syncModuleFromRoute()
   // 三级浏览：小类卡片页跳过来会带 category，先灌进筛选再取数，避免"跳到了却没筛"
   syncCategoryFromRoute()
   await load()
@@ -589,6 +620,16 @@ onMounted(async () => {
 // （看板同样要重取，否则卡片还停在上一小类的数字上）
 watch(() => route.query.category, () => {
   if (syncCategoryFromRoute()) { load(); loadBoard() }
+  else if (query.category) {
+    query.category = ''
+    cascadeFilter.value = []
+    load(); loadBoard()
+  }
+})
+watch(() => route.query.module, () => {
+  syncModuleFromRoute()
+  query.page = 1
+  load()
 })
 </script>
 

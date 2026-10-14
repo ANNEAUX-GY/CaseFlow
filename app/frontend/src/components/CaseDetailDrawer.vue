@@ -81,6 +81,25 @@
       <!-- 案件待办（含领导意见）：提意见/定级/落实反馈都在这一个面板，避免同一事项两处展示 -->
       <CaseTodoPanel :case-id="detail.id" :anchor="anchor" style="margin-top: 12px" @changed="reload" />
 
+      <div v-if="detail.caseType === 'ADMINISTRATIVE' && canViewCloseRequest" class="cf-panel" style="margin-top: 12px">
+        <div class="cf-panel__head">
+          <span>行政案件结案申请</span>
+          <el-button v-if="canRequestClose" type="primary" size="small" @click="closeDialogVisible = true">申请结案</el-button>
+        </div>
+        <template v-if="closeRequest">
+          <p>处理结果：{{ closeOutcomeName(closeRequest.outcome) }} · {{ closeRequest.submittedByName }} 于 {{ closeRequest.submittedAt }} 提交</p>
+          <p v-if="closeRequest.note" style="white-space: pre-wrap">处理说明：{{ closeRequest.note }}</p>
+          <p v-if="closeRequest.operationPlatform">{{ closeOperationText }}</p>
+          <p>审核状态：<el-tag :type="closeRequest.status === 'APPROVED' ? 'success' : closeRequest.status === 'RETURNED' ? 'danger' : 'warning'" size="small">{{ closeRequest.status === 'APPROVED' ? '已同意' : closeRequest.status === 'RETURNED' ? '已退回' : '待管理层审核' }}</el-tag></p>
+          <p v-if="closeRequest.reviewComment">审核意见：{{ closeRequest.reviewComment }}</p>
+          <div v-if="canManage && closeRequest.status === 'PENDING' && detail.status !== 'DONE'">
+            <el-button type="success" :loading="closeReviewSaving" @click="reviewClose(true)">同意并办结</el-button>
+            <el-button :loading="closeReviewSaving" @click="reviewClose(false)">退回申请</el-button>
+          </div>
+        </template>
+        <span v-else class="cf-muted">尚无结案申请；经办人完成案件后可填写处理结果申请。</span>
+      </div>
+
       <!-- 重要时间节点（2026-10-13）：增删改都在这里，与建案弹窗的批量录入互补。
            改完由后端 syncPrimary 派生回写 case_info 的期限三列，
            列表「截止期限」/到期提醒随之变化，不需要重新配置任何东西。 -->
@@ -250,11 +269,11 @@
         </el-collapse-transition>
       </div>
       <div class="cf-toolbar" style="margin-top: 14px">
-        <el-button v-if="detail.status === 'ASSIGNED'" type="primary" @click="changeStatus('IN_PROGRESS')">
+        <el-button v-if="detail.caseType !== 'ADMINISTRATIVE' && detail.status === 'ASSIGNED'" type="primary" @click="changeStatus('IN_PROGRESS')">
           开始处理
         </el-button>
         <el-button
-          v-if="canManage && !['DONE', 'CANCELLED'].includes(detail.status)"
+          v-if="canManage && detail.caseType !== 'ADMINISTRATIVE' && !['DONE', 'CANCELLED'].includes(detail.status)"
           type="success"
           @click="changeStatus('DONE')"
         >
@@ -266,12 +285,24 @@
         >
           撤销
         </el-button>
-        <span v-if="!canManage" class="cf-muted" style="font-size: 13px">办结 / 撤销为管理层权限</span>
+        <span v-if="!canManage" class="cf-muted" style="font-size: 13px">{{ detail.caseType === 'ADMINISTRATIVE' ? '可提交结案申请，审核通过后办结' : '办结 / 撤销为管理层权限' }}</span>
         <span class="cf-spacer" />
         <el-button @click="visible = false">关闭</el-button>
       </div>
     </template>
   </el-drawer>
+
+  <FeedbackDialog v-model="closeDialogVisible" title="申请行政案件结案" confirm-text="提交结案申请"
+    :hide-status="true" :loading="closeSaving" @submit="submitCloseRequest">
+    <el-form-item label="处理结果" required style="margin-top: 12px">
+      <el-select v-model="closeOutcome" placeholder="请选择实际处理结果" style="width: 100%">
+        <el-option label="调解" value="MEDIATION" />
+        <el-option label="处罚" value="PENALTY" />
+        <el-option label="不予处罚" value="NO_PENALTY" />
+        <el-option label="终止" value="TERMINATED" />
+      </el-select>
+    </el-form-item>
+  </FeedbackDialog>
 
   <!-- 时间节点录入：新增与修改共用（带 nodeId 即为修改） -->
   <el-dialog
@@ -365,6 +396,7 @@ import { ElCollapseTransition } from 'element-plus'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { caseApi, fileApi, suspectApi, timeNodeApi, logApi, watchApi } from '../api'
 import CaseTodoPanel from './CaseTodoPanel.vue'
+import FeedbackDialog from './FeedbackDialog.vue'
 import FocusStar from './FocusStar.vue'
 import { STATUS_META, PRIORITY_META, SOURCE_META, DUE_META, CASE_TYPE_META, MEASURE_META, dueText,
   deadlineTextOf, TIME_NODE_PRESETS, REMIND_DAY_PRESETS } from '../utils/format'
@@ -389,8 +421,86 @@ const canManage = computed(() => userStore.isFullAccess)
 
 const visible = ref(false)
 const detail = ref({})
+const closeRequest = ref(null)
+const closeDialogVisible = ref(false)
+const closeSaving = ref(false)
+const closeReviewSaving = ref(false)
+const closeOutcome = ref('')
+const closeOutcomeName = (value) => ({ MEDIATION: '调解', PENALTY: '处罚', NO_PENALTY: '不予处罚', TERMINATED: '终止' })[value] || value
+const isCurrentHandler = computed(() => !!userStore.userInfo?.employeeId
+  && [detail.value.owner, ...(detail.value.members || [])].some(a => a?.employeeId === userStore.userInfo.employeeId && a?.status === 'ACTIVE'))
+const canViewCloseRequest = computed(() => canManage.value || isCurrentHandler.value)
+const canRequestClose = computed(() => detail.value.caseType === 'ADMINISTRATIVE'
+  && !['DONE', 'CANCELLED'].includes(detail.value.status)
+  && closeRequest.value?.status !== 'PENDING'
+  && isCurrentHandler.value)
+const closeOperationText = computed(() => closeRequest.value?.operationPlatform
+  ? '于 ' + (closeRequest.value.operationTime || closeRequest.value.submittedAt) + ' 在 '
+    + closeRequest.value.operationPlatform + ' 执行了 ' + closeRequest.value.operationAction + ' 操作。' : '')
 
-const statusMeta = computed(() => STATUS_META[detail.value.status] || { label: '-', type: 'info' })
+const submitCloseRequest = async (feedback) => {
+  if (!closeOutcome.value) {
+    ElMessage.warning('请选择实际处理结果')
+    return
+  }
+  closeSaving.value = true
+  try {
+    closeRequest.value = await caseApi.requestClose(detail.value.id, {
+      outcome: closeOutcome.value,
+      note: feedback.note,
+      uploadTime: feedback.uploadTime,
+      uploadPlatform: feedback.uploadPlatform,
+      uploadFile: feedback.uploadFile
+    })
+    closeDialogVisible.value = false
+    closeOutcome.value = ''
+    ElMessage.success('结案申请已提交，等待管理层审核')
+    emit('done')
+  } finally {
+    closeSaving.value = false
+  }
+}
+
+const reviewClose = async (approve) => {
+  if (closeReviewSaving.value || !closeRequest.value) return
+  let comment = ''
+  try {
+    if (approve) {
+      await ElMessageBox.confirm('确认同意该申请并将行政案件办结？', '审核结案申请', { type: 'warning' })
+    } else {
+      const answer = await ElMessageBox.prompt('请填写退回原因', '退回结案申请', {
+        inputType: 'textarea', inputValidator: (v) => v?.trim() ? true : '请填写退回原因',
+        confirmButtonText: '退回', cancelButtonText: '取消'
+      })
+      comment = answer.value.trim()
+    }
+  } catch { return }
+  closeReviewSaving.value = true
+  try {
+    await caseApi.reviewCloseRequest(detail.value.id, closeRequest.value.id, { approve, comment })
+    ElMessage.success(approve ? '已审核并办结案件' : '申请已退回')
+    await reload()
+    emit('done')
+  } finally {
+    closeReviewSaving.value = false
+  }
+}
+
+const changeStatus = async (status) => {
+  if (status === 'DONE' || status === 'CANCELLED') {
+    try {
+      await ElMessageBox.confirm(status === 'DONE' ? '确认办结该案件？' : '确认撤销该案件？', '变更案件状态', { type: 'warning' })
+    } catch { return }
+  }
+  await caseApi.status(detail.value.id, { status })
+  ElMessage.success(status === 'DONE' ? '案件已办结' : status === 'CANCELLED' ? '案件已撤销' : '已开始处理')
+  await reload()
+  emit('done')
+}
+
+const statusMeta = computed(() => detail.value.caseType === 'ADMINISTRATIVE' && detail.value.status !== 'DONE'
+  ? { label: '已受案', type: 'primary' }
+  : STATUS_META[detail.value.status] || { label: '-', type: 'info' })
 const priorityMeta = computed(() => PRIORITY_META[detail.value.priority] || { label: '-', color: '#646a73' })
 const sourceLabel = computed(() => SOURCE_META[detail.value.sourceType] || detail.value.sourceType || '-')
 // Excel 导入字段（2026-10-14）：五项里任一个有值就渲染整组
@@ -420,6 +530,8 @@ const reload = async () => {
   if (!props.caseId) return
   try {
     detail.value = await caseApi.detail(props.caseId)
+    closeRequest.value = detail.value.caseType === 'ADMINISTRATIVE' && canViewCloseRequest.value
+      ? await caseApi.latestCloseRequest(props.caseId) : null
   } catch (e) {
     // 案件已被删除，或当前登录人已经看不到它（转手后不再承办）：
     // 抽屉继续开着只会是一张空白卡，不如关掉并说清原因。

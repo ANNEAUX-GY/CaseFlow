@@ -98,6 +98,10 @@ public class FlowService {
 
     /** 案件当前阶段（存量 NULL 归 INITIAL） */
     public String stageOf(CaseInfo c) {
+        if (c != null && "ADMINISTRATIVE".equals(c.getCaseType())
+                && !CaseFlowTemplate.STAGE_CLOSED.equals(c.getFlowStage())) {
+            return CaseFlowTemplate.STAGE_INITIAL;
+        }
         String s = c == null ? null : c.getFlowStage();
         return StringUtils.hasText(s) ? s : CaseFlowTemplate.STAGE_INITIAL;
     }

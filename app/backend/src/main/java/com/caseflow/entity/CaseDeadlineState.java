@@ -28,6 +28,9 @@ public class CaseDeadlineState {
     private LocalDateTime adminExtendedAt;
     @TableField("admin_60_doc_at")
     private LocalDateTime admin60DocAt;
+    private LocalDateTime adminExtended90At;
+    private LocalDateTime filingAt;
+    private LocalDateTime arrestTargetAt;
     @TableField("admin_check_3_at")
     private LocalDateTime adminCheck3At;
     @TableField("admin_check_10_at")

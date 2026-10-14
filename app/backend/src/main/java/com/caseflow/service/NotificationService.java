@@ -59,6 +59,8 @@ public class NotificationService {
         // 指派 / 状态流转
         NOTIFY_ACTIONS.add("CASE_ASSIGN");
         NOTIFY_ACTIONS.add("CASE_STATUS");
+        NOTIFY_ACTIONS.add("CASE_CLOSE_REQUEST");
+        NOTIFY_ACTIONS.add("CASE_CLOSE_REVIEW");
         NOTIFY_ACTIONS.add("CASE_FLOW_TRANSFER");
         // 待办 / 子任务
         NOTIFY_ACTIONS.add("CASE_TODO_ADD");
@@ -292,6 +294,7 @@ public class NotificationService {
     /** 从 module+action 映射为简短的 type 标签（用完整 key 判断，稳） */
     private String mapType(String module, String action) {
         String key = (module == null ? "" : module) + "_" + (action == null ? "" : action);
+        if (key.startsWith("CASE_CLOSE_")) return "STATUS";
         if (key.contains("OPINION")) return "OPINION";
         if (key.contains("ASSIGN") || key.contains("TRANSFER")) return "ASSIGN";
         if (key.contains("STATUS") || key.contains("MEASURE") || key.contains("INVESTIGATION")
@@ -317,6 +320,8 @@ public class NotificationService {
     /** 动作中文标签（信箱标题用，与 actionName 口径一致即可，独立维护避免耦合） */
     private String actionLabel(String module, String action) {
         String key = (module == null ? "" : module) + "_" + (action == null ? "" : action);
+        if ("CASE_CLOSE_REQUEST".equals(key)) return "提交了结案申请";
+        if ("CASE_CLOSE_REVIEW".equals(key)) return "审核了结案申请";
         if (key.contains("ASSIGN")) return "调整了指派";
         if (key.contains("TRANSFER")) return "转手了案件";
         if (key.contains("STATUS") || key.contains("FLOW")) return "更新了案件状态";

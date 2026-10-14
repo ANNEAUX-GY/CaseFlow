@@ -13,7 +13,7 @@
 打包范围（源码与配置，均可由新电脑复现）：
   app/           后端源码、前端源码、sql、scripts、docs、.idea 工程配置、.env.example
   tools/         不打包（便携工具链，体积 500M+，新电脑用已装好的 JDK8/Maven/Node）
-  README-开发包.txt
+  README-开发包.md / README-开发包.txt / CONTRIBUTING.md / .gitignore
 
 排除项（可再生成 / 本地状态，一律不打）：
   frontend/node_modules/  frontend/dist/  backend/target/  app/.venv/
@@ -45,8 +45,11 @@ EXCLUDE_DIRS = {
 EXCLUDE_NAME_SUFFIX = {".pyc", ".class", ".log", ".tmp", ".trace.db"}
 EXCLUDE_NAME_EXACT = {".DS_Store", "Thumbs.db", ".env", ".env.local"}
 
-# 要打的顶层内容
-INCLUDE_TOP = {"app", "README-开发包.txt"}
+# 要打的顶层内容。保留协作文件，解压后可以直接初始化 Git 继续开发。
+INCLUDE_TOP = {
+    ".gitattributes", ".gitignore", "CONTRIBUTING.md",
+    "README-开发包.md", "README-开发包.txt",
+}
 
 
 def _rel(root: Path, p: Path) -> str:
@@ -143,7 +146,7 @@ def main():
     # 收集 app 与顶层说明文件
     entries = collect_files(ROOT)
     top_extra = []
-    for name in ("README-开发包.txt",):
+    for name in sorted(INCLUDE_TOP):
         p = PROJECT_DIR / name
         if p.exists():
             top_extra.append((name, str(p)))
@@ -184,7 +187,7 @@ def main():
         print("  ✔ 校验通过：无 node_modules/dist/target/.venv/日志/密钥 混入")
 
     print(f"\n完成：{zip_path}")
-    print("新电脑接手：解压后参考包内 README-开发包.txt 或 app/README.md，")
+    print("新电脑接手：解压后参考包内 README-开发包.md 或 app/README.md，")
     print("重建 .venv、npm ci、按需初始化数据库后即可用 PyCharm 打开 app 目录开发。")
 
 

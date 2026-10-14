@@ -9,7 +9,8 @@
     <div v-if="quote" class="cf-fb__quote">{{ quote }}</div>
 
     <el-form label-width="92px" style="margin-top: 12px">
-      <el-form-item label="落实状态" required>
+      <slot />
+      <el-form-item v-if="!hideStatus" label="落实状态" required>
         <el-radio-group v-model="status">
           <el-radio-button value="DONE">完成</el-radio-button>
           <el-radio-button value="IN_PROGRESS">进行中</el-radio-button>
@@ -87,6 +88,7 @@ const props = defineProps({
   /** 确认按钮文案：反馈场景「提交反馈」/ 完成场景「确认完成」/ 修改场景「保存修改」 */
   confirmText: { type: String, default: '提交反馈' },
   loading: { type: Boolean, default: false },
+  hideStatus: { type: Boolean, default: false },
   /**
    * 修改已有反馈时的初始值（2026-10-08）。
    * 不传 = 新建（说明与声明都留空）。

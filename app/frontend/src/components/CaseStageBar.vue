@@ -107,7 +107,7 @@ const total = computed(() => flow.value.progress?.total || 0)
 const percent = computed(() => flow.value.progress?.percent || 0)
 const finished = computed(() => !!flow.value.progress?.finished)
 /** 流转是管理层动作，普通民警只看到提示文案，点不到按钮 */
-const canTransfer = computed(() => isFullAccess.value && !!flow.value.transferable)
+const canTransfer = computed(() => isFullAccess.value && flow.value.caseType !== 'ADMINISTRATIVE' && !!flow.value.transferable)
 /** 可选出口：刑事主干只有一条（初查→刑拘在办、刑拘→取保），刑拘阶段另有通往终结的分支 */
 const branches = computed(() => flow.value.transitions || [])
 

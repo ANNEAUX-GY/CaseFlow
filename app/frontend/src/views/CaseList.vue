@@ -4,20 +4,20 @@
          类型名与"限定在此类型内"已由全局类型条承担，此处不重复。 -->
     <div class="cf-gatebar" :class="'is-' + (caseTypeStore.currentOption?.type || 'info')">
       <span class="cf-gatebar__tag">{{ caseTypeStore.currentOption?.label || '未选择' }}</span>
-      <span>当前共 {{ total }} 件</span>
+      <span>{{ isClosedPage ? '已办结' : '当前' }}共 {{ total }} 件</span>
       <template v-if="query.category">
         <span class="cf-gatebar__divider"></span>
         <span>类别：<b>{{ categoryLabel }}</b></span>
         <el-button link size="small" @click="clearCategory">清除</el-button>
       </template>
       <span class="cf-spacer"></span>
-      <el-button link type="primary" @click="gotoBoards">选择小类</el-button>
+      <el-button v-if="caseTypeStore.current !== 'ALL'" link type="primary" @click="gotoBoards">选择小类</el-button>
       <span class="cf-gatebar__tip">退回上一级或换类型，请用顶部类型条右侧的按钮</span>
       <!-- 案件导入（2026-10-14）：与员工图谱同款 el-upload 直传。
            放在 gatebar 而不是工具栏：工具栏 1440 宽度下已经贴边，
            再加按钮会换行把重置挤到第二行（新建案件就是这么搬过来的）。 -->
-      <el-button link type="primary" @click="downloadTemplate">下载导入模板</el-button>
-      <el-upload
+      <el-button v-if="!isClosedPage" link type="primary" @click="downloadTemplate">下载导入模板</el-button>
+      <el-upload v-if="!isClosedPage"
         :action="`${importBase}/cases/import`"
         :headers="uploadHeaders"
         :show-file-list="false"
@@ -34,23 +34,24 @@
            位置改过两轮：先在筛选行中间（没人看见）、再提到页面顶部独占一行（像孤儿），
            现在贴回检索条最左端——它是这里最"重"的筛选条件（勾上后整个列表只剩重点案件），
            该占第一眼；镀金态与下面重点行的金色高亮同色。 -->
-      <FocusOnlyToggle v-model="query.focusOnly" @change="reload" lead />
-      <el-input v-model="query.keyword" placeholder="案件名 / 编号 / 备注" clearable style="width: 220px" @keyup.enter="load" />
-      <el-select v-model="query.status" placeholder="状态" clearable style="width: 120px" @change="reload">
-        <el-option label="未办结" value="OPEN" />
-        <el-option label="待指派" value="PENDING_ASSIGN" />
-        <el-option label="已指派" value="ASSIGNED" />
-        <el-option label="处理中" value="IN_PROGRESS" />
+      <FocusOnlyToggle v-model="query.focusOnly" @change="applyFilters" lead />
+      <el-input v-model="query.keyword" placeholder="案件名 / 编号 / 备注" clearable style="width: 220px" @keyup.enter="applyFilters" @clear="applyFilters" />
+      <el-tag v-if="isClosedPage" type="success" effect="plain">已办结</el-tag>
+      <el-select v-else v-model="query.status" placeholder="状态" clearable style="width: 120px" @change="applyFilters">
+        <el-option :label="caseTypeStore.current === 'ADMINISTRATIVE' ? '已受案' : '未办结'" value="OPEN" />
+        <el-option v-if="caseTypeStore.current !== 'ADMINISTRATIVE'" label="待指派" value="PENDING_ASSIGN" />
+        <el-option v-if="caseTypeStore.current !== 'ADMINISTRATIVE'" label="已指派" value="ASSIGNED" />
+        <el-option v-if="caseTypeStore.current !== 'ADMINISTRATIVE'" label="处理中" value="IN_PROGRESS" />
         <el-option label="已办结" value="DONE" />
-        <el-option label="已撤销" value="CANCELLED" />
+        <el-option v-if="caseTypeStore.current !== 'ADMINISTRATIVE'" label="已撤销" value="CANCELLED" />
       </el-select>
-      <el-select v-model="query.priority" placeholder="优先级" clearable style="width: 110px" @change="reload">
+      <el-select v-model="query.priority" placeholder="优先级" clearable style="width: 110px" @change="applyFilters">
         <el-option label="特急" value="URGENT" />
         <el-option label="紧急" value="HIGH" />
         <el-option label="普通" value="NORMAL" />
         <el-option label="低" value="LOW" />
       </el-select>
-      <el-select v-model="query.sourceType" placeholder="来源" clearable style="width: 110px" @change="load">
+      <el-select v-model="query.sourceType" placeholder="来源" clearable style="width: 110px" @change="applyFilters">
         <el-option label="手工录入" value="MANUAL" />
         <el-option label="PDF" value="PDF" />
         <el-option label="Word" value="WORD" />
@@ -79,11 +80,11 @@
       >
         <el-option v-for="e in employeeOptions" :key="e.id" :label="e.name" :value="e.id" />
       </el-select>
-      <el-select v-model="query.hasSuspect" placeholder="嫌疑人" clearable style="width: 110px" @change="load">
+      <el-select v-model="query.hasSuspect" placeholder="嫌疑人" clearable style="width: 110px" @change="applyFilters">
         <el-option label="有嫌疑人" value="YES" />
         <el-option label="无嫌疑人" value="NO" />
       </el-select>
-      <el-select v-model="query.dueBucket" placeholder="到期" clearable style="width: 130px" @change="reload">
+      <el-select v-if="!isClosedPage" v-model="query.dueBucket" placeholder="到期" clearable style="width: 130px" @change="applyFilters">
         <el-option label="已逾期" value="OVERDUE" />
         <el-option label="今天到期" value="TODAY" />
         <el-option label="3天内" value="D3" />
@@ -95,13 +96,13 @@
            用 margin-left:auto 而不是 cf-spacer——spacer 在 flex-wrap 换行时
            （筛选控件太宽会折到第二行）撑不开，按钮会贴在「重置」右侧而不是行尾；
            auto 外边距无论在哪一行都把它顶到最右。 -->
-      <el-button type="primary" style="margin-left: auto" @click="onCreate">新建案件</el-button>
+      <el-button v-if="!isClosedPage" type="primary" style="margin-left: auto" @click="onCreate">新建案件</el-button>
     </div>
 
     <!-- 可视化：随筛选条件联动统计 -->
     <el-row :gutter="12">
       <el-col :span="14" :xs="24">
-        <ChartPanel title="近 14 天案件趋势" :empty="!trendData.length">
+        <ChartPanel :title="isClosedPage ? '近 14 天办结趋势' : '近 14 天案件趋势'" :empty="!trendData.length">
           <template #tools>
             <el-select v-model="trendType" size="small">
               <el-option label="折线图" value="line" />
@@ -116,10 +117,10 @@
         <ChartPanel title="维度分布（点击柱体即按该值筛选）" :empty="!distData.length">
           <template #tools>
             <el-select v-model="distDim" size="small">
-              <el-option label="状态" value="statusDist" />
+              <el-option v-if="!isClosedPage" label="状态" value="statusDist" />
               <el-option label="优先级" value="priorityDist" />
               <el-option label="来源" value="sourceDist" />
-              <el-option label="案卷类型" value="caseTypeDist" />
+              <el-option v-if="!isClosedPage" label="案卷类型" value="caseTypeDist" />
               <el-option label="案件类别" value="categoryDist" />
             </el-select>
             <el-select v-model="distType" size="small">
@@ -138,6 +139,7 @@
         :loading="loading"
         :min-body="360"
         show-case-no
+        :details-only="isClosedPage"
         @open="openDetail"
         @assign="openAssign"
         @remove="onRemove"
@@ -166,7 +168,7 @@
       @done="load"
       :case-measure="currentMeasure"
     />
-    <CaseDetailDrawer v-model="detailVisible" :case-id="currentId" :anchor="locateAnchor" @done="load" />
+    <CaseDetailDrawer v-model="detailVisible" :case-id="currentId" :anchor="locateAnchor" @done="loadFiltered" />
 
     <PageFooter />
   </div>
@@ -190,6 +192,7 @@ import { withCaseType, useCaseTypeStore, boardsUrl } from '../store/caseType'
 import PageFooter from '../components/PageFooter.vue'
 
 const route = useRoute()
+const isClosedPage = computed(() => route.path === '/closed-cases')
 const router = useRouter()
 const categoryStore = useCategoryStore()
 const caseTypeStore = useCaseTypeStore()
@@ -228,7 +231,7 @@ const searchEmployee = async (kw) => {
 const onEmployeePick = (id) => {
   query.employeeId = id || null
   query.page = 1
-  load()
+  loadFiltered()
 }
 
 // 案件分类级联（大类 -> 小类逐层选择）；query.caseType/category 由级联路径拆出
@@ -239,13 +242,13 @@ watch(cascadeFilter, (val) => {
   // （表现为：类型条显示"未分类"，列表却是全部案件）。2026-10-09 三级浏览修复。
   if (!val?.length && query.category === 'NONE') {
     query.page = 1
-    load()
+    loadFiltered()
     return
   }
   query.caseType = val?.[0] || ''
   query.category = val?.[1] || ''
   query.page = 1
-  load()
+  loadFiltered()
 })
 // 把 query 里的分类条件反投影回级联路径（统计柱体点击时用）
 const syncCascade = () => {
@@ -268,7 +271,7 @@ const clearCategory = () => {
   query.category = ''
   query.page = 1
   cascadeFilter.value = []
-  load()
+  loadFiltered()
 }
 
 /**
@@ -281,7 +284,7 @@ const gotoBoards = () => {
   delete q.category
   delete q.page
   const qs = new URLSearchParams(q).toString()
-  router.push(boardsUrl(qs ? `/cases?${qs}` : '/cases'))
+  router.push(boardsUrl(qs ? `${route.path}?${qs}` : route.path))
 }
 
 const formVisible = ref(false)
@@ -304,7 +307,7 @@ const load = async () => {
   try {
     // 混入当前案件类型（统一入口门控）：列表与下方图表必须同一口径，
     // 否则会出现"列表是刑事、趋势图是行政"这种看不懂的错位
-    const params = withCaseType(query)
+    const params = withCaseType({ ...query, status: isClosedPage.value ? 'DONE' : query.status })
     Object.keys(params).forEach((k) => {
       if (params[k] === '' || params[k] == null) delete params[k]
     })
@@ -333,6 +336,10 @@ const distType = ref('bar')
  * 列表那边是单值字段，这里按「只有一个值」的写法转过去，行为一致。
  */
 const loadStats = async () => {
+  if (isClosedPage.value) {
+    stats.value = await caseApi.closedStats(withCaseType({ ...query, days: 14, status: 'DONE' }))
+    return
+  }
   stats.value = await caseApi.stats(withCaseType({
     days: 14,
     dueBuckets: query.dueBucket || undefined,
@@ -346,16 +353,23 @@ const reload = () => {
   load()
   loadStats()
 }
+const applyFilters = () => {
+  query.page = 1
+  reload()
+}
+const loadFiltered = () => isClosedPage.value ? reload() : load()
 
 const trendData = computed(() => stats.value.trend || [])
 const distData = computed(() => stats.value[distDim.value] || [])
 
 const trendOption = computed(() => {
   const cats = trendData.value.map((p) => (p.date || '').slice(5))
-  const series = [
-    { name: '新增', data: trendData.value.map((p) => p.created) },
-    { name: '办结', data: trendData.value.map((p) => p.done), color: CHART.gold }
-  ]
+  const series = isClosedPage.value
+    ? [{ name: '办结', data: trendData.value.map((p) => p.done), color: CHART.ok }]
+    : [
+      { name: '新增', data: trendData.value.map((p) => p.created) },
+      { name: '办结', data: trendData.value.map((p) => p.done), color: CHART.gold }
+    ]
   return trendType.value === 'bar'
     ? barOption({ categories: cats, series, narrow: false })
     : lineOption({ categories: cats, series, area: true, narrow: false })
@@ -414,7 +428,7 @@ const reset = () => {
   Object.assign(query, {
     page: 1,
     keyword: '',
-    status: '',
+    status: isClosedPage.value ? 'DONE' : '',
     priority: '',
     sourceType: '',
     caseType: '',
@@ -501,15 +515,21 @@ const consumeOpenCase = () => {
   currentId.value = Number(q.caseId)
   const anchor = {
  todoId: q.todoId ? Number(q.todoId) : null,
-    subtaskId: q.subtaskId ? Number(q.subtaskId) : null
+    subtaskId: q.subtaskId ? Number(q.subtaskId) : null,
+    highlightTodo: q.highlightTodo === '1'
   }
   locateAnchor.value = anchor.todoId || anchor.subtaskId ? anchor : null
   detailVisible.value = true
   // 抹掉定位参数，否则刷新会重复打开（与 MyCases 同一约定）
   const rest = { ...q }
-  delete rest.caseId; delete rest.todoId; delete rest.subtaskId
-  router.replace({ path: '/cases', query: rest })
+  delete rest.caseId; delete rest.todoId; delete rest.subtaskId; delete rest.highlightTodo
+  router.replace({ path: route.path, query: rest })
 }
+
+// 关闭详情后清除深链锚点，避免下次手动打开别的案件时沿用旧任务定位。
+watch(detailVisible, (visible) => {
+  if (!visible) locateAnchor.value = null
+})
 
 watch(() => route.query, (q) => {
   if (!q) return
@@ -518,32 +538,40 @@ watch(() => route.query, (q) => {
     query.category = q.category
     query.page = 1
     syncCascade()
-    load()
+    loadFiltered()
   }
   if (q.status) {
-    query.status = q.status
-    load()
+    query.status = isClosedPage.value ? 'DONE' : q.status
+    loadFiltered()
   }
   // 工作台「承办人在手负载」点柱体跳过来：按经办人过滤并回填姓名到下拉
   if (q.employeeId) {
     const id = Number(q.employeeId)
     query.employeeId = id
     if (q.employeeName) employeeOptions.value = [{ id, name: q.employeeName }]
-    load()
+    loadFiltered()
   }
   // 工作台「重点案件」点 KPI / 查看全部跳过来：自动勾上「只看重点」筛选片。
   // 这里改的是 query 对象本身，筛选片是 v-model 绑着它的，会跟着变亮/熄灭；
   // 但仍要 load() —— 别人跳转过来时组件是重新挂载的，光改值不会自己请求。
   if (q.focusOnly != null) {
     query.focusOnly = q.focusOnly === 'true' || q.focusOnly === '1'
-    load()
+    loadFiltered()
   }
 }, { immediate: true })
+watch(isClosedPage, (closed) => {
+  distDim.value = closed ? 'priorityDist' : 'statusDist'
+  reset()
+})
 
 // 信箱跳转：同上，等导航落地再消费（不能放进上面那个 immediate 的 watcher）
 watch(() => route.query.caseId, consumeOpenCase)
 
 onMounted(async () => {
+  if (isClosedPage.value) {
+    query.status = 'DONE'
+    distDim.value = 'priorityDist'
+  }
   consumeOpenCase()
   await categoryStore.load()
   await load()

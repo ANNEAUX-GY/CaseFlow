@@ -19,7 +19,7 @@ public class TimeNodeSaveRequest {
      * 预设节点类型：ACCEPT 受案 / FILING 立案 / DETAIN_END 刑事拘留期限届满 /
      * BAIL_END 取保期限届满 / RESIDENCE_END 监视居住期限届满 /
      * SUPP_PROBE 补充侦查期限 / ARREST_END 逮捕期限届满 /
-     * CUSTODY_CHANGE 变更强制措施 / OTHER 其他。
+     * CUSTODY_CHANGE 变更强制措施 / CUSTODY_TERM_CHANGE 变更羁押期限 / OTHER 其他。
      *
      * <p>留空 = 自定义节点，此时 {@link #nodeName} 必填。
      */

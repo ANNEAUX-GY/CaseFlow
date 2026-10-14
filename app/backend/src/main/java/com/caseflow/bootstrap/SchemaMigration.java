@@ -177,6 +177,9 @@ public class SchemaMigration implements ApplicationRunner {
             {"case_deadline_state", "admin_30_doc_at", "DATETIME NULL"},
             {"case_deadline_state", "admin_extended_at", "DATETIME NULL"},
             {"case_deadline_state", "admin_60_doc_at", "DATETIME NULL"},
+            {"case_deadline_state", "admin_extended90_at", "DATETIME NULL"},
+            {"case_deadline_state", "filing_at", "DATETIME NULL"},
+            {"case_deadline_state", "arrest_target_at", "DATETIME NULL"},
             {"case_deadline_state", "admin_check_3_at", "DATETIME NULL"},
             {"case_deadline_state", "admin_check_10_at", "DATETIME NULL"},
             {"case_deadline_state", "admin_check_20_at", "DATETIME NULL"},
@@ -387,6 +390,9 @@ public class SchemaMigration implements ApplicationRunner {
         }
         if (name.contains("拘留")) {
             return "DETAIN_END";
+        }
+        if (name.contains("变更羁押期限")) {
+            return "CUSTODY_TERM_CHANGE";
         }
         if (name.contains("变更") || name.contains("强制措施")) {
             return "CUSTODY_CHANGE";

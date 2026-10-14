@@ -63,10 +63,10 @@
 
       <!-- 卡片列表：一张卡一件事，点击卡片任意空白处即可看详情/反馈 -->
       <ul ref="listEl" class="cf-todo__cards">
-        <li v-for="(t, i) in todos" :key="t.id" class="cf-todo__card"
+        <li v-for="(t, i) in todos" :key="t.id" class="cf-todo__card" :data-cf-todoid="t.id"
           :class="[
             { 'is-done': t.status === 'DONE', 'is-dragging': dragId === t.id },
-            t.opinionId && t.status !== 'DONE' ? 'is-' + urgencyOf(t) : ''
+            t.status !== 'DONE' ? 'is-importance-' + displayImpOf(t) : ''
           ]">
           <div class="cf-todo__card-main">
             <!-- 拖拽把手：仅管理层、桌面端；手机端用「管理 ▾」里的上移/下移 -->
@@ -99,8 +99,8 @@
                     :type="(FEEDBACK_META[t.opinionFeedbackStatus] || {}).type || 'info'">
                     {{ (FEEDBACK_META[t.opinionFeedbackStatus] || {}).label || '待反馈' }}
                   </el-tag>
-                  <el-tag size="small" effect="dark" :type="IMPORTANCE_META[impOf(t)].type">
-                    {{ impOf(t) }} 级
+                  <el-tag size="small" effect="dark" :class="['cf-todo__importance-tag', 'is-' + displayImpOf(t).toLowerCase()]">
+                    {{ displayImpOf(t) }} 级
                   </el-tag>
                   <el-tag v-if="t.opinionDeadline" size="small" effect="plain"
                     :type="URGENCY_META[urgencyOf(t)].type">
@@ -194,16 +194,14 @@
                 <span class="cf-todo__meta-edit-label">意见设置</span>
                 <el-date-picker :model-value="t.opinionDeadline || ''" type="datetime" size="small"
                   format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DDTHH:mm:ss" placeholder="设截止时间"
-                  :clearable="true" style="width: 170px" @change="(v) => saveOpinionMeta(t, { deadline: v || '' })" />
-                <!-- ABC 三档：选中后各自显示颜色（A 红=最重要 / B 橙=重要 / C 蓝=一般），
-                     用 is-a/is-b/is-c 三个类给 el-radio-button 单独上色。
-                     不用 el-tag 是因为它只能只读展示，这里要能点。 -->
-                <el-radio-group :model-value="impOf(t)" size="small"
-                  class="cf-abc" @change="(v) => saveOpinionMeta(t, { importance: v })">
-                  <el-radio-button value="A" class="is-a">A</el-radio-button>
-                  <el-radio-button value="B" class="is-b">B</el-radio-button>
-                  <el-radio-button value="C" class="is-c">C</el-radio-button>
-                </el-radio-group>
+                  :clearable="true" :disabled="!!savingOpinionMetaIds[t.opinionId]" style="width: 170px"
+                  @change="(v) => saveOpinionMeta(t, { deadline: v || '' })" />
+                <div class="cf-todo__grade" role="group" aria-label="待办重要程度">
+                  <button v-for="grade in ['A', 'B', 'C']" :key="grade" type="button"
+                    class="cf-todo__grade-button" :class="['is-' + grade.toLowerCase(), { 'is-active': displayImpOf(t) === grade }]"
+                    :aria-pressed="displayImpOf(t) === grade"
+                    @click.stop="saveOpinionMeta(t, { importance: grade })">{{ grade }}</button>
+                </div>
               </div>
               <div v-else-if="isAdmin && !t.opinionId && t.status !== 'DONE'" class="cf-todo__meta-edit" @click.stop>
                 <span class="cf-todo__meta-edit-label">自定项完成时限</span>
@@ -289,12 +287,9 @@
         ref="batchRef"
         v-model:rows="rows"
         scope="cf-btodo"
-        preset-mode="submit"
         :max="MAX_BATCH"
         :presets="presets"
-        :preset-saving="presetSaving"
         hint="一次可以连着写多条：填完一行按 <b>Enter</b> 直接写下一行。截止时间与重要程度都是选填，不填按「C 一般」处理。"
-        @preset-click="applyPreset"
       />
 
       <template #footer>
@@ -366,7 +361,6 @@ import { useUserStore } from '../store/user'
 import { useEventStore } from '../store/events'
 import {
   FEEDBACK_STATUS_META as FEEDBACK_META,
-  IMPORTANCE_META,
   URGENCY_META,
   importanceOf,
   urgencyOf as urgencyOfFn,
@@ -390,10 +384,13 @@ const emit = defineEmits(['changed'])
 const userStore = useUserStore()
 const isAdmin = computed(() => userStore.isFullAccess)
 
-const urgencyOf = (t) => urgencyOfFn(t.opinionDeadline)
+const urgencyOf = (t) => urgencyOfFn(t.opinionId ? t.opinionDeadline : t.deadline)
 const deadlineTextOf = deadlineTextOfFn
-/** 重要性：意见派生条目优先读意见侧字段（与意见面板同一来源） */
-const impOf = (t) => importanceOf({ importance: t.opinionId ? t.opinionImportance : t.importance })
+/** 意见用 A/B/C；旧的独立待办用 KEY/MEDIUM/NORMAL，整卡统一换算为 A/B/C。 */
+const impOf = (t) => t.opinionId
+  ? importanceOf({ importance: t.opinionImportance })
+  : ({ KEY: 'A', MEDIUM: 'B', NORMAL: 'C' }[t.importance] || importanceOf(t))
+const displayImpOf = (t) => (t.opinionId && importanceDrafts[t.opinionId]) || impOf(t)
 
 const todos = ref([])
 const saving = ref(false)
@@ -469,11 +466,12 @@ const load = async () => {
   nextTick(setupSortable)
 }
 
-onMounted(async () => {
+const loadAndConsumeAnchor = async () => {
   await load()
-  await consumeAnchor()
-})
-watch(() => props.caseId, load)
+  if (props.caseId) await consumeAnchor()
+}
+onMounted(loadAndConsumeAnchor)
+watch(() => props.caseId, loadAndConsumeAnchor)
 
 /**
  * 消费定位锚点：打开对应任务的详情浮窗并高亮目标（2026-10-08 信箱跳转）。
@@ -491,6 +489,21 @@ const consumeAnchor = async () => {
   const hit = (todos.value || []).find((t) => String(t.id) === String(a.todoId))
   if (!hit) {
     ElMessage.warning('该任务已被删除，已打开案件详情')
+    return
+  }
+  if (a.highlightTodo) {
+    await nextTick()
+    await new Promise((resolve) => setTimeout(resolve, 180))
+    const card = [...document.querySelectorAll('.cf-todo__card')]
+      .find((el) => el.dataset.cfTodoid === String(hit.id))
+    if (card) {
+      card.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      card.classList.remove('is-cf-todo-target')
+      void card.offsetWidth
+      card.classList.add('is-cf-todo-target')
+      clearTimeout(taskFlashTimer)
+      taskFlashTimer = setTimeout(() => card.classList.remove('is-cf-todo-target'), 2600)
+    }
     return
   }
   await nextTick()
@@ -734,7 +747,6 @@ const openAdd = () => {
  * 服务端按「本人写过几次」排好序给回来，这里只管展示与点击。
  * 只在打开弹窗时拉一次——它是慢变量，没必要跟着每次输入刷新。 */
 const presets = ref([])
-const presetSaving = ref(false)
 
 const loadPresets = async () => {
   try {
@@ -742,30 +754,6 @@ const loadPresets = async () => {
   } catch (e) {
     // 拉不到就当没有：快捷入口是锦上添花，不该因为它弹个错把弹窗搞得没法用
     presets.value = []
-  }
-}
-
-/**
- * 点「常用待办」= 直接添加这一条（不用手打，也不用再点保存）。
- *
- * <p>已填的行不受影响：只把这一条提交上去，弹窗继续开着，接着写别的照旧。
- */
-const applyPreset = async (p) => {
-  if (presetSaving.value) return
-  presetSaving.value = true
-  try {
-    await watchApi.addOpinions(props.caseId, [{
-      content: p.content,
-      deadline: '',
-      importance: p.importance || 'C'
-    }])
-    ElMessage.success(`已添加：${p.content}`)
-    // 次数变了排序可能跟着变，顺手刷一次，让"最常用的"始终在最前
-    await loadPresets()
-    await load()
-    emit('changed')
-  } finally {
-    presetSaving.value = false
   }
 }
 
@@ -867,17 +855,41 @@ const onAdminCmd = (t, i, cmd) => {
 }
 
 // ---- 管理层就地调整意见元信息（截止时间/重要性，同步回意见与待办） ----
+const savingOpinionMetaIds = reactive({})
+const importanceDrafts = reactive({})
+const queuedImportance = {}
 const saveOpinionMeta = async (row, patch) => {
-  const payload = {
-    deadline: patch.deadline !== undefined ? patch.deadline : (row.opinionDeadline || ''),
-    importance: patch.importance !== undefined ? patch.importance : impOf(row)
+  const key = String(row.opinionId)
+  if (patch.importance !== undefined) importanceDrafts[key] = patch.importance
+  // 保存过程中仍允许改 A/B/C；把最后一次选择排队，避免连续点击被禁用态吞掉。
+  if (savingOpinionMetaIds[key]) {
+    if (patch.importance !== undefined) queuedImportance[key] = patch.importance
+    return
   }
+  savingOpinionMetaIds[key] = true
   try {
-    await watchApi.updateOpinionMeta(row.opinionId, payload)
-    await load()
+    let nextPatch = patch
+    while (nextPatch) {
+      const payload = {
+        deadline: nextPatch.deadline !== undefined ? nextPatch.deadline : (row.opinionDeadline || ''),
+        importance: nextPatch.importance !== undefined ? nextPatch.importance : (importanceDrafts[key] || impOf(row))
+      }
+      nextPatch = null
+      await watchApi.updateOpinionMeta(row.opinionId, payload)
+      await load()
+      const pending = queuedImportance[key]
+      delete queuedImportance[key]
+      if (pending !== undefined && pending !== payload.importance) nextPatch = { importance: pending }
+    }
+    delete importanceDrafts[key]
     emit('changed')
   } catch (e) {
-    ElMessage.error('保存失败')
+    delete queuedImportance[key]
+    delete importanceDrafts[key]
+    const message = e?.response?.data?.message || e?.response?.data?.msg || e?.message
+    ElMessage.error(message ? '保存失败：' + message : '保存失败，请检查网络后重试')
+  } finally {
+    delete savingOpinionMetaIds[key]
   }
 }
 const saveCustomDeadline = async (row, deadline) => {
@@ -922,11 +934,13 @@ const scheduleReload = () => {
 }
 
 let unsubscribe = null
+let taskFlashTimer = null
 onMounted(() => { unsubscribe = eventStore.subscribe(onCaseEvent) })
 onBeforeUnmount(() => {
   if (unsubscribe) unsubscribe()
   clearTimeout(noticeTimer)
   clearTimeout(reloadTimer)
+  clearTimeout(taskFlashTimer)
 })
 
 </script>
@@ -990,10 +1004,20 @@ onBeforeUnmount(() => {
   border: 1px solid #e4e8ee; border-left: 4px solid #c9d4e3; border-radius: 8px;
   background: #fff; margin-top: 10px; transition: box-shadow .15s, border-color .15s;
 }
-.cf-todo__card:hover { box-shadow: 0 2px 10px rgba(18, 41, 74, .08); border-color: #b9cbe6 }
-.cf-todo__card.is-OVERDUE { border-left-color: #c62a2a; background: #fdf6f6 }
-.cf-todo__card.is-URGENT { border-left-color: #d98a0b; background: #fffaf1 }
-.cf-todo__card.is-done { border-left-color: var(--cf-ok, #1e8e58); background: #f6fbf8; opacity: .92 }
+.cf-todo__card:hover {
+  box-shadow: 0 2px 10px rgba(18, 41, 74, .08);
+  border-top-color: #b9cbe6; border-right-color: #b9cbe6; border-bottom-color: #b9cbe6;
+}
+/* 整张主任务卡片按 A/B/C 重要程度着色；临期/逾期由截止时间徽标单独提示。 */
+.cf-todo__card.is-importance-A { border-left-color: #c62a2a; background: #ffe2e2 }
+.cf-todo__card.is-importance-B { border-left-color: #e0ad16; background: #fff0b3 }
+.cf-todo__card.is-importance-C { border-left-color: #cfd4dc; background: #fff }
+.cf-todo__card.is-done { border-left-color: var(--cf-ok, #1e8e58); background: #dff3e5; opacity: .96 }
+.cf-todo__card.is-cf-todo-target { animation: cf-todo-target-flash 2.6s ease-out }
+@keyframes cf-todo-target-flash {
+  0%, 35%, 70% { background-color: #fff0a8; box-shadow: 0 0 0 4px rgba(200, 164, 92, .42) }
+  18%, 53%, 100% { background-color: #fff; box-shadow: 0 0 0 0 rgba(200, 164, 92, 0) }
+}
 /* 拖拽把手：仅管理层桌面端渲染；竖排双点更像"可抓握" */
 .cf-todo__drag {
   flex: none; align-self: center; cursor: grab; user-select: none;
@@ -1044,7 +1068,7 @@ onBeforeUnmount(() => {
 .cf-todo__sub-all { color: var(--cf-ok, #1e8e58); font-weight: 600 }
 .cf-todo__sub-tip { color: #8a929e }
 .cf-todo__subs {
-  margin-top: 8px; padding: 8px 10px; background: #f7f9fc;
+  margin-top: 8px; padding: 8px 10px; background: rgba(255, 255, 255, .28);
   border: 1px dashed #d6dee9; border-radius: 6px;
 }
 .cf-todo__sub { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 13px }
@@ -1060,7 +1084,7 @@ onBeforeUnmount(() => {
 /* 管理层意见设置行 */
 .cf-todo__meta-edit {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px;
-  padding: 6px 8px; background: #fbfcfe; border: 1px dashed #dfe4ea; border-radius: 6px;
+  padding: 6px 8px; background: rgba(255, 255, 255, .28); border: 1px dashed #dfe4ea; border-radius: 6px;
 }
 /* 「为什么勾不动」的内联说明：放在标题行内，常驻可见不悬浮。
    位置在 .cf-todo__card-title（flex 行）里，需允许收缩换行，
@@ -1073,9 +1097,17 @@ onBeforeUnmount(() => {
 }
 .cf-todo__meta-edit-label { font-size: 12px; color: #8a929e; flex: none }
 
-/* ABC 三档选中色（.cf-abc）已移到 styles/index.css：
-   待办批量编辑器（2026-10-13）现在有三个入口共用这套三档，
-   藏在 CaseTodoPanel 里会让另外两处的样式依赖"恰好加载过这个面板"。 */
+.cf-todo__grade { display: inline-flex; align-items: stretch }
+.cf-todo__grade-button {
+  min-width: 34px; height: 24px; border: 1px solid #dcdfe6; border-right: 0;
+  background: #fff; color: #606266; cursor: pointer; font-size: 12px;
+}
+.cf-todo__grade-button:first-child { border-radius: 4px 0 0 4px }
+.cf-todo__grade-button:last-child { border-right: 1px solid #dcdfe6; border-radius: 0 4px 4px 0 }
+.cf-todo__grade-button.is-a.is-active { background: #c62a2a; border-color: #c62a2a; color: #fff }
+.cf-todo__grade-button.is-b.is-active { background: #f4c542; border-color: #f4c542; color: #303133 }
+.cf-todo__grade-button.is-c.is-active { background: #fff; border-color: #9da6b3; color: #303133 }
+.cf-todo__grade-button:focus-visible { outline: 2px solid #409eff; outline-offset: 2px; z-index: 1 }
 
 /* 操作区 */
 .cf-todo__card-actions {

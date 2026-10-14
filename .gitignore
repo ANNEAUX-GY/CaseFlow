@@ -17,6 +17,7 @@ app/backend/target/
 app/.venv/
 app/backend/data/uploads/
 app/backend/data/h2/*.trace.db
+app/backend/data/h2/caseflow-before-close-request-*.mv.db
 **/__pycache__/
 
 # ---- 本地日志与临时文件 ----

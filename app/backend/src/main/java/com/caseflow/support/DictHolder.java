@@ -45,6 +45,7 @@ public class DictHolder {
                 "DETAIN_END", "刑事拘留期限届满", "ARREST_END", "逮捕期限届满",
                 "BAIL_END", "取保候审期限届满", "RESIDENCE_END", "监视居住期限届满",
                 "SUPP_PROBE", "补充侦查期限届满", "CUSTODY_CHANGE", "变更强制措施时间",
+                "CUSTODY_TERM_CHANGE", "变更羁押期限",
                 "OTHER", "其他时间节点"));
     }
 

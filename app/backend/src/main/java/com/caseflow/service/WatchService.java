@@ -63,6 +63,10 @@ public class WatchService {
             String fs = vo.getFlowStage() == null || vo.getFlowStage().trim().isEmpty()
                     ? com.caseflow.flow.CaseFlowTemplate.STAGE_INITIAL
                     : vo.getFlowStage();
+            if ("ADMINISTRATIVE".equals(vo.getCaseType())
+                    && !com.caseflow.flow.CaseFlowTemplate.STAGE_CLOSED.equals(fs)) {
+                fs = com.caseflow.flow.CaseFlowTemplate.STAGE_INITIAL;
+            }
             vo.setFlowStage(fs);
             vo.setFlowStageName(com.caseflow.flow.CaseFlowTemplate.stageLabel(fs));
             // 阶段进度口径 = 该阶段**案件待办**的完成情况（2026-10-12）。
@@ -76,7 +80,7 @@ public class WatchService {
             vo.setTodoDone(fDone);
             vo.setTodoTotal(fTotal);
             // 阶段做完不自动跳（出口要人拍板），但必须让领导看得见「这个案子在等你确认流转」
-            vo.setFlowFinished(fTotal > 0 && fDone == fTotal
+            vo.setFlowFinished(!"ADMINISTRATIVE".equals(vo.getCaseType()) && fTotal > 0 && fDone == fTotal
                     && !com.caseflow.flow.CaseFlowTemplate.STAGE_CLOSED.equals(fs));
             // 初查状态四态（2026-10-14）：未分配 → 已分配 → 已签收 → 已反馈。
             // 与 CaseVO.investStage 注释里的判定链保持一致
@@ -190,17 +194,20 @@ public class WatchService {
 
         // 初查：无强制措施（含拘传这类不改变在押状态的）+ 在办
         List<CaseInfo> initial = open.stream()
-                .filter(c -> initialModule.equals(com.caseflow.flow.PoliceGroup.moduleOfMeasure(c.getCaseMeasure())))
+                .filter(c -> "ADMINISTRATIVE".equals(c.getCaseType())
+                        || initialModule.equals(com.caseflow.flow.PoliceGroup.moduleOfMeasure(c.getCaseMeasure())))
                 .collect(Collectors.toList());
         vo.setInitialTotal(initial.size());
         vo.setInitialWithSuspect(countWithSuspect(initial.stream().map(CaseInfo::getId).collect(Collectors.toList())));
 
         // 刑拘在办（拘留 / 逮捕）/ 取保监居
         List<CaseInfo> detention = open.stream()
-                .filter(c -> c.getCaseMeasure() != null && detentionMeasures.contains(c.getCaseMeasure()))
+                .filter(c -> !"ADMINISTRATIVE".equals(c.getCaseType())
+                        && c.getCaseMeasure() != null && detentionMeasures.contains(c.getCaseMeasure()))
                 .collect(Collectors.toList());
         List<CaseInfo> bail = open.stream()
-                .filter(c -> c.getCaseMeasure() != null && bailMeasures.contains(c.getCaseMeasure()))
+                .filter(c -> !"ADMINISTRATIVE".equals(c.getCaseType())
+                        && c.getCaseMeasure() != null && bailMeasures.contains(c.getCaseMeasure()))
                 .collect(Collectors.toList());
         vo.setDetentionTotal(detention.size());
         vo.setBailTotal(bail.size());

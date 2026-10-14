@@ -3,8 +3,8 @@
     <div class="cf-picker__head">
       <div class="cf-picker__title">请选择案件类型</div>
       <div class="cf-picker__sub">
-        选定大类后进入该类的小类卡片页，再选小类进入具体栏目；
-        本次浏览的案件列表、看板与统计都只显示该类案件
+        选择“查看全部”可直接进入栏目；刑事案件先选办案阶段，其他案件按原流程选择小类。
+        列表、看板与统计会跟随当前选择
       </div>
     </div>
 
@@ -37,7 +37,7 @@
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { CASE_TYPE_OPTIONS, GATED_PATHS, boardsUrl, useCaseTypeStore } from '../store/caseType'
+import { CASE_TYPE_OPTIONS, LEVEL3_PATHS, boardsUrl, useCaseTypeStore } from '../store/caseType'
 import { caseApi } from '../api'
 
 const props = defineProps({
@@ -67,7 +67,24 @@ const choose = async (o) => {
   const target = resolveFrom()
   store.rememberPath(target.path)
 
-  // 三级浏览（2026-10-09）：选完大类**一律**先过小类卡片这一级，
+  // “查看全部”跳过小类页，清掉地址中的类型和小类筛选后直接进入栏目。
+  if (o.key === 'ALL') {
+    // 保留通知的案件定位锚点，其余旧筛选一律清空。
+    const query = {}
+    for (const key of ['caseId', 'todoId', 'subtaskId']) {
+      if (target.query?.[key]) query[key] = target.query[key]
+    }
+    router.push({ path: target.path, query })
+    return
+  }
+
+  // 刑事案件先选办案阶段；初查再选小类，刑拘/取保监居直接进入案件盯办。
+  if (o.key === 'CRIMINAL') {
+    router.push({ path: '/case-stages' })
+    return
+  }
+
+  // 其他大类沿用原有小类浏览，
   // 不再区分目标栏目；最终落点（含原有筛选）用 to 带过去，选完小类再落位。
   // 对应地，退出时也逐级退回：栏目页 → 小类页 → 大类页。
   const qs = target.query ? new URLSearchParams(target.query).toString() : ''
@@ -81,8 +98,8 @@ const resolveFrom = () => {
   const s = String(raw)
   if (!s.startsWith('/')) return { path: '/cases' }   // 防注入：只接受站内绝对路径
   const [p, qs] = s.split('?')
-  // 只允许跳到受门控的栏目，防止 from 被构造成跳到任意路由
-  if (!GATED_PATHS.some(g => p === g)) return { path: '/cases' }
+  // 只允许跳到最终栏目，避免“查看全部”误落在中间的小类卡片页。
+  if (!LEVEL3_PATHS.includes(p)) return { path: '/cases' }
   if (!qs) return { path: p }
   const query = {}
   for (const [k, v] of new URLSearchParams(qs).entries()) query[k] = v
@@ -94,7 +111,7 @@ const loadCounts = async () => {
   const out = {}
   for (const o of options) {
     try {
-      const data = await caseApi.page({ page: 1, size: 1, caseType: o.scope })
+      const data = await caseApi.page({ page: 1, size: 1, ...(o.scope ? { caseType: o.scope } : {}) })
       out[o.key] = data?.total ?? 0
     } catch (e) {
       out[o.key] = 0

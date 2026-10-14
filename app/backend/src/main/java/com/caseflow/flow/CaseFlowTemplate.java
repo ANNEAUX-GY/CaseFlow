@@ -78,14 +78,12 @@ public final class CaseFlowTemplate {
      */
     public static List<String[]> transitionsOf(String caseType, String stage) {
         List<String[]> out = new ArrayList<>();
+        // 行政案件只有初查阶段，办结由案件状态处理，不走刑事阶段流转。
+        if (ADMIN_TYPES.contains(caseType)) {
+            return out;
+        }
         if (STAGE_INITIAL.equals(stage)) {
-            if (ADMIN_TYPES.contains(caseType)) {
-                // 行政：批准行政处罚后办结
-                out.add(new String[]{"PUNISH", STAGE_CLOSED});
-            } else {
-                // 刑事初查 → 刑拘在办（唯一出口）
-                out.add(new String[]{"DETAIN", STAGE_DETAIN});
-            }
+            // 刑事初查在实际执行拘留或逮捕后自动转段，不由按钮提前流转。
         } else if (STAGE_DETAIN.equals(stage)) {
             // 刑拘在办 → 取保及监居（主干）；逮捕 / 释放 通向终结，保留待议
             out.add(new String[]{"BAIL", STAGE_BAIL});
@@ -113,6 +111,6 @@ public final class CaseFlowTemplate {
         }
     }
 
-    /** 行政案件类型：走行政处罚流程，不适用刑事的刑拘/取保主干 */
+    /** 行政案件类型：仅有初查阶段，不适用刑事的阶段流转 */
     private static final List<String> ADMIN_TYPES = Arrays.asList("ADMINISTRATIVE");
 }

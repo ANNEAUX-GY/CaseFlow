@@ -338,10 +338,10 @@ const locateAnchor = async (anchor) => {
   setTimeout(() => el.classList.remove('is-cf-flash'), 2600)
 }
 
-/** 勾选主任务时直接打开「标记完成」的反馈弹窗（完成必须带落实状态） */
+/** 管理层确认主任务完成时直接落库，不再重复填写落实状态弹窗。 */
 const openComplete = async (id) => {
   await open(id)
-  openCompleteMain()
+  await openCompleteMain()
 }
 
 /**
@@ -466,9 +466,19 @@ const canEditFeedback = (f) =>
   isAdmin.value || String(f.creatorId) === String(userStore.userInfo?.userId)
 
 const openRecord = () => openFeedbackDlg({ target: 'main', complete: false })
-const openCompleteMain = () => {
-  if (!canDone.value) return
-  openFeedbackDlg({ target: 'main', complete: true })
+const openCompleteMain = async () => {
+  if (!canDone.value || savingDone.value) return
+  savingDone.value = true
+  try {
+    await todoApi.done(todoId.value, '')
+    ElMessage.success('已标记完成')
+    await load()
+    emit('changed')
+  } catch (e) {
+    await load()
+  } finally {
+    savingDone.value = false
+  }
 }
 
 const undoMain = async () => {

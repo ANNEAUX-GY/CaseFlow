@@ -5,10 +5,10 @@
 //     用户点击则可直接添加该待办」
 //
 // 覆盖点：
-//   A 弹窗底部出现「常用待办」区：有标签、有"点一下就直接加一条"的说明、最多 8 条
+//   A 弹窗底部出现「常用待办」区：有标签、有"点一下填进表格"的说明、最多 8 条
 //   B 记忆来自后台：按本人使用次数从多到少排，次数会以角标显示
-//   C 点标签 = 直接添加：不打字、不用再点保存，弹窗继续开着可以接着写
-//   D 添加后次数 +1，面板与接口两侧都同步（卡片多一张、角标跟着涨）
+//   C 点标签只填表，不直接落库；用户编辑后点保存才添加
+//   D 保存后次数 +1，面板与接口两侧都同步（卡片多一张、角标跟着涨）
 //   E 自己手写的待办保存后也进记忆（下次就能一键添加）
 //   F 空态兜底：没有任何记忆时不显示这一块，不占地方
 //
@@ -205,7 +205,7 @@ const run = async () => {
     const block = await presetBlockText()
     console.log('  常用待办区文案 =', JSON.stringify(block.replace(/\s+/g, ' ').slice(0, 120)))
     checkTrue('A2 底部有「常用待办」四个字', block.includes('常用待办'), block.slice(0, 80))
-    checkTrue('A3 说清了怎么用（点一下就直接加一条）', block.includes('点一下就直接加一条'), block.slice(0, 80))
+    checkTrue('A3 说清了怎么用（点一下填进表格）', block.includes('点一下填进上面的表格'), block.slice(0, 80))
 
     const cs = await chips()
     console.log('  标签 =', JSON.stringify(cs.map((c) => [c.text.slice(0, 14), c.n])))
@@ -215,7 +215,7 @@ const run = async () => {
       await p.evaluate(() => [...document.querySelectorAll('.cf-btodo__chip')]
         .every((c) => (c.innerText || '').trim().startsWith('＋'))))
     checkTrue('A7 标签有悬浮说明（完整内容不用猜）',
-      cs.every((c) => c.title.includes('点击直接添加')), JSON.stringify(cs[0]))
+      cs.every((c) => c.title.includes('点击填入')), JSON.stringify(cs[0]))
     await p.screenshot({ path: `${OUT}/tp1-presets.png` })
 
     // ================= B. 记忆来自后台（次数角标）=================
@@ -229,8 +229,8 @@ const run = async () => {
     check('B3 前8 的顺序与接口一致（都是按次数排）',
       cs.map((c) => c.text), before.slice(0, 8).map((x) => x.content))
 
-    // ================= C. 点标签 = 直接添加 =================
-    console.log('\n=== C. 点一下就添加（不用打字、不用再点保存）===')
+    // ================= C. 点标签先填表，保存后才添加 =================
+    console.log('\n=== C. 点常用项填入表格，保存后添加 ===')
     const target = cs[0].text
     console.log('  点第一个标签 =', JSON.stringify(target.slice(0, 20)))
     const opsBefore = (await opinionsApi()).filter((o) => o.content === target).length
@@ -241,18 +241,23 @@ const run = async () => {
       const c = document.querySelectorAll('.cf-btodo__chip')[0]
       c && c.click()
     })
-    await sleep(1400)
-    const ts = await toasts()
-    console.log('  提示 =', JSON.stringify(ts))
-    checkTrue('C1 提示已添加，并带上加的是哪一条',
-      ts.some((t) => t.includes('已添加') && t.includes(target.slice(0, 8))), JSON.stringify(ts))
-    checkTrue('C2 弹窗不关（接着写别的照旧）', await dlgVisible())
+    await sleep(500)
+    const presetInput = await p.evaluate(() =>
+      document.querySelector('.cf-btodo__row .cf-btodo__content input')?.value || '')
+    check('C1 点常用项后填入编辑行', presetInput, target)
+    checkTrue('C2 点常用项不关闭弹窗', await dlgVisible())
 
     const opsAfter = (await opinionsApi()).filter((o) => o.content === target).length
-    check('C3 库里真的多了一条', opsAfter, opsBefore + 1)
+    check('C3 点常用项后尚未写入数据库', opsAfter, opsBefore)
+    await dlgFooterBtn('保存')
+    await sleep(900)
+    check('C4 保存后弹窗关闭', await dlgVisible(), false)
+    const opsSaved = (await opinionsApi()).filter((o) => o.content === target).length
+    check('C5 保存后才写入一条', opsSaved, opsBefore + 1)
     const cardsAfter = await p.evaluate((t) => [...document.querySelectorAll('.cf-todo__card')]
       .filter((c) => (c.querySelector('.cf-todo__name')?.innerText || '').trim() === t).length, target)
-    check('C4 面板上跟着多一张卡', cardsAfter, cardsBefore + 1)
+    check('C6 保存后面板上多一张卡', cardsAfter, cardsBefore + 1)
+    await openAddDialog()
 
     // ================= D. 添加后次数 +1 =================
     console.log('\n=== D. 用过一次就记一次 ===')

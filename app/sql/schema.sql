@@ -107,6 +107,9 @@ CREATE TABLE IF NOT EXISTS case_deadline_state (
     admin_30_doc_at DATETIME DEFAULT NULL COMMENT '30日延长文书呈报时间',
     admin_extended_at DATETIME DEFAULT NULL COMMENT '确认延长至总计60天时间',
     admin_60_doc_at DATETIME DEFAULT NULL COMMENT '60日延长文书呈报时间',
+    admin_extended90_at DATETIME DEFAULT NULL COMMENT '第二次确认延长至总计90天时间',
+    filing_at DATETIME DEFAULT NULL COMMENT '刑事案件立案时间',
+    arrest_target_at DATETIME DEFAULT NULL COMMENT '领导确定的拘捕目标时间',
     admin_check_3_at DATETIME DEFAULT NULL COMMENT '第3日内部监督完成时间',
     admin_check_10_at DATETIME DEFAULT NULL COMMENT '第10日内部监督完成时间',
     admin_check_20_at DATETIME DEFAULT NULL COMMENT '第20日内部监督完成时间',
@@ -341,6 +344,25 @@ CREATE TABLE IF NOT EXISTS case_approval (
     approver_id   BIGINT       DEFAULT NULL COMMENT '审批人',
     approver_name VARCHAR(64)  DEFAULT NULL COMMENT '审批人姓名（冗余）',
     created_at    DATETIME     DEFAULT CURRENT_TIMESTAMP COMMENT '审批时间'
+);
+
+-- 行政案件结案申请：经办人提交处理结果，管理层审核后办结；退回可重新申请。
+CREATE TABLE IF NOT EXISTS case_close_request (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    case_id BIGINT NOT NULL,
+    outcome VARCHAR(24) NOT NULL,
+    note VARCHAR(600) DEFAULT NULL,
+    operation_time VARCHAR(32) DEFAULT NULL,
+    operation_platform VARCHAR(100) DEFAULT NULL,
+    operation_action VARCHAR(200) DEFAULT NULL,
+    status VARCHAR(16) NOT NULL,
+    submitted_by BIGINT DEFAULT NULL,
+    submitted_by_name VARCHAR(64) DEFAULT NULL,
+    submitted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    reviewed_by BIGINT DEFAULT NULL,
+    reviewed_by_name VARCHAR(64) DEFAULT NULL,
+    reviewed_at DATETIME DEFAULT NULL,
+    review_comment VARCHAR(500) DEFAULT NULL
 );
 
 -- 6. 操作日志（追溯功能的底座，第一版即全量埋点；同时是「撤回上一步」的依据）

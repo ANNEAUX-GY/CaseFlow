@@ -67,11 +67,21 @@
             </el-table-column>
             <el-table-column label="案件" min-width="220">
               <template #default="{ row }">
-                <div class="cf-cell-strong">{{ row.caseName || '-' }}</div>
+                <button class="cf-todo-overview__link cf-cell-strong" type="button"
+                  :disabled="!row.caseId || !row.id" @click="openTodo(row)">
+                  {{ row.caseName || '-' }}
+                </button>
                 <div class="cf-muted">{{ row.caseNo || '-' }}</div>
               </template>
             </el-table-column>
-            <el-table-column prop="content" label="待办内容" min-width="220" show-overflow-tooltip />
+            <el-table-column label="待办内容" min-width="220" show-overflow-tooltip>
+              <template #default="{ row }">
+                <button class="cf-todo-overview__link" type="button"
+                  :disabled="!row.caseId || !row.id" @click="openTodo(row)">
+                  {{ row.content || '-' }}
+                </button>
+              </template>
+            </el-table-column>
             <el-table-column label="状态" width="90" align="center">
               <template #default="{ row }">
                 <el-tag :type="row.status === 'DONE' ? 'success' : 'warning'" size="small" effect="plain">
@@ -112,11 +122,13 @@ import { Search } from '@element-plus/icons-vue'
 import { fileApi, todoApi } from '../api'
 import { withCaseType } from '../store/caseType'
 import { useUserStore } from '../store/user'
+import { useRouter } from 'vue-router'
 import FocusStar from '../components/FocusStar.vue'
 import FocusOnlyToggle from '../components/FocusOnlyToggle.vue'
 
 // 与盯办一致：标注重点是管理端能力，普通民警不渲染星标
 const userStore = useUserStore()
+const router = useRouter()
 const canFocus = computed(() => userStore.isFullAccess)
 
 
@@ -138,6 +150,15 @@ const filtered = computed(() => {
 
 const fmtTime = (s) => (s ? String(s).replace('T', ' ').slice(0, 16) : '-')
 
+/** 打开案件详情，并把对应待办作为闪烁定位锚点 */
+const openTodo = (row) => {
+  if (!row?.caseId || !row?.id) return
+  router.push({
+    path: '/cases',
+    query: { caseId: String(row.caseId), todoId: String(row.id), highlightTodo: '1' }
+  })
+}
+
 const load = async () => {
   loading.value = true
   try {
@@ -158,3 +179,13 @@ const download = (f) => {
 
 onMounted(load)
 </script>
+
+<style scoped>
+.cf-todo-overview__link {
+  display: inline; padding: 0; border: 0; background: transparent;
+  color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.cf-todo-overview__link:hover { color: #1b4a8c; text-decoration: underline }
+.cf-todo-overview__link:focus-visible { outline: 2px solid #1b4a8c; outline-offset: 2px }
+.cf-todo-overview__link:disabled { cursor: default; text-decoration: none }
+</style>

@@ -8,7 +8,7 @@
           当前大类下的案件按小类分成卡片，点击卡片即可查看该小类的案件
         </template>
         <template v-else>
-          该栏目没有小类维度，直接进入即可；案件列表与案件盯办才支持按小类筛选
+          该栏目没有小类维度，直接进入即可；案件管理、已办结案件与案件盯办支持按小类筛选
         </template>
         <br />
         退回上一级（重选大类）请点顶部类型条右侧的按钮
@@ -47,7 +47,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowRight } from '@element-plus/icons-vue'
-import { caseApi } from '../api'
+import { caseApi, watchApi } from '../api'
 import { useCategoryStore } from '../store/category'
 import { CATEGORY_AWARE_PATHS, parseLevel3, useCaseTypeStore, withCaseType } from '../store/caseType'
 
@@ -79,6 +79,8 @@ const boards = ref([])
 
 /** 最终落点栏目（大类页用 to 带过来；非法值 parseLevel3 会退回案件管理） */
 const target = computed(() => parseLevel3(String(route.query.to || '/cases')))
+const criminalInitial = computed(() => caseTypeStore.current === 'CRIMINAL'
+  && target.value.path === '/watch' && target.value.query.module === 'INITIAL')
 /** 落点栏目是否支持小类筛选 */
 const categoryAware = computed(() => CATEGORY_AWARE_PATHS.includes(target.value.path))
 
@@ -91,12 +93,15 @@ const TREE_KEY = { CRIMINAL: 'CRIMINAL', ADMINISTRATIVE: 'ADMINISTRATIVE' }
 /** 统计某类别在当前类型下的案件数（口径与案件管理列表一致） */
 const countOf = async (category) => {
   const params = withCaseType({ page: 1, size: 1 })
+  if (target.value.path === '/closed-cases') params.status = 'DONE'
   if (category) params.category = category
   Object.keys(params).forEach((k) => {
     if (params[k] === '' || params[k] == null) delete params[k]
   })
   try {
-    const data = await caseApi.page(params)
+    const data = criminalInitial.value
+      ? await watchApi.cases({ ...params, module: 'INITIAL' })
+      : await caseApi.page(params)
     return data?.total ?? 0
   } catch (e) {
     return 0

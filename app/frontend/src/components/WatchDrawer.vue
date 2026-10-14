@@ -3,7 +3,9 @@
     <div v-if="detail.id" v-loading="loading" style="padding: 4px 4px 20px">
       <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom: 14px">
         <b style="font-size: 15px">{{ detail.name }}</b>
-        <el-tag v-if="detail.investigationStatus" size="small"
+        <el-tag v-if="detail.caseType === 'ADMINISTRATIVE'" size="small"
+          :type="detail.status === 'DONE' ? 'success' : 'primary'">{{ detail.status === 'DONE' ? '已办结' : '已受案' }}</el-tag>
+        <el-tag v-else-if="detail.investigationStatus" size="small"
           :type="(INVEST_STATUS_META[detail.investigationStatus] || {}).type">
           {{ (INVEST_STATUS_META[detail.investigationStatus] || {}).label }}
         </el-tag>
@@ -14,13 +16,13 @@
         </el-tag>
         <span class="cf-spacer"></span>
         <!-- 开始侦查：办案人本人的动作（表示"我开始干了"），管理层不代点 -->
-        <el-button v-if="isAssignee && canStart" size="small" type="primary" @click="doTransition('START')">开始侦查</el-button>
-        <el-button v-if="canSubmit" size="small" type="warning" @click="doTransition('SUBMIT')">申请已提交审核</el-button>
-        <template v-if="detail.investigationStatus === 'PENDING_APPROVAL' && isFullAccess">
+        <el-button v-if="detail.caseType !== 'ADMINISTRATIVE' && isAssignee && canStart" size="small" type="primary" @click="doTransition('START')">开始侦查</el-button>
+        <el-button v-if="detail.caseType !== 'ADMINISTRATIVE' && canSubmit" size="small" type="warning" @click="doTransition('SUBMIT')">申请已提交审核</el-button>
+        <template v-if="detail.caseType !== 'ADMINISTRATIVE' && detail.investigationStatus === 'PENDING_APPROVAL' && isFullAccess">
           <el-button size="small" type="success" @click="doApprove('APPROVE')">同意终结</el-button>
           <el-button size="small" type="danger" plain @click="doApprove('REJECT')">退回补侦</el-button>
         </template>
-        <span v-if="canStart && !isAssignee" class="cf-muted" style="font-size: 12px">
+        <span v-if="detail.caseType !== 'ADMINISTRATIVE' && canStart && !isAssignee" class="cf-muted" style="font-size: 12px">
           由办案人本人点击开始侦查
         </span>
       </div>
@@ -40,8 +42,8 @@
             </div>
             <div v-if="deadlineView.canSubmit && detail.investigationStatus !== 'PENDING_APPROVAL'" class="cf-muted" style="margin-bottom:8px">预审或法制已审核通过并接收，可以申请已提交审核。</div>
           </template>
-          <div v-if="detail.caseType === 'ADMINISTRATIVE' && !detail.acceptTime" style="margin-bottom:10px">
-            <span class="cf-muted">请先登记受案时间；确认延长30天后，才显示第60天节点。</span>
+          <div v-if="['ADMINISTRATIVE', 'CRIMINAL'].includes(detail.caseType) && !detail.acceptTime" style="margin-bottom:10px">
+            <span class="cf-muted">{{ detail.caseType === 'ADMINISTRATIVE' ? '请先登记受案时间；默认30天，逐次呈文书并确认后可延长至60天、90天。' : '请先登记受案时间；刑事案件须在受案起30天内立案。' }}</span>
             <el-button v-if="isFullAccess" link type="primary" @click="openRecord('ACCEPT')">登记受案时间</el-button>
           </div>
           <el-table v-if="deadlineView.items?.length" :data="deadlineView.items" size="small" max-height="350">
@@ -116,7 +118,7 @@
       <div class="cf-panel" style="margin-top: 12px">
         <div class="cf-panel__head">
           <span>办案阶段</span>
-          <span class="cf-panel__head-tip">本阶段待办全部办完后，由领导确认转入下一阶段</span>
+          <span class="cf-panel__head-tip">{{ detail.caseType === 'ADMINISTRATIVE' ? '行政案件仅设初查阶段' : '本阶段待办全部办完后，由领导确认转入下一阶段' }}</span>
         </div>
         <div style="padding: 12px 16px">
           <CaseStageBar :case-id="detail.id" @changed="after" />
@@ -149,8 +151,9 @@
     </el-dialog>
 
     <!-- 强制措施登记 -->
-    <el-dialog v-model="recordDlg.visible" :title="managerRecordKeys.has(recordDlg.key) ? '确认审核或延长时间' : '录入办理时间'" width="410px" append-to-body>
+    <el-dialog v-model="recordDlg.visible" :title="recordDlg.key === 'ARREST_TARGET' ? '领导确定拘捕目标时间' : managerRecordKeys.has(recordDlg.key) ? '确认审核或延长时间' : '录入办理时间'" width="410px" append-to-body>
       <el-date-picker v-model="recordDlg.at" type="datetime" value-format="YYYY-MM-DD HH:mm:ss" style="width:100%" />
+      <div v-if="recordDlg.key === 'ARREST_TARGET'" class="cf-muted" style="margin-top:8px;font-size:12px">此时间由领导决定；实际执行拘捕后，再登记强制措施及执行日期。</div>
       <template #footer>
         <el-button @click="recordDlg.visible = false">取消</el-button>
         <el-button type="primary" :loading="recordDlg.loading" @click="submitRecord">保存</el-button>
@@ -166,7 +169,7 @@
             <el-option v-for="m in MEASURE_CHOICES" :key="m.value" :label="m.label" :value="m.value" />
           </el-select>
         </el-form-item>
-        <el-form-item label="措施日期">
+        <el-form-item label="措施日期" :required="detail.caseType === 'CRIMINAL' && ['DETENTION', 'ARREST'].includes(measureDlg.measure)">
           <el-date-picker v-model="measureDlg.measureDate" type="date" value-format="YYYY-MM-DD"
             :disabled="measureDlg.measure === 'NONE'" style="width: 100%" />
         </el-form-item>
@@ -210,8 +213,8 @@ const loading = ref(false)
 const detail = ref({})
 const deadlineView = ref({ items: [], state: {}, detentionTerm: '3' })
 const dayText = (v) => (v || '').slice(0, 10) || '—'
-const recordKey = (key) => ({ PRETRIAL: 'PRETRIAL', LEGAL: 'LEGAL', PRETRIAL_ACCEPT: 'PRETRIAL_ACCEPT', LEGAL_ACCEPT: 'LEGAL_ACCEPT', SUMMONS: 'SUMMONS', SUMMONS_MONTH: 'SUMMONS', SUMMONS_MAX: 'SUMMONS', ADMIN_30: 'ADMIN_30', ADMIN_EXTEND: 'ADMIN_EXTEND', ADMIN_60: 'ADMIN_60', ADMIN_CHECK_3: 'ADMIN_CHECK_3', ADMIN_CHECK_10: 'ADMIN_CHECK_10', ADMIN_CHECK_20: 'ADMIN_CHECK_20' })[key]
-const managerRecordKeys = new Set(['PRETRIAL_ACCEPT', 'LEGAL_ACCEPT', 'ADMIN_EXTEND'])
+const recordKey = (key) => ({ PRETRIAL: 'PRETRIAL', LEGAL: 'LEGAL', PRETRIAL_ACCEPT: 'PRETRIAL_ACCEPT', LEGAL_ACCEPT: 'LEGAL_ACCEPT', SUMMONS: 'SUMMONS', SUMMONS_MONTH: 'SUMMONS', SUMMONS_MAX: 'SUMMONS', ACCEPT: 'ACCEPT', FILING: 'FILING', ARREST_TARGET: 'ARREST_TARGET', ADMIN_30: 'ADMIN_30', ADMIN_EXTEND: 'ADMIN_EXTEND', ADMIN_60: 'ADMIN_60', ADMIN_EXTEND_90: 'ADMIN_EXTEND_90', ADMIN_CHECK_3: 'ADMIN_CHECK_3', ADMIN_CHECK_10: 'ADMIN_CHECK_10', ADMIN_CHECK_20: 'ADMIN_CHECK_20' })[key]
+const managerRecordKeys = new Set(['PRETRIAL_ACCEPT', 'LEGAL_ACCEPT', 'ADMIN_EXTEND', 'ADMIN_EXTEND_90', 'ARREST_TARGET'])
 /** 现役承办人（主办/协办），供「主办人与盯办人」区块展示 */
 const assignees = computed(() =>
   (detail.value.assignHistory || []).filter(a => a.status === 'ACTIVE')
@@ -322,6 +325,11 @@ const submitRecord = async () => {
   } finally { recordDlg.loading = false }
 }
 const submitMeasure = async () => {
+  if (detail.value.caseType === 'CRIMINAL' && ['DETENTION', 'ARREST'].includes(measureDlg.measure)
+      && !measureDlg.measureDate && detail.value.caseMeasure !== measureDlg.measure) {
+    ElMessage.warning('请填写拘捕实际执行日期')
+    return
+  }
   measureDlg.loading = true
   try {
     await watchApi.measure(props.caseId, {

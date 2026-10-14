@@ -138,18 +138,38 @@ public class CaseDeadlineService {
             if (s.getPretrialSentAt() != null) add(items, "PRETRIAL_ACCEPT", "预审审核通过并接收", null, null, s.getPretrialReceivedAt(), now);
             if (s.getLegalSentAt() != null) add(items, "LEGAL_ACCEPT", "法制审核通过并接收", null, null, s.getLegalReceivedAt(), now);
         }
+        if ("CRIMINAL".equals(c.getCaseType()) && c.getAcceptTime() != null) {
+            LocalDateTime base = c.getAcceptTime();
+            add(items, "FILING", "受案起第30天内立案", day(base, 30), day(base, 23), s.getFilingAt(), now);
+            if (s.getFilingAt() != null) {
+                add(items, "ARREST_TARGET", "领导确定拘捕目标时间", null, null, s.getArrestTargetAt(), now);
+                if (s.getArrestTargetAt() != null) {
+                    LocalDateTime executed = ("DETENTION".equals(c.getCaseMeasure())
+                            || "ARREST".equals(c.getCaseMeasure())) ? c.getMeasureDate() : null;
+                    add(items, "ARREST_EXECUTE", "按领导确定时间执行拘捕",
+                            s.getArrestTargetAt(), s.getArrestTargetAt().minusWeeks(1), executed, now);
+                }
+            }
+        }
         if ("ADMINISTRATIVE".equals(c.getCaseType()) && c.getAcceptTime() != null) {
             LocalDateTime base = c.getAcceptTime();
             add(items, "ADMIN_CHECK_3", "第3天所内部监督", day(base, 3), day(base, 3), s.getAdminCheck3At(), now);
             add(items, "ADMIN_CHECK_10", "第10天所内部监督", day(base, 10), day(base, 10), s.getAdminCheck10At(), now);
             add(items, "ADMIN_CHECK_20", "第20天所内部监督", day(base, 20), day(base, 20), s.getAdminCheck20At(), now);
-            add(items, "ADMIN_30", "第30天办结；未办结则呈延长文书", day(base, 30), day(base, 29), s.getAdmin30DocAt(), now);
+            add(items, "ADMIN_30", "默认第30天办结；未办结则呈第一份延长文书", day(base, 30), day(base, 29), s.getAdmin30DocAt(), now);
             if (s.getAdmin30DocAt() != null) {
                 add(items, "ADMIN_EXTEND", "确认延长30天（总期限60天）", day(base, 30),
                         s.getAdmin30DocAt(), s.getAdminExtendedAt(), now);
             }
             if (s.getAdminExtendedAt() != null) {
-                add(items, "ADMIN_60", "已延长30天：第60天前呈延长文书", day(base, 60), day(base, 59), s.getAdmin60DocAt(), now);
+                add(items, "ADMIN_60", "第60天前呈第二份延长文书（拟延长至90天）", day(base, 60), day(base, 59), s.getAdmin60DocAt(), now);
+                if (s.getAdmin60DocAt() != null) {
+                    add(items, "ADMIN_EXTEND_90", "确认第二次延长（总期限90天）", day(base, 60),
+                            s.getAdmin60DocAt(), s.getAdminExtended90At(), now);
+                }
+            }
+            if (s.getAdminExtended90At() != null) {
+                add(items, "ADMIN_90", "第90天办结期限", day(base, 90), day(base, 89), null, now);
             }
         }
         if ("DONE".equals(c.getStatus()) || "CANCELLED".equals(c.getStatus()))
@@ -224,18 +244,23 @@ public class CaseDeadlineService {
         CaseInfo c = requireCase(caseId);
         checkHandlerOrManager(c);
         if (at == null) throw new BizException("请填写有效的实际办理时间");
-        if (at.isAfter(LocalDateTime.now())) throw new BizException("实际办理时间不能晚于现在");
+        if (!"ARREST_TARGET".equals(key) && at.isAfter(LocalDateTime.now()))
+            throw new BizException("实际办理时间不能晚于现在");
         if (key == null) throw new BizException("请选择时限节点");
-        if ((key.startsWith("ADMIN_") || "ACCEPT".equals(key)) && !"ADMINISTRATIVE".equals(c.getCaseType()))
+        if (key.startsWith("ADMIN_") && !"ADMINISTRATIVE".equals(c.getCaseType()))
             throw new BizException("仅行政案件可登记该节点");
+        if (("ACCEPT".equals(key) || "FILING".equals(key) || "ARREST_TARGET".equals(key))
+                && !"CRIMINAL".equals(c.getCaseType()) && !"ADMINISTRATIVE".equals(c.getCaseType()))
+            throw new BizException("当前案件类型不适用该节点");
         if (("PRETRIAL".equals(key) || "LEGAL".equals(key)
                 || "PRETRIAL_ACCEPT".equals(key) || "LEGAL_ACCEPT".equals(key))
                 && !"DETENTION".equals(c.getCaseMeasure()) && !"BAIL".equals(c.getCaseMeasure()))
             throw new BizException("当前强制措施不适用该收件节点");
         if (("PRETRIAL_ACCEPT".equals(key) || "LEGAL_ACCEPT".equals(key)) && !AuthContext.isFullAccess())
             throw new BizException(403, "审核通过并接收须由管理层根据回执登记");
-        if ("ADMIN_EXTEND".equals(key) && !AuthContext.isFullAccess())
-            throw new BizException(403, "确认延长办案期限须由管理层登记");
+        if (("ADMIN_EXTEND".equals(key) || "ADMIN_EXTEND_90".equals(key)
+                || "ARREST_TARGET".equals(key)) && !AuthContext.isFullAccess())
+            throw new BizException(403, "此节点须由管理层登记");
         if ("SUMMONS".equals(key) && !"BAIL".equals(c.getCaseMeasure())
                 && !"RESIDENCE".equals(c.getCaseMeasure()))
             throw new BizException("当前强制措施不适用传讯节点");
@@ -243,8 +268,17 @@ public class CaseDeadlineService {
         LocalDateTime date = at;
         switch (key) {
             case "ACCEPT":
-                if (!"ADMINISTRATIVE".equals(c.getCaseType())) throw new BizException("仅行政案件登记受案时间");
                 c.setAcceptTime(date); cases.updateById(c); break;
+            case "FILING":
+                if (!"CRIMINAL".equals(c.getCaseType()) || c.getAcceptTime() == null)
+                    throw new BizException("刑事案件须先登记受案时间");
+                if (date.isBefore(c.getAcceptTime())) throw new BizException("立案时间不能早于受案时间");
+                s.setFilingAt(date); break;
+            case "ARREST_TARGET":
+                if (!"CRIMINAL".equals(c.getCaseType()) || s.getFilingAt() == null)
+                    throw new BizException("请先登记刑事案件立案时间");
+                if (date.isBefore(s.getFilingAt())) throw new BizException("拘捕目标时间不能早于立案时间");
+                s.setArrestTargetAt(date); break;
             case "PRETRIAL":
                 if (s.getPretrialReceivedAt() != null && date.isAfter(s.getPretrialReceivedAt()))
                     throw new BizException("移交时间不能晚于审核通过并接收时间");
@@ -264,6 +298,8 @@ public class CaseDeadlineService {
             case "SUMMONS": s.setLastSummonsAt(date); break;
             case "ADMIN_30":
                 if (c.getAcceptTime() == null) throw new BizException("请先登记受案时间");
+                if (date.toLocalDate().isAfter(day(c.getAcceptTime(), 30).toLocalDate()))
+                    throw new BizException("第一份延长文书须在第30天前呈报");
                 if (s.getAdminExtendedAt() != null && date.isAfter(s.getAdminExtendedAt()))
                     throw new BizException("延长文书呈报时间不能晚于确认延长时间");
                 s.setAdmin30DocAt(date); break;
@@ -273,7 +309,13 @@ public class CaseDeadlineService {
                 s.setAdminExtendedAt(date); break;
             case "ADMIN_60":
                 if (s.getAdminExtendedAt() == null) throw new BizException("请先确认延长30天");
+                if (date.toLocalDate().isAfter(day(c.getAcceptTime(), 60).toLocalDate()))
+                    throw new BizException("第二份延长文书须在第60天前呈报");
                 s.setAdmin60DocAt(date); break;
+            case "ADMIN_EXTEND_90":
+                if (s.getAdmin60DocAt() == null) throw new BizException("请先呈报第60天前的第二份延长文书");
+                if (date.isBefore(s.getAdmin60DocAt())) throw new BizException("确认延长时间不能早于文书呈报时间");
+                s.setAdminExtended90At(date); break;
             case "ADMIN_CHECK_3": s.setAdminCheck3At(date); break;
             case "ADMIN_CHECK_10": s.setAdminCheck10At(date); break;
             case "ADMIN_CHECK_20": s.setAdminCheck20At(date); break;

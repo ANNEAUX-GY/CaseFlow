@@ -56,7 +56,8 @@ public class TimeNodeService {
      */
     private static final java.util.Set<String> NODE_KEYS = new java.util.HashSet<>(
             java.util.Arrays.asList("ACCEPT", "FILING", "DETAIN_END", "ARREST_END",
-                    "BAIL_END", "RESIDENCE_END", "SUPP_PROBE", "CUSTODY_CHANGE"));
+                    "BAIL_END", "RESIDENCE_END", "SUPP_PROBE", "CUSTODY_CHANGE",
+                    "CUSTODY_TERM_CHANGE"));
 
     @Resource
     private CaseTimeNodeMapper nodeMapper;

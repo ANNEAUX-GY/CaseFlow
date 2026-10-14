@@ -160,9 +160,34 @@ public class ApprovalService {
                 : measureDate != null ? measureDate
                 : sameMeasure && c.getMeasureDate() != null ? c.getMeasureDate() : LocalDateTime.now();
         boolean newEpisode = !sameMeasure || !base.equals(c.getMeasureDate());
-        // 换措施或重新确定措施起算日时，旧收件/传讯/暂停记录不得套到新一期。
+        boolean custodyExecuted = "CRIMINAL".equals(c.getCaseType())
+                && ("DETENTION".equals(measure) || "ARREST".equals(measure));
+        if (custodyExecuted && newEpisode
+                && !com.caseflow.flow.CaseFlowTemplate.STAGE_DETAIN.equals(c.getFlowStage())) {
+            com.caseflow.entity.CaseDeadlineState deadlineState = deadlineStateMapper.selectById(caseId);
+            if (c.getAcceptTime() == null || deadlineState == null || deadlineState.getFilingAt() == null) {
+                throw new BizException("请先登记刑事案件受案时间和立案时间，再登记拘捕执行");
+            }
+            if (measureDate == null) throw new BizException("执行拘捕须填写实际措施日期");
+            if (base.toLocalDate().isBefore(deadlineState.getFilingAt().toLocalDate()))
+                throw new BizException("拘捕执行时间不能早于立案时间");
+            c.setFlowStage(com.caseflow.flow.CaseFlowTemplate.STAGE_DETAIN);
+        }
+        // 换措施或重新确定措施起算日时，只清理本期措施记录。
+        // 受案、立案及行政延期属于案件本身，不能随措施变更被删除。
         if (newEpisode) {
-            deadlineStateMapper.deleteById(caseId);
+            deadlineStateMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<com.caseflow.entity.CaseDeadlineState>()
+                    .eq(com.caseflow.entity.CaseDeadlineState::getCaseId, caseId)
+                    .set(com.caseflow.entity.CaseDeadlineState::getDetentionTerm, null)
+                    .set(com.caseflow.entity.CaseDeadlineState::getPausedAt, null)
+                    .set(com.caseflow.entity.CaseDeadlineState::getPausedDeadline, null)
+                    .set(com.caseflow.entity.CaseDeadlineState::getPausedSeconds, 0L)
+                    .set(com.caseflow.entity.CaseDeadlineState::getPretrialSentAt, null)
+                    .set(com.caseflow.entity.CaseDeadlineState::getLegalSentAt, null)
+                    .set(com.caseflow.entity.CaseDeadlineState::getPretrialReceivedAt, null)
+                    .set(com.caseflow.entity.CaseDeadlineState::getLegalReceivedAt, null)
+                    .set(com.caseflow.entity.CaseDeadlineState::getSubmittedAt, null)
+                    .set(com.caseflow.entity.CaseDeadlineState::getLastSummonsAt, null));
         }
 
         c.setCaseMeasure("NONE".equals(measure) ? null : measure);

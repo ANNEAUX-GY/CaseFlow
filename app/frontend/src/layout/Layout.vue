@@ -39,7 +39,7 @@
           <span class="cf-ctypebar__sep">/</span>
           <span class="cf-ctypebar__tag is-info">{{ currentCategory }}</span>
         </template>
-        <span class="cf-ctypebar__tip">筛选与统计均限定在此类型内</span>
+        <span class="cf-ctypebar__tip">{{ caseTypeStore.current === 'ALL' ? '当前不按案件类型筛选' : '筛选与统计均限定在此类型内' }}</span>
         <span class="cf-spacer"></span>
         <el-button link type="warning" class="cf-ctypebar__exit" @click="onBackLevel">
           {{ backCtx.label }}
@@ -72,7 +72,7 @@ import { Filter } from '@element-plus/icons-vue'
 import { useUserStore } from '../store/user'
 import { usePendingStore } from '../store/pending'
 import { useEventStore } from '../store/events'
-import { useCaseTypeStore, boardsUrl, levelOf, PICKER_PATH } from '../store/caseType'
+import { useCaseTypeStore, boardsUrl, levelOf, PICKER_PATH, STAGES_PATH, BOARDS_PATH, parseLevel3 } from '../store/caseType'
 import { useMyTodoStore } from '../store/myTodo'
 import NavPanel from './NavPanel.vue'
 import WelcomeDialog from '../components/WelcomeDialog.vue'
@@ -176,6 +176,7 @@ const level = computed(() => levelOf(route.path))
 /** 类型条左侧的层级提示语 */
 const levelLabel = computed(() => {
   if (level.value === 1) return '选择案件大类'
+  if (route.path === STAGES_PATH) return '选择办案阶段'
   if (level.value === 2) return '选择小类'
   return '当前案件类型'
 })
@@ -190,7 +191,17 @@ const currentCategory = computed(() => {
 /** 返回按钮文案：按层级决定 */
 const backCtx = computed(() => {
   if (level.value === 1) return { label: '退出类型', kind: 'exit' }
+  if (route.path === BOARDS_PATH && caseTypeStore.current === 'CRIMINAL'
+    && parseLevel3(String(route.query.to || '')).query.module === 'INITIAL') {
+    return { label: '返回阶段', kind: 'upStage' }
+  }
   if (level.value === 2) return { label: '返回大类', kind: 'upType' }
+  if (caseTypeStore.current === 'ALL') return { label: '返回大类', kind: 'upType' }
+  if (caseTypeStore.current === 'CRIMINAL' && route.path === '/watch') {
+    return route.query.module === 'INITIAL'
+      ? { label: '返回类别', kind: 'upCategory' }
+      : { label: '返回阶段', kind: 'upStage' }
+  }
   return { label: '返回类别', kind: 'upCategory' }
 })
 
@@ -210,6 +221,10 @@ const onBackLevel = () => {
   if (kind === 'upType') {
     // 回大类页：带上 from，选完大类后能回到原来那个栏目
     router.push({ path: PICKER_PATH, query: { from: caseTypeStore.lastGatedPath || '/cases' } })
+    return
+  }
+  if (kind === 'upStage') {
+    router.push(STAGES_PATH)
     return
   }
   // upCategory：栏目页 → 小类页。剥掉小类筛选与分页，避免把旧筛选带进新一次选择

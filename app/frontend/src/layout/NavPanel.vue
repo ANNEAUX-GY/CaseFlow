@@ -51,6 +51,10 @@
           <el-icon><Tickets /></el-icon>
           <span>案件管理</span>
         </el-menu-item>
+        <el-menu-item index="/closed-cases">
+          <el-icon><DocumentChecked /></el-icon>
+          <span>已办结案件</span>
+        </el-menu-item>
         <el-menu-item index="/reminders">
           <el-icon><AlarmClock /></el-icon>
           <span>到期提醒</span>
@@ -86,7 +90,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Odometer, Tickets, AlarmClock, Connection, View, UserFilled, Collection, List, Folder } from '@element-plus/icons-vue'
+import { Odometer, Tickets, DocumentChecked, AlarmClock, Connection, View, UserFilled, Collection, List, Folder } from '@element-plus/icons-vue'
 import { useUserStore } from '../store/user'
 import { usePendingStore } from '../store/pending'
 import { useCaseTypeStore } from '../store/caseType'

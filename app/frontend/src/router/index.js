@@ -42,8 +42,10 @@ const routes = [
       { path: 'my-todos', name: 'MyTodos', component: () => import('../views/MyTodos.vue'), meta: { title: '我的待办' } },
       { path: 'dashboard', name: 'Dashboard', component: () => import('../views/Dashboard.vue'), meta: { title: '工作台' } },
       { path: 'cases', name: 'Cases', component: () => import('../views/CaseList.vue'), meta: { title: '案件管理' } },
+      { path: 'closed-cases', name: 'ClosedCases', component: () => import('../views/CaseList.vue'), meta: { title: '已办结案件', fullAccessOnly: true } },
       // 三级浏览的第 2 级：选完大类后选小类（2026-10-09）
       { path: 'case-boards', name: 'CaseBoards', component: () => import('../views/CaseBoards.vue'), meta: { title: '选择小类', fullAccessOnly: true } },
+      { path: 'case-stages', name: 'CaseStages', component: () => import('../views/CaseStages.vue'), meta: { title: '选择办案阶段', fullAccessOnly: true } },
       { path: 'reminders', name: 'Reminders', component: () => import('../views/Reminder.vue'), meta: { title: '到期提醒' } },
       // 员工图谱：整页级限定「系统管理员」（systemManageOnly）。
       // 2026-10-09：业务领导侧栏不再出现该项，守卫同步兜底——否则「藏菜单」只是障眼法。

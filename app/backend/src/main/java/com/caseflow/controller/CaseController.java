@@ -53,6 +53,8 @@ public class CaseController {
     private com.caseflow.service.StatsService statsService;
     @Resource
     private com.caseflow.service.StaffWorkloadService workloadService;
+    @Resource
+    private com.caseflow.service.CaseCloseRequestService closeRequestService;
 
     /**
      * 某民警的承办负荷详情（2026-10-04）。
@@ -119,6 +121,28 @@ public class CaseController {
     @GetMapping("/{id}")
     public Result<CaseVO> detail(@PathVariable Long id) {
         return Result.ok(caseService.detail(id));
+    }
+
+    /** 行政案件经办人申请结案；只提交反馈，不直接改变案件状态。 */
+    @PostMapping("/{id}/close-requests")
+    public Result<com.caseflow.entity.CaseCloseRequest> requestClose(
+            @PathVariable Long id, @RequestBody Map<String, String> body) {
+        return Result.ok(closeRequestService.submit(id, body));
+    }
+
+    @GetMapping("/{id}/close-requests/latest")
+    public Result<com.caseflow.entity.CaseCloseRequest> latestCloseRequest(@PathVariable Long id) {
+        return Result.ok(closeRequestService.latest(id));
+    }
+
+    /** 管理层审核；同意时由既有案件状态流程办结。 */
+    @PostMapping("/{id}/close-requests/{requestId}/review")
+    @FullAccessOnly("审核结案申请")
+    public Result<com.caseflow.entity.CaseCloseRequest> reviewCloseRequest(
+            @PathVariable Long id, @PathVariable Long requestId, @RequestBody Map<String, Object> body) {
+        return Result.ok(closeRequestService.review(id, requestId,
+                Boolean.TRUE.equals(body.get("approve")),
+                body.get("comment") == null ? null : String.valueOf(body.get("comment"))));
     }
 
     @PostMapping
@@ -267,6 +291,33 @@ public class CaseController {
         return Result.ok(statsService.stats(days == null ? 14 : days,
                 csvToSet(caseTypes), csvToSet(dueBuckets), csvToSet(priorities), restrict,
                 Boolean.TRUE.equals(focusOnly)));
+    }
+
+    /** 已办结栏目图表：与列表使用同一查询条件，状态强制为 DONE。 */
+    @GetMapping("/closed-stats")
+    @FullAccessOnly("查看已办结案件统计")
+    public Result<com.caseflow.vo.StatsVO> closedStats(
+            @RequestParam(required = false) Integer days,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String priority,
+            @RequestParam(required = false) String sourceType,
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) String caseType,
+            @RequestParam(required = false) String hasSuspect,
+            @RequestParam(required = false) Long employeeId,
+            @RequestParam(required = false) Boolean focusOnly) {
+        CaseQuery q = new CaseQuery();
+        q.setStatus("DONE");
+        q.setKeyword(keyword);
+        q.setPriority(priority);
+        q.setSourceType(sourceType);
+        q.setCategory(category);
+        q.setCaseType(caseType);
+        q.setHasSuspect(hasSuspect);
+        q.setEmployeeId(employeeId);
+        q.setFocusOnly(Boolean.TRUE.equals(focusOnly));
+        return Result.ok(statsService.stats(days == null ? 14 : days, null, null, null,
+                caseService.matchingCaseIds(q), false));
     }
 
     /** "CRIMINAL,ADMINISTRATIVE" -> Set；null/空返回 null 表示该维度不限 */

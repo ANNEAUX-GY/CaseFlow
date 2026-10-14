@@ -54,8 +54,8 @@
     </div>
 
     <!-- 常用待办：服务端按「本人写过几次」记下来的（次数越多排越前）。
-         fill 模式（随指派/建案一起提交）点一下填进表格第一空行，
-         submit 模式（案件已存在）点一下直接落库。 -->
+         fill 模式点一下填进表格第一空行，确认内容与时限后再统一保存；
+         submit 模式供明确需要直接落库的调用方使用。 -->
     <div v-if="presets && presets.length" :class="c('preset')">
       <div :class="c('preset-label')">
         常用待办
@@ -104,11 +104,9 @@
  *
  * <p><b>常用待办的两种点法</b>（`presetMode`）：
  * <ul>
- *   <li>`submit` = 点一下直接落库。仅案件详情可用——那时案件已经存在，
- *       待办本来就是独立的一次提交；</li>
- *   <li>`fill` = 点一下填进表格第一空行。指派 / 建案时主操作还没提交，
- *       此时直接写库会绕开主操作的事务：用户在指派弹窗里点了常用待办、
- *       发现库里已经多了待办，再点「取消」也回不去。</li>
+ *   <li>`submit` = 点一下触发上层直接落库，供明确需要此行为的调用方使用；</li>
+ *   <li>`fill` = 点一下填进表格第一空行。用户可以先检查、修改内容与时限，
+ *       再通过当前表单的「保存」统一提交，取消时不会产生待办。</li>
  * </ul>
  */
 import { computed, nextTick, ref, watch } from 'vue'
@@ -313,9 +311,15 @@ defineExpose({ addRow, removeRow, reset, focusFirst, items, filled, focusRow })
 }
 .cf-bt__legend { padding: 10px 8px 0; font-size: 12px; color: #8a929e }
 .cf-bt__legend b { font-weight: 700 }
-.cf-bt__legend .is-a { color: #c62a2a }
-.cf-bt__legend .is-b { color: #d98a0b }
-.cf-bt__legend .is-c { color: #1b4a8c }
+.cf-bt__legend .is-a,
+.cf-bt__legend .is-b,
+.cf-bt__legend .is-c {
+  display: inline-block; min-width: 18px; padding: 1px 5px; border: 1px solid transparent;
+  border-radius: 3px; text-align: center; font-style: normal;
+}
+.cf-bt__legend .is-a { color: #fff; background: #c62a2a; }
+.cf-bt__legend .is-b { color: #3d2f00; background: #f4c542; }
+.cf-bt__legend .is-c { color: #303133; background: #fff; border-color: #cfd4dc; }
 
 /* 底部条（由 TodoBatchFoot 渲染）：条数统计 + 「再添一条」 */
 .cf-bt__foot {

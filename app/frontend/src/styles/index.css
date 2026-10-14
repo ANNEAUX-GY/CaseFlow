@@ -1277,9 +1277,8 @@ html { scrollbar-gutter: stable; }
    ABC 三档单选（.cf-abc）
    ------------------------------------------------------------
    Element 的 el-radio-button 选中态统一是主题蓝，A/B/C 三档看不出差别。
-   这里覆盖 .is-active 的背景/边框/文字色：A 红=最重要、B 橙=重要、C 蓝=一般，
-   配色沿用项目警情色板（#c62a2a 危险红 / #d98a0b 警告橙 / #1b4a8c 警蓝）。
-   钩子比 .is-active 稍深，选中时白字压在上面保证对比度 ≥ 4.5:1。
+   这里覆盖 .is-active 的背景/边框/文字色：A 红、B 黄、C 白。
+   A 用白字；黄色 B 与白色 C 用深色字，保持清楚易读。
 
    放在全局而不是 CaseTodoPanel 里（2026-10-13）：待办批量编辑器现在有
    案件详情、指派、建案三个入口都用这一套三档，藏在某个面板里会让
@@ -1296,21 +1295,27 @@ html { scrollbar-gutter: stable; }
   background: #c62a2a; border-color: #c62a2a !important; box-shadow: -1px 0 0 0 #c62a2a;
 }
 .cf-abc .el-radio-button.is-b.is-active .el-radio-button__inner {
-  background: #d98a0b; border-color: #d98a0b !important; box-shadow: -1px 0 0 0 #d98a0b;
+  background: #f4c542; border-color: #f4c542 !important; box-shadow: -1px 0 0 0 #f4c542;
 }
 .cf-abc .el-radio-button.is-c.is-active .el-radio-button__inner {
-  background: #1b4a8c; border-color: #1b4a8c !important; box-shadow: -1px 0 0 0 #1b4a8c;
+  background: #fff; border-color: #cfd4dc !important; box-shadow: -1px 0 0 0 #cfd4dc;
 }
+/* A/B/C 徽标跟编辑按钮使用同一套颜色；C 白底加边框，避免融入卡片。 */
+.cf-todo__importance-tag.is-a { background: #c62a2a !important; border-color: #c62a2a !important; color: #fff !important; }
+.cf-todo__importance-tag.is-b { background: #f4c542 !important; border-color: #f4c542 !important; color: #3d2f00 !important; }
+.cf-todo__importance-tag.is-c { background: #fff !important; border-color: #cfd4dc !important; color: #303133 !important; }
 /* 悬停时用浅色底提示可点。
    注意：悬停文字色不能盖在 .is-active 上——Element 的默认 hover 规则是
    "文字变主题色"，若不排除 active 态，点中后鼠标仍悬停在按钮上时
    会出现「红底红字」这种看不清的情况（实测踩过）。
    所以用 :hover:not(.is-active)。 */
 .cf-abc .el-radio-button.is-a:hover:not(.is-active) .el-radio-button__inner { color: #c62a2a; }
-.cf-abc .el-radio-button.is-b:hover:not(.is-active) .el-radio-button__inner { color: #d98a0b; }
-.cf-abc .el-radio-button.is-c:hover:not(.is-active) .el-radio-button__inner { color: #1b4a8c; }
-/* 选中态文字必须是白的（浅色底上的深色字）——显式声明，不依赖继承 */
-.cf-abc .el-radio-button.is-active .el-radio-button__inner { color: #fff; }
+.cf-abc .el-radio-button.is-b:hover:not(.is-active) .el-radio-button__inner { color: #8a6800; }
+.cf-abc .el-radio-button.is-c:hover:not(.is-active) .el-radio-button__inner { color: #4b5563; }
+/* 各档选中字色分别指定：黄色/白色底用深色字。 */
+.cf-abc .el-radio-button.is-a.is-active .el-radio-button__inner { color: #fff; }
+.cf-abc .el-radio-button.is-b.is-active .el-radio-button__inner,
+.cf-abc .el-radio-button.is-c.is-active .el-radio-button__inner { color: #303133; }
 
 /* 指派弹窗里的待办编辑器：已于 2026-10-13 移除。
    原来是一套"每行一个纯文本框 + 上移/下移/删除"的清单，与案件详情的
@@ -1478,6 +1483,7 @@ html { scrollbar-gutter: stable; }
 .cf-gatebar.is-danger { border-left-color: #c62a2a; }
 .cf-gatebar.is-warning { border-left-color: #d98a0b; }
 .cf-gatebar.is-info { border-left-color: #5a6472; }
+.cf-gatebar.is-all { border-left-color: #1b4a8c; }
 .cf-gatebar__tag {
   padding: 1px 9px;
   border-radius: 3px;
@@ -1502,13 +1508,13 @@ html { scrollbar-gutter: stable; }
 .cf-picker__title { font-size: 22px; font-weight: 600; color: #1b2430 }
 .cf-picker__sub { font-size: 15px; color: #5a6472; margin-top: 10px; line-height: 1.75 }
 .cf-picker__cards {
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 20px;
 }
 .cf-picker__card {
   border: 1px solid #dfe4ea; border-radius: 8px; padding: 26px 22px;
   cursor: pointer; background: #fff; transition: all .15s;
   min-width: 0;
-  /* 三卡片等高，长描述不会把某张卡顶矮 */
+  /* 卡片等高，长描述不会把某张卡顶矮 */
   display: flex; flex-direction: column;
 }
 .cf-picker__card:hover { border-color: #1b4a8c; background: #f7faff; transform: translateY(-2px) }
@@ -1522,6 +1528,7 @@ html { scrollbar-gutter: stable; }
 .cf-picker__badge.is-danger { background: #c62a2a }
 .cf-picker__badge.is-warning { background: #d98a0b }
 .cf-picker__badge.is-info { background: #5a6472 }
+.cf-picker__badge.is-all { background: #1b4a8c }
 .cf-picker__ok { color: #1b4a8c; font-size: 20px; margin-left: auto }
 .cf-picker__desc { font-size: 14px; color: #5a6472; line-height: 1.75; flex: 1 }
 /* 案件数是选择前就要看的信息，给足视觉权重并与描述拉开距离 */

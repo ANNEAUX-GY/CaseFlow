@@ -23,7 +23,7 @@ import { ref, computed } from 'vue'
  */
 const KEY = 'cf_case_type'
 
-/** 三个选项。scope 为传后端的查询值；OTHER 走后端 NOT IN 分支 */
+/** 全部或按大类浏览。ALL 的 scope 为空，查询时不传 caseType。 */
 export const CASE_TYPE_OPTIONS = [
   {
     key: 'CRIMINAL',
@@ -45,11 +45,18 @@ export const CASE_TYPE_OPTIONS = [
     scope: 'OTHER',
     type: 'info',
     desc: '未立案及其他非刑事、非行政案件'
+  },
+  {
+    key: 'ALL',
+    label: '查看全部',
+    scope: '',
+    type: 'all',
+    desc: '不按案件类型或小类筛选，直接进入栏目'
   }
 ]
 
 /** 受门控的栏目：进入前必须先选类型 */
-export const GATED_PATHS = ['/watch', '/todos', '/cases', '/reminders', '/case-boards']
+export const GATED_PATHS = ['/watch', '/todos', '/cases', '/closed-cases', '/reminders', '/case-boards', '/case-stages']
 
 /**
  * 三级浏览（2026-10-09）：大类 → 小类 → 案件列表。
@@ -59,7 +66,7 @@ export const GATED_PATHS = ['/watch', '/todos', '/cases', '/reminders', '/case-b
  * 选完大类不再直达第 3 级，一律先过第 2 级；退出时反过来逐级退回。
  */
 /** 第 3 级：真正干活的栏目页 */
-export const LEVEL3_PATHS = ['/watch', '/todos', '/cases', '/reminders']
+export const LEVEL3_PATHS = ['/watch', '/todos', '/cases', '/closed-cases', '/reminders']
 /**
  * 第 3 级里**支持按小类过滤**的栏目。
  *
@@ -67,9 +74,11 @@ export const LEVEL3_PATHS = ['/watch', '/todos', '/cases', '/reminders']
  * 硬塞一个小类筛选只会给人「选了却不生效」的错觉——
  * 所以这两个栏目在小类页只给一张「全部」卡，流程照样走两级，但不假装能筛。
  */
-export const CATEGORY_AWARE_PATHS = ['/cases', '/watch']
+export const CATEGORY_AWARE_PATHS = ['/cases', '/closed-cases', '/watch']
 /** 第 2 级：小类卡片页 */
 export const BOARDS_PATH = '/case-boards'
+/** 刑事案件的办案阶段卡片页 */
+export const STAGES_PATH = '/case-stages'
 /** 第 1 级：大类卡片页 */
 export const PICKER_PATH = '/case-type'
 
@@ -95,7 +104,7 @@ export const useCaseTypeStore = defineStore('caseType', () => {
   const currentOption = computed(
     () => CASE_TYPE_OPTIONS.find(o => o.key === current.value) || null
   )
-  /** 传给后端的 caseType 查询值；未选时返回 ''（后端不过滤） */
+  /** 传给后端的 caseType 查询值；ALL 与未选均返回空串，后端不过滤 */
   const scope = computed(() => currentOption.value?.scope || '')
   const selected = computed(() => !!current.value)
 
@@ -154,6 +163,7 @@ export const useCaseTypeStore = defineStore('caseType', () => {
  * <p>与后端的对应关系：
  * - CRIMINAL / ADMINISTRATIVE → 等值匹配
  * - OTHER → 后端走 NOT IN(刑事,行政) OR IS NULL
+ * - 查看全部（ALL）→ 初始不传该参数；进入后仍可用页内分类控件主动筛选。
  * - 未选类型（''）→ 不传该参数。此时理论上已被守卫拦下，
  *   但留着做兜底：万一有漏网请求，至少不会凭空只显示某一类。
  *
@@ -165,7 +175,7 @@ export function withCaseType(params) {
   const out = { ...(params || {}) }
   const s = store.scope
   if (s) out.caseType = s
-  else delete out.caseType
+  else if (store.current !== 'ALL') delete out.caseType
   return out
 }
 
@@ -240,6 +250,6 @@ export function boardsUrl(full) {
 export function levelOf(path) {
   const p = String(path || '')
   if (p.startsWith(PICKER_PATH)) return 1
-  if (p.startsWith(BOARDS_PATH)) return 2
+  if (p.startsWith(BOARDS_PATH) || p.startsWith(STAGES_PATH)) return 2
   return 3
 }

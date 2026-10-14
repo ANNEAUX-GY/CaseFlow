@@ -177,6 +177,12 @@ public class CaseService {
         return new PageResult<>(list, result.getTotal(), result.getCurrent(), result.getSize());
     }
 
+    /** 与案件列表共用筛选链，供已办结栏目图表限定同一批案件。 */
+    public Set<Long> matchingCaseIds(CaseQuery query) {
+        return caseMapper.selectList(buildWrapper(query).select(CaseInfo::getId)).stream()
+                .map(CaseInfo::getId).collect(Collectors.toSet());
+    }
+
     /**
      * 当前登录人「名下案件」的 id 集合，是列表 / 提醒 / 看板 / 图表的统一口径，
      * 避免各处各写一套筛选而出现口径不一致。
@@ -278,10 +284,12 @@ public class CaseService {
             if (!measures.isEmpty()) {
                 if ("INITIAL".equals(m)) {
                     // 初查：无措施（含存量 NULL）+ 拘传这类"不改变在押状态"的措施 + 在办
-                    q.and(w -> w.isNull(CaseInfo::getCaseMeasure)
-                            .or().eq(CaseInfo::getCaseMeasure, "NONE")
-                            .or().in(CaseInfo::getCaseMeasure, measures))
-                            .notIn(CaseInfo::getStatus, new ArrayList<>(java.util.Arrays.asList("DONE", "CANCELLED")));
+                    if (!"ADMINISTRATIVE".equals(query.getCaseType())) {
+                        q.and(w -> w.isNull(CaseInfo::getCaseMeasure)
+                                .or().eq(CaseInfo::getCaseMeasure, "NONE")
+                                .or().in(CaseInfo::getCaseMeasure, measures));
+                    }
+                    q.notIn(CaseInfo::getStatus, new ArrayList<>(java.util.Arrays.asList("DONE", "CANCELLED")));
                 } else {
                     q.in(CaseInfo::getCaseMeasure, measures)
                             .notIn(CaseInfo::getStatus, new ArrayList<>(java.util.Arrays.asList("DONE", "CANCELLED")));
@@ -419,6 +427,10 @@ public class CaseService {
         String stage = c.getFlowStage() == null || c.getFlowStage().trim().isEmpty()
                 ? com.caseflow.flow.CaseFlowTemplate.STAGE_INITIAL
                 : c.getFlowStage();
+        if ("ADMINISTRATIVE".equals(c.getCaseType())
+                && !com.caseflow.flow.CaseFlowTemplate.STAGE_CLOSED.equals(stage)) {
+            stage = com.caseflow.flow.CaseFlowTemplate.STAGE_INITIAL;
+        }
         vo.setFlowStage(stage);
         vo.setFlowStageName(com.caseflow.flow.CaseFlowTemplate.stageLabel(stage));
         vo.setRemark(c.getRemark());
@@ -1348,6 +1360,9 @@ public class CaseService {
         }
         if (!VALID_STATUS.contains(req.getStatus())) {
             throw new BizException("非法的案件状态：" + req.getStatus());
+        }
+        if ("ADMINISTRATIVE".equals(c.getCaseType()) && "CANCELLED".equals(req.getStatus())) {
+            throw new BizException("行政案件仅支持已受案和已办结两种业务状态");
         }
         // 办结 / 撤销 = 结案动作，属管理层权限；普通民警只能推进「处理中」
         if (MANAGER_ONLY_STATUS.contains(req.getStatus()) && !AuthContext.isFullAccess()) {

@@ -177,6 +177,7 @@ export const TIME_NODE_PRESETS = [
   { value: 'RESIDENCE_END', label: '监视居住期限届满' },
   { value: 'SUPP_PROBE', label: '补充侦查期限届满' },
   { value: 'CUSTODY_CHANGE', label: '变更强制措施时间' },
+  { value: 'CUSTODY_TERM_CHANGE', label: '变更羁押期限' },
   { value: 'OTHER', label: '其他时间节点' }
 ]
 

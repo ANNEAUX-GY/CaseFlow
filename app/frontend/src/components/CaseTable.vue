@@ -71,16 +71,16 @@
       </el-table-column>
       <el-table-column label="状态" width="86">
         <template #default="{ row }">
-          <el-tag size="small" :type="(STATUS_META[row.status] || {}).type || 'info'">
-            {{ (STATUS_META[row.status] || {}).label || row.status }}
+          <el-tag size="small" :type="row.caseType === 'ADMINISTRATIVE' && row.status !== 'DONE' ? 'primary' : (STATUS_META[row.status] || {}).type || 'info'">
+            {{ row.caseType === 'ADMINISTRATIVE' && row.status !== 'DONE' ? '已受案' : (STATUS_META[row.status] || {}).label || row.status }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column v-if="showActions" label="操作" :width="canManage ? 150 : 90" align="right">
+      <el-table-column v-if="showActions" label="操作" :width="canManage && !detailsOnly ? 150 : 90" align="right">
         <template #default="{ row }">
-          <el-button v-if="canManage" link type="primary" @click="emit('assign', row)">指派</el-button>
+          <el-button v-if="canManage && !detailsOnly" link type="primary" @click="emit('assign', row)">指派</el-button>
           <el-button link @click="emit('open', row)">详情</el-button>
-          <el-button v-if="canManage" link type="danger" @click="emit('remove', row)">删除</el-button>
+          <el-button v-if="canManage && !detailsOnly" link type="danger" @click="emit('remove', row)">删除</el-button>
         </template>
       </el-table-column>
       <template #empty><span class="cf-muted">暂无数据</span></template>
@@ -104,6 +104,7 @@ const props = defineProps({
   height: { type: [String, Number], default: undefined },
   showCaseNo: { type: Boolean, default: false },
   showActions: { type: Boolean, default: true },
+  detailsOnly: { type: Boolean, default: false },
   /**
    * 精简模式（2026-10-08）：工作台等窄栏位用。
    * 全部列宽合计约 1156px，窄栏放不下会被挤到「截止期限」被截断，
