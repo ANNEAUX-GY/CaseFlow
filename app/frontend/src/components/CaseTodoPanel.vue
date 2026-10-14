@@ -133,6 +133,9 @@
                   </span>
                 </template>
                 <template v-else>
+                  <span v-if="t.deadline" class="cf-todo__meta-item" :class="'is-' + urgencyOfFn(t.deadline).toLowerCase()">
+                    <el-icon><AlarmClock /></el-icon>截止 {{ deadlineTextOf(t.deadline) }}
+                  </span>
                   <span class="cf-todo__meta-item is-hint">
                     <el-icon><InfoFilled /></el-icon>{{ blockReason(t) || '提交一条反馈说明后即可勾选完成' }}
                   </span>
@@ -201,6 +204,12 @@
                   <el-radio-button value="B" class="is-b">B</el-radio-button>
                   <el-radio-button value="C" class="is-c">C</el-radio-button>
                 </el-radio-group>
+              </div>
+              <div v-else-if="isAdmin && !t.opinionId && t.status !== 'DONE'" class="cf-todo__meta-edit" @click.stop>
+                <span class="cf-todo__meta-edit-label">自定项完成时限</span>
+                <el-date-picker :model-value="t.deadline || ''" type="datetime" size="small"
+                  format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DDTHH:mm:ss" placeholder="单独设完成时限"
+                  clearable style="width:190px" @change="(v) => saveCustomDeadline(t, v || '')" />
               </div>
             </div>
 
@@ -866,6 +875,11 @@ const saveOpinionMeta = async (row, patch) => {
   } catch (e) {
     ElMessage.error('保存失败')
   }
+}
+const saveCustomDeadline = async (row, deadline) => {
+  await todoApi.updateDeadline(row.id, deadline)
+  await load()
+  emit('changed')
 }
 
 // ---- 实时推送：领导的意见操作即时同步（SSE） ----

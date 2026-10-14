@@ -10,6 +10,7 @@ import com.caseflow.entity.CasePlan;
 import com.caseflow.entity.CaseProgressComment;
 import com.caseflow.security.FullAccessOnly;
 import com.caseflow.service.ApprovalService;
+import com.caseflow.service.CaseDeadlineService;
 import com.caseflow.service.FlowService;
 import com.caseflow.service.OpinionService;
 import com.caseflow.service.PlanService;
@@ -50,6 +51,8 @@ public class WatchController {
     private PlanService planService;
     @Resource
     private ApprovalService approvalService;
+    @Resource
+    private CaseDeadlineService caseDeadlineService;
     @Resource
     private ProgressCommentService commentService;
     @Resource
@@ -146,6 +149,28 @@ public class WatchController {
     public Result<CaseInfo> measure(@PathVariable Long caseId, @RequestBody Map<String, Object> body) {
         return Result.ok(approvalService.measure(caseId, str(body.get("measure")),
                 date(body.get("measureDate")), date(body.get("detainDeadline")), str(body.get("comment"))));
+    }
+
+    /** 具体时限节点及当前提醒，按请求时刻实时计算。 */
+    @GetMapping("/cases/{caseId}/deadlines")
+    public Result<CaseDeadlineService.View> deadlines(@PathVariable Long caseId) {
+        return Result.ok(caseDeadlineService.view(caseId));
+    }
+
+    @GetMapping("/deadline-alerts")
+    public Result<List<CaseDeadlineService.Alert>> deadlineAlerts(@RequestParam(required = false) String caseType,
+            @RequestParam(required = false) String category, @RequestParam(required = false) Boolean focusOnly) {
+        return Result.ok(caseDeadlineService.active(caseType, category, Boolean.TRUE.equals(focusOnly)));
+    }
+
+    @PostMapping("/cases/{caseId}/deadlines/term")
+    public Result<CaseDeadlineService.View> changeTerm(@PathVariable Long caseId, @RequestBody Map<String, Object> body) {
+        return Result.ok(caseDeadlineService.changeTerm(caseId, str(body.get("action"))));
+    }
+
+    @PostMapping("/cases/{caseId}/deadlines/record")
+    public Result<CaseDeadlineService.View> recordDeadline(@PathVariable Long caseId, @RequestBody Map<String, Object> body) {
+        return Result.ok(caseDeadlineService.record(caseId, str(body.get("key")), date(body.get("at"))));
     }
 
     @GetMapping("/cases/{caseId}/approvals")

@@ -289,6 +289,7 @@ export const todoApi = {
   listOfCase: (caseId) => http.get(`/todos/case/${caseId}`),
   add: (caseId, data) => http.post(`/todos/case/${caseId}`, data),
   update: (id, data) => http.put(`/todos/${id}`, data),
+  updateDeadline: (id, deadline) => http.put(`/todos/${id}/deadline`, { deadline }),
   remove: (id) => http.delete(`/todos/${id}`),
   reorder: (caseId, ids) => http.post(`/todos/case/${caseId}/reorder`, { caseId, ids }),
   done: (id, remark) => http.post(`/todos/${id}/done`, { remark }),

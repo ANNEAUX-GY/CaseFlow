@@ -61,7 +61,7 @@
                 <span v-else class="cf-muted">未到期</span>
               </template>
             </el-table-column>
-            <el-table-column v-if="isFullAccess" label="操作" width="80">
+            <el-table-column v-if="isFullAccess || isAssignee" label="操作" width="80">
               <template #default="{ row }"><el-button v-if="recordKey(row.key)" link type="primary" @click="openRecord(recordKey(row.key))">录入时间</el-button></template>
             </el-table-column>
           </el-table>
@@ -98,7 +98,7 @@
       <div class="cf-panel">
         <div class="cf-panel__head">
           <span>强制措施与期限</span>
-          <el-button v-if="isFullAccess" size="small" @click="measureDlg.visible = true">登记 / 变更</el-button>
+          <el-button v-if="isFullAccess" size="small" @click="openMeasure">登记 / 变更</el-button>
         </div>
         <div style="padding: 12px 16px; font-size: 13px">
           <template v-if="detail.caseMeasure && detail.caseMeasure !== 'NONE'">
@@ -161,7 +161,7 @@
         <el-form-item label="措施类型" required>
           <!-- 取值与建案表单一致（法定五种 + 无），别在这边另起一套：
                两边不一样会出现"建案选了逮捕，盯办下拉里却没有逮捕可改"。 -->
-          <el-select v-model="measureDlg.measure" style="width: 100%">
+          <el-select v-model="measureDlg.measure" style="width: 100%" @change="onMeasureChange">
             <el-option label="无（回到初查）" value="NONE" />
             <el-option v-for="m in MEASURE_CHOICES" :key="m.value" :label="m.label" :value="m.value" />
           </el-select>
@@ -235,8 +235,9 @@ const reload = async () => {
 }
 
 const canStart = computed(() => (!detail.value.investigationStatus || detail.value.investigationStatus === 'PENDING_INITIAL'))
-const canSubmit = computed(() => detail.value.investigationStatus === 'INVESTIGATING' &&
-  (detail.value.caseMeasure !== 'DETENTION' || deadlineView.value.canSubmit))
+const canSubmit = computed(() => detail.value.caseMeasure === 'DETENTION'
+  ? deadlineView.value.canSubmit && (!detail.value.investigationStatus || ['PENDING_INITIAL', 'INVESTIGATING'].includes(detail.value.investigationStatus))
+  : detail.value.investigationStatus === 'INVESTIGATING')
 
 /** 当前登录人是否本案现职承办人（办案人）：决定开始侦查 / 计划维护等"工作者动作" */
 const isAssignee = computed(() => {
@@ -287,6 +288,17 @@ const submitApprove = async () => {
 }
 
 const measureDlg = reactive({ visible: false, measure: 'DETENTION', measureDate: '', detainDeadline: '', comment: '', loading: false })
+const openMeasure = () => {
+  measureDlg.measure = detail.value.caseMeasure || 'DETENTION'
+  measureDlg.measureDate = (detail.value.measureDate || '').slice(0, 10)
+  measureDlg.detainDeadline = (detail.value.detainDeadline || '').replace('T', ' ').slice(0, 19)
+  measureDlg.comment = ''
+  measureDlg.visible = true
+}
+const onMeasureChange = () => {
+  measureDlg.measureDate = ''
+  measureDlg.detainDeadline = ''
+}
 const changeTerm = async (action) => {
   await watchApi.changeTerm(props.caseId, action)
   ElMessage.success(action === 'PAUSE' ? '已停止计算' : action === 'RESUME' ? '已恢复计算' : `已录入刑拘${action}天案`)

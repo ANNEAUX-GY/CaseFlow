@@ -120,6 +120,13 @@ public class TodoController {
         return Result.ok(todoService.update(todoId, req.getContent()));
     }
 
+    @PutMapping("/{todoId}/deadline")
+    @FullAccessOnly("设置待办完成时限")
+    public Result<CaseTodoVO> updateDeadline(@PathVariable Long todoId, @RequestBody Map<String, Object> body) {
+        Object deadline = body == null ? null : body.get("deadline");
+        return Result.ok(todoService.updateDeadline(todoId, deadline == null ? null : String.valueOf(deadline)));
+    }
+
     /**
      * 删除待办 / 子任务。
      *

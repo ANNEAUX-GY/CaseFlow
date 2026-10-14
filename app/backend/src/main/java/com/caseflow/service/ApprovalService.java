@@ -3,10 +3,12 @@ package com.caseflow.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.caseflow.entity.CaseApproval;
 import com.caseflow.entity.CaseInfo;
+import com.caseflow.entity.CaseDeadlineState;
 import com.caseflow.entity.CasePlan;
 import com.caseflow.exception.BizException;
 import com.caseflow.mapper.CaseApprovalMapper;
 import com.caseflow.mapper.CaseInfoMapper;
+import com.caseflow.mapper.CaseDeadlineStateMapper;
 import com.caseflow.mapper.CasePlanMapper;
 import com.caseflow.security.AuthContext;
 import com.caseflow.support.DictHolder;
@@ -40,6 +42,8 @@ public class ApprovalService {
 
     @Resource
     private CaseInfoMapper caseMapper;
+    @Resource
+    private CaseDeadlineStateMapper deadlineStateMapper;
     @Resource
     private CasePlanMapper planMapper;
     @Resource
@@ -82,13 +86,27 @@ public class ApprovalService {
                 c.setInvestigationStatus("INVESTIGATING");
                 break;
             case "SUBMIT":
-                // 侦查中 -> 待审批：经办人或管理层；至少 1 条已完成计划
-                requireState(cur, "INVESTIGATING");
+                // 刑拘：预审或法制任一方已收即可申请；其他案件沿用完成计划校验。
+                if (!"DETENTION".equals(c.getCaseMeasure())) {
+                    requireState(cur, "INVESTIGATING");
+                } else if (cur != null && !"PENDING_INITIAL".equals(cur) && !"INVESTIGATING".equals(cur)) {
+                    throw new BizException("当前侦查进度不能再次提交审核");
+                }
                 checkHandlerOrManager(c);
-                Long doneCnt = planMapper.selectCount(new LambdaQueryWrapper<CasePlan>()
-                        .eq(CasePlan::getCaseId, caseId).eq(CasePlan::getStatus, "DONE"));
-                if (doneCnt == null || doneCnt == 0) {
-                    throw new BizException("至少完成 1 条侦查计划后才能提请审批");
+                if ("DETENTION".equals(c.getCaseMeasure())) {
+                    CaseDeadlineState state = deadlineStateMapper.selectById(caseId);
+                    if (state == null || (state.getPretrialReceivedAt() == null && state.getLegalReceivedAt() == null)) {
+                        throw new BizException("预审或法制至少一方收件后才能申请已提交审核");
+                    }
+                    state.setSubmittedAt(LocalDateTime.now());
+                    state.setUpdatedAt(state.getSubmittedAt());
+                    deadlineStateMapper.updateById(state);
+                } else {
+                    Long doneCnt = planMapper.selectCount(new LambdaQueryWrapper<CasePlan>()
+                            .eq(CasePlan::getCaseId, caseId).eq(CasePlan::getStatus, "DONE"));
+                    if (doneCnt == null || doneCnt == 0) {
+                        throw new BizException("至少完成 1 条侦查计划后才能提请审批");
+                    }
                 }
                 c.setInvestigationStatus("PENDING_APPROVAL");
                 break;
@@ -136,7 +154,16 @@ public class ApprovalService {
         requireManager("登记强制措施");
 
         String before = snapshotService.capture(caseId);
-        LocalDateTime base = measureDate != null ? measureDate : LocalDateTime.now();
+        boolean sameMeasure = measure.equals(c.getCaseMeasure());
+        LocalDateTime base = sameMeasure && measureDate != null && c.getMeasureDate() != null
+                && measureDate.toLocalDate().equals(c.getMeasureDate().toLocalDate()) ? c.getMeasureDate()
+                : measureDate != null ? measureDate
+                : sameMeasure && c.getMeasureDate() != null ? c.getMeasureDate() : LocalDateTime.now();
+        boolean newEpisode = !sameMeasure || !base.equals(c.getMeasureDate());
+        // 换措施或重新确定措施起算日时，旧收件/传讯/暂停记录不得套到新一期。
+        if (newEpisode) {
+            deadlineStateMapper.deleteById(caseId);
+        }
 
         c.setCaseMeasure("NONE".equals(measure) ? null : measure);
         c.setMeasureDate("NONE".equals(measure) ? null : base);
@@ -144,6 +171,8 @@ public class ApprovalService {
             c.setDetainDeadline(null);
         } else if (detainDeadline != null) {
             c.setDetainDeadline(detainDeadline);
+        } else if (!newEpisode) {
+            // 只修改备注等信息时保留已有 7/30 天期限及暂停状态。
         } else {
             c.setDetainDeadline(defaultDeadline(measure, base));
         }
@@ -172,19 +201,19 @@ public class ApprovalService {
     }
 
     /**
-     * 措施期限推算默认值：刑拘 +30 天（提请批捕期限），取保 +12 个月，监居 +6 个月，
+     * 措施期限推算默认值：刑拘先按 3 天登记，待变更羁押期限后选 7/30 天；取保 +12 个月，监居 +6 个月，
      * 逮捕 +2 个月（侦查羁押期限）；拘传只有 12 小时、不成"期限"，故不推算。
      */
     private LocalDateTime defaultDeadline(String measure, LocalDateTime base) {
         switch (measure) {
             case "DETENTION":
-                return base.plusDays(30);
+                return base.plusDays(3).toLocalDate().atTime(23, 59, 59);
             case "ARREST":
                 return base.plusMonths(2);
             case "BAIL":
-                return base.plusMonths(12);
+                return base.plusMonths(12).toLocalDate().atTime(23, 59, 59);
             case "RESIDENCE":
-                return base.plusMonths(6);
+                return base.plusMonths(6).toLocalDate().atTime(23, 59, 59);
             default:
                 return null;
         }

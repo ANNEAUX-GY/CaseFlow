@@ -6,6 +6,7 @@ import com.caseflow.entity.CaseTodo;
 import com.caseflow.exception.BizException;
 import com.caseflow.flow.CaseFlowTemplate;
 import com.caseflow.mapper.CaseInfoMapper;
+import com.caseflow.mapper.CaseDeadlineStateMapper;
 import com.caseflow.mapper.CaseTodoMapper;
 import com.caseflow.security.AuthContext;
 import com.caseflow.support.LogService;
@@ -42,6 +43,8 @@ public class FlowService {
     private CaseTodoMapper todoMapper;
     @Resource
     private CaseInfoMapper caseMapper;
+    @Resource
+    private CaseDeadlineStateMapper deadlineStateMapper;
     @Resource
     private LogService logService;
 
@@ -198,9 +201,15 @@ public class FlowService {
             if (!StringUtils.hasText(c.getCaseMeasure()) || "NONE".equals(c.getCaseMeasure())) {
                 c.setCaseMeasure("DETENTION");
             }
+            if (c.getMeasureDate() == null) c.setMeasureDate(java.time.LocalDateTime.now());
+            if (c.getDetainDeadline() == null) c.setDetainDeadline(c.getMeasureDate().plusDays(3).toLocalDate().atTime(23, 59, 59));
         } else if ("BAIL".equals(action)) {
+            deadlineStateMapper.deleteById(caseId);
             c.setCaseMeasure("BAIL");
+            c.setMeasureDate(java.time.LocalDateTime.now());
+            c.setDetainDeadline(c.getMeasureDate().plusYears(1).toLocalDate().atTime(23, 59, 59));
         } else if ("RELEASE".equals(action)) {
+            deadlineStateMapper.deleteById(caseId);
             c.setCaseMeasure(null);
             c.setMeasureDate(null);
             c.setDetainDeadline(null);

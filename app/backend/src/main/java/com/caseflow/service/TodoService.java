@@ -403,6 +403,28 @@ public class TodoService {
         return toVO(t, true);
     }
 
+    /** 自定待办的完成时限独立设置；意见派生待办仍经意见元数据入口修改。 */
+    @Transactional(rollbackFor = Exception.class)
+    public CaseTodoVO updateDeadline(Long todoId, String value) {
+        CaseTodo t = requireTodo(todoId);
+        requireAdmin("设置待办完成时限");
+        if (t.getOpinionId() != null) throw new BizException("盯办事项请在意见设置中修改截止时间");
+        LocalDateTime deadline = null;
+        if (StringUtils.hasText(value)) {
+            try { deadline = LocalDateTime.parse(value.trim().replace(' ', 'T')); }
+            catch (java.time.format.DateTimeParseException e) { throw new BizException("完成时限格式不正确"); }
+        }
+        t.setDeadline(deadline);
+        t.setUpdatedAt(LocalDateTime.now());
+        todoMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<CaseTodo>()
+                .eq(CaseTodo::getId, todoId)
+                .set(CaseTodo::getDeadline, deadline)
+                .set(CaseTodo::getUpdatedAt, t.getUpdatedAt()));
+        logService.log("CASE", "TODO_UPDATE", "CASE", t.getCaseId(),
+                "设置自定项完成时限：" + (deadline == null ? "未设置" : deadline));
+        return toVO(t, true);
+    }
+
     @Transactional(rollbackFor = Exception.class)
     public void remove(Long todoId) {
         CaseTodo t = requireTodo(todoId);
