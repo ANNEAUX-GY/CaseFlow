@@ -27,7 +27,6 @@
       >
         <el-button size="small">案件导入</el-button>
       </el-upload>
-      <el-button type="primary" size="small" @click="onCreate">新建案件</el-button>
     </div>
 
     <div class="cf-toolbar">
@@ -92,6 +91,11 @@
         <el-option label="未设期限" value="NONE" />
       </el-select>
       <el-button @click="reset">重置</el-button>
+      <!-- 新建案件（2026-10-14 用户指定）：放筛选行右侧空白处，不与「选择小类」同排。
+           spacer 把它推到行尾——宽屏落在筛选与图表之间的空白带；
+           窄屏换行时也独自占一行的右端，不会挤进筛选控件中间。 -->
+      <span class="cf-spacer"></span>
+      <el-button type="primary" @click="onCreate">新建案件</el-button>
     </div>
 
     <!-- 可视化：随筛选条件联动统计 -->
