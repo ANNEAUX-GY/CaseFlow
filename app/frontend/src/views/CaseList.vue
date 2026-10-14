@@ -91,11 +91,11 @@
         <el-option label="未设期限" value="NONE" />
       </el-select>
       <el-button @click="reset">重置</el-button>
-      <!-- 新建案件（2026-10-14 用户指定）：放筛选行右侧空白处，不与「选择小类」同排。
-           spacer 把它推到行尾——宽屏落在筛选与图表之间的空白带；
-           窄屏换行时也独自占一行的右端，不会挤进筛选控件中间。 -->
-      <span class="cf-spacer"></span>
-      <el-button type="primary" @click="onCreate">新建案件</el-button>
+      <!-- 新建案件（2026-10-14 用户指定）：放筛选行最右端。
+           用 margin-left:auto 而不是 cf-spacer——spacer 在 flex-wrap 换行时
+           （筛选控件太宽会折到第二行）撑不开，按钮会贴在「重置」右侧而不是行尾；
+           auto 外边距无论在哪一行都把它顶到最右。 -->
+      <el-button type="primary" style="margin-left: auto" @click="onCreate">新建案件</el-button>
     </div>
 
     <!-- 可视化：随筛选条件联动统计 -->
