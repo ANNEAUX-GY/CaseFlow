@@ -163,9 +163,24 @@ public class SchemaMigration implements ApplicationRunner {
             {"case_info", "accept_time", "DATETIME NULL"},
             {"case_info", "punish_time", "DATETIME NULL"},
             {"case_info", "external_id", "VARCHAR(32) NULL"},
+            // 老库的 case_deadline_state 可能建于行政/传讯节点加入之前；逐列补齐。
+            {"case_deadline_state", "detention_term", "VARCHAR(8) NULL"},
+            {"case_deadline_state", "paused_at", "DATETIME NULL"},
+            {"case_deadline_state", "paused_deadline", "DATETIME NULL"},
+            {"case_deadline_state", "paused_seconds", "BIGINT NOT NULL DEFAULT 0"},
+            {"case_deadline_state", "pretrial_received_at", "DATETIME NULL"},
+            {"case_deadline_state", "legal_received_at", "DATETIME NULL"},
             {"case_deadline_state", "pretrial_sent_at", "DATETIME NULL"},
             {"case_deadline_state", "legal_sent_at", "DATETIME NULL"},
-            {"case_deadline_state", "admin_extended_at", "DATETIME NULL"}
+            {"case_deadline_state", "submitted_at", "DATETIME NULL"},
+            {"case_deadline_state", "last_summons_at", "DATETIME NULL"},
+            {"case_deadline_state", "admin_30_doc_at", "DATETIME NULL"},
+            {"case_deadline_state", "admin_extended_at", "DATETIME NULL"},
+            {"case_deadline_state", "admin_60_doc_at", "DATETIME NULL"},
+            {"case_deadline_state", "admin_check_3_at", "DATETIME NULL"},
+            {"case_deadline_state", "admin_check_10_at", "DATETIME NULL"},
+            {"case_deadline_state", "admin_check_20_at", "DATETIME NULL"},
+            {"case_deadline_state", "updated_at", "DATETIME NULL"}
     };
 
     /** 旧数据回填：把历史「案件类型」自由文本里的大类词归位到 case_type（小类位清空）。
@@ -192,17 +207,7 @@ public class SchemaMigration implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         try (Connection conn = dataSource.getConnection()) {
             Set<String> existing = existingColumns(conn);
-            for (String[] c : NEW_COLUMNS) {
-                String key = c[0].toLowerCase() + "." + c[1].toLowerCase();
-                if (existing.contains(key)) {
-                    continue;
-                }
-                String ddl = "ALTER TABLE " + c[0] + " ADD COLUMN " + c[1] + " " + c[2];
-                try (Statement st = conn.createStatement()) {
-                    st.execute(ddl);
-                    log.info("[SchemaMigration] 已补列：{}", key);
-                }
-            }
+            ensureColumns(conn, existing, null);
             migrateLegacyDeadlineReceipts(conn, existing);
             migrateCategory(conn, existing);
             removeCivilType(conn);
@@ -215,6 +220,20 @@ public class SchemaMigration implements ApplicationRunner {
             // 报错信息会明确指出，不会静默损坏数据。
             log.error("[SchemaMigration] 增量建列失败，撤回功能可能不可用：{}。"
                     + "可手动执行：{}", e.getMessage(), describeAll());
+        }
+    }
+
+    /** 仅添加当前表缺少的列；tableFilter 供旧库回归测试使用。 */
+    void ensureColumns(Connection conn, Set<String> existing, String tableFilter) throws Exception {
+        for (String[] c : NEW_COLUMNS) {
+            if (tableFilter != null && !tableFilter.equals(c[0])) continue;
+            String key = c[0].toLowerCase() + "." + c[1].toLowerCase();
+            if (existing.contains(key)) continue;
+            String ddl = "ALTER TABLE " + c[0] + " ADD COLUMN " + c[1] + " " + c[2];
+            try (Statement st = conn.createStatement()) {
+                st.execute(ddl);
+                log.info("[SchemaMigration] 已补列：{}", key);
+            }
         }
     }
 
