@@ -202,7 +202,7 @@ public class FlowService {
                 c.setCaseMeasure("DETENTION");
             }
             if (c.getMeasureDate() == null) c.setMeasureDate(java.time.LocalDateTime.now());
-            if (c.getDetainDeadline() == null) c.setDetainDeadline(c.getMeasureDate().plusDays(3).toLocalDate().atTime(23, 59, 59));
+            if (c.getDetainDeadline() == null) c.setDetainDeadline(c.getMeasureDate().plusDays(2).toLocalDate().atTime(23, 59, 59));
         } else if ("BAIL".equals(action)) {
             deadlineStateMapper.deleteById(caseId);
             c.setCaseMeasure("BAIL");

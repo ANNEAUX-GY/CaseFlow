@@ -38,10 +38,10 @@
               <el-button v-if="!deadlineView.paused" size="small" @click="changeTerm('PAUSE')">停止计算（精神病鉴定）</el-button>
               <el-button v-else size="small" @click="changeTerm('RESUME')">恢复计算</el-button>
             </div>
-            <div v-if="deadlineView.canSubmit && detail.investigationStatus !== 'PENDING_APPROVAL'" class="cf-muted" style="margin-bottom:8px">预审或法制已收件，可以申请已提交审核。</div>
+            <div v-if="deadlineView.canSubmit && detail.investigationStatus !== 'PENDING_APPROVAL'" class="cf-muted" style="margin-bottom:8px">预审或法制已审核通过并接收，可以申请已提交审核。</div>
           </template>
           <div v-if="detail.caseType === 'ADMINISTRATIVE' && !detail.acceptTime" style="margin-bottom:10px">
-            <span class="cf-muted">请先登记受案时间，系统再计算第3/10/20/30/60天节点。</span>
+            <span class="cf-muted">请先登记受案时间；确认延长30天后，才显示第60天节点。</span>
             <el-button v-if="isFullAccess" link type="primary" @click="openRecord('ACCEPT')">登记受案时间</el-button>
           </div>
           <el-table v-if="deadlineView.items?.length" :data="deadlineView.items" size="small" max-height="350">
@@ -62,7 +62,7 @@
               </template>
             </el-table-column>
             <el-table-column v-if="isFullAccess || isAssignee" label="操作" width="80">
-              <template #default="{ row }"><el-button v-if="recordKey(row.key)" link type="primary" @click="openRecord(recordKey(row.key))">录入时间</el-button></template>
+              <template #default="{ row }"><el-button v-if="recordKey(row.key) && (isFullAccess || !managerRecordKeys.has(row.key))" link type="primary" @click="openRecord(recordKey(row.key))">{{ managerRecordKeys.has(row.key) ? '确认时间' : '录入时间' }}</el-button></template>
             </el-table-column>
           </el-table>
           <span v-else-if="detail.caseType !== 'ADMINISTRATIVE'" class="cf-muted">登记强制措施日期后显示具体时限。</span>
@@ -149,7 +149,7 @@
     </el-dialog>
 
     <!-- 强制措施登记 -->
-    <el-dialog v-model="recordDlg.visible" title="录入办理时间" width="410px" append-to-body>
+    <el-dialog v-model="recordDlg.visible" :title="managerRecordKeys.has(recordDlg.key) ? '确认审核或延长时间' : '录入办理时间'" width="410px" append-to-body>
       <el-date-picker v-model="recordDlg.at" type="datetime" value-format="YYYY-MM-DD HH:mm:ss" style="width:100%" />
       <template #footer>
         <el-button @click="recordDlg.visible = false">取消</el-button>
@@ -210,7 +210,8 @@ const loading = ref(false)
 const detail = ref({})
 const deadlineView = ref({ items: [], state: {}, detentionTerm: '3' })
 const dayText = (v) => (v || '').slice(0, 10) || '—'
-const recordKey = (key) => ({ PRETRIAL: 'PRETRIAL', LEGAL: 'LEGAL', SUMMONS: 'SUMMONS', SUMMONS_MONTH: 'SUMMONS', SUMMONS_MAX: 'SUMMONS', ADMIN_30: 'ADMIN_30', ADMIN_60: 'ADMIN_60', ADMIN_CHECK_3: 'ADMIN_CHECK_3', ADMIN_CHECK_10: 'ADMIN_CHECK_10', ADMIN_CHECK_20: 'ADMIN_CHECK_20' })[key]
+const recordKey = (key) => ({ PRETRIAL: 'PRETRIAL', LEGAL: 'LEGAL', PRETRIAL_ACCEPT: 'PRETRIAL_ACCEPT', LEGAL_ACCEPT: 'LEGAL_ACCEPT', SUMMONS: 'SUMMONS', SUMMONS_MONTH: 'SUMMONS', SUMMONS_MAX: 'SUMMONS', ADMIN_30: 'ADMIN_30', ADMIN_EXTEND: 'ADMIN_EXTEND', ADMIN_60: 'ADMIN_60', ADMIN_CHECK_3: 'ADMIN_CHECK_3', ADMIN_CHECK_10: 'ADMIN_CHECK_10', ADMIN_CHECK_20: 'ADMIN_CHECK_20' })[key]
+const managerRecordKeys = new Set(['PRETRIAL_ACCEPT', 'LEGAL_ACCEPT', 'ADMIN_EXTEND'])
 /** 现役承办人（主办/协办），供「主办人与盯办人」区块展示 */
 const assignees = computed(() =>
   (detail.value.assignHistory || []).filter(a => a.status === 'ACTIVE')

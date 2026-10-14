@@ -27,21 +27,27 @@ class CaseDeadlineServiceTest {
         CaseInfo c = measure("DETENTION");
         CaseDeadlineState s = new CaseDeadlineState();
         CaseDeadlineService.View first = CaseDeadlineService.calculate(c, s, base.plusDays(2));
-        assertEquals(base.plusDays(3).toLocalDate().atTime(23, 59, 59), item(first, "CHANGE_TERM").getDueAt());
+        assertEquals(base.plusDays(2).toLocalDate().atTime(23, 59, 59), item(first, "CHANGE_TERM").getDueAt());
         s.setDetentionTerm("7");
         CaseDeadlineService.View seven = CaseDeadlineService.calculate(c, s, base.plusDays(4));
         assertTrue(item(seven, "HANDOFF").isReminding());
-        assertEquals(base.plusDays(5).toLocalDate().atTime(23, 59, 59), item(seven, "PRETRIAL").getDueAt());
-        assertEquals(base.plusDays(6).toLocalDate().atTime(23, 59, 59), item(seven, "LEGAL").getDueAt());
+        assertEquals(base.plusDays(4).toLocalDate().atTime(23, 59, 59), item(seven, "PRETRIAL").getDueAt());
+        assertEquals(base.plusDays(5).toLocalDate().atTime(23, 59, 59), item(seven, "LEGAL").getDueAt());
+        assertEquals(base.plusDays(6).toLocalDate().atTime(23, 59, 59), item(seven, "DETENTION_END").getDueAt());
+        s.setLegalSentAt(base.plusDays(3));
+        assertFalse(CaseDeadlineService.acceptedByReviewer(s));
+        assertFalse(CaseDeadlineService.calculate(c, s, base.plusDays(4)).isCanSubmit());
         s.setLegalReceivedAt(base.plusDays(4));
+        assertTrue(CaseDeadlineService.acceptedByReviewer(s));
         assertTrue(CaseDeadlineService.calculate(c, s, base.plusDays(4)).isCanSubmit());
         assertFalse(item(CaseDeadlineService.calculate(c, s, base.plusDays(4)), "HANDOFF").isReminding());
         s.setDetentionTerm("30");
         CaseDeadlineService.View thirty = CaseDeadlineService.calculate(c, s, base.plusDays(19));
-        assertEquals(base.plusDays(12).toLocalDate().atStartOfDay(), item(thirty, "HANDOFF").getRemindAt());
-        assertEquals(base.plusDays(15).toLocalDate().atTime(23, 59, 59), item(thirty, "PRETRIAL").getDueAt());
+        assertEquals(base.plusDays(11).toLocalDate().atStartOfDay(), item(thirty, "HANDOFF").getRemindAt());
+        assertEquals(base.plusDays(14).toLocalDate().atTime(23, 59, 59), item(thirty, "PRETRIAL").getDueAt());
         assertTrue(item(thirty, "PROGRESS").isReminding());
-        assertEquals(base.plusDays(20).toLocalDate().atTime(23, 59, 59), item(thirty, "LEGAL").getDueAt());
+        assertEquals(base.plusDays(19).toLocalDate().atTime(23, 59, 59), item(thirty, "LEGAL").getDueAt());
+        assertEquals(base.plusDays(29).toLocalDate().atTime(23, 59, 59), item(thirty, "DETENTION_END").getDueAt());
     }
 
     @Test
@@ -55,7 +61,7 @@ class CaseDeadlineServiceTest {
         assertFalse(item(paused, "PRETRIAL").isReminding());
         s.setPausedAt(null);
         s.setPausedSeconds(3L * 24 * 3600);
-        assertEquals(base.plusDays(8).toLocalDate().atTime(23, 59, 59),
+        assertEquals(base.plusDays(7).toLocalDate().atTime(23, 59, 59),
                 item(CaseDeadlineService.calculate(c, s, base.plusDays(6)), "PRETRIAL").getDueAt());
     }
 
@@ -79,11 +85,23 @@ class CaseDeadlineServiceTest {
         CaseInfo c = new CaseInfo();
         c.setCaseType("ADMINISTRATIVE");
         c.setAcceptTime(base);
-        CaseDeadlineService.View v = CaseDeadlineService.calculate(c, new CaseDeadlineState(), base);
-        assertEquals(base.plusDays(3).toLocalDate().atTime(23, 59, 59), item(v, "ADMIN_CHECK_3").getDueAt());
-        assertEquals(base.plusDays(10).toLocalDate().atTime(23, 59, 59), item(v, "ADMIN_CHECK_10").getDueAt());
-        assertEquals(base.plusDays(20).toLocalDate().atTime(23, 59, 59), item(v, "ADMIN_CHECK_20").getDueAt());
+        CaseDeadlineState s = new CaseDeadlineState();
+        CaseDeadlineService.View v = CaseDeadlineService.calculate(c, s, base);
+        assertEquals(base.plusDays(2).toLocalDate().atTime(23, 59, 59), item(v, "ADMIN_CHECK_3").getDueAt());
+        assertEquals(base.plusDays(9).toLocalDate().atTime(23, 59, 59), item(v, "ADMIN_CHECK_10").getDueAt());
+        assertEquals(base.plusDays(19).toLocalDate().atTime(23, 59, 59), item(v, "ADMIN_CHECK_20").getDueAt());
         assertEquals(base.plusDays(29).toLocalDate().atTime(23, 59, 59), item(v, "ADMIN_30").getDueAt());
+        assertEquals(base.plusDays(28).toLocalDate().atStartOfDay(), item(v, "ADMIN_30").getRemindAt());
+        assertFalse(v.getItems().stream().anyMatch(i -> "ADMIN_60".equals(i.getKey())));
+        s.setAdmin30DocAt(base.plusDays(28));
+        v = CaseDeadlineService.calculate(c, s, base.plusDays(28));
+        assertTrue(item(v, "ADMIN_EXTEND").isReminding());
+        assertFalse(v.getItems().stream().anyMatch(i -> "ADMIN_60".equals(i.getKey())));
+        s.setAdminExtendedAt(base.plusDays(28));
+        v = CaseDeadlineService.calculate(c, s, base.plusDays(28));
         assertEquals(base.plusDays(59).toLocalDate().atTime(23, 59, 59), item(v, "ADMIN_60").getDueAt());
+        assertEquals(base.plusDays(58).toLocalDate().atStartOfDay(), item(v, "ADMIN_60").getRemindAt());
+        c.setStatus("DONE");
+        assertFalse(item(CaseDeadlineService.calculate(c, s, base.plusDays(60)), "ADMIN_60").isReminding());
     }
 }

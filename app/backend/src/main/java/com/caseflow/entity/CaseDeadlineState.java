@@ -18,9 +18,12 @@ public class CaseDeadlineState {
     private Long pausedSeconds;
     private LocalDateTime pretrialReceivedAt;
     private LocalDateTime legalReceivedAt;
+    private LocalDateTime pretrialSentAt;
+    private LocalDateTime legalSentAt;
     private LocalDateTime submittedAt;
     private LocalDateTime lastSummonsAt;
     private LocalDateTime admin30DocAt;
+    private LocalDateTime adminExtendedAt;
     private LocalDateTime admin60DocAt;
     private LocalDateTime adminCheck3At;
     private LocalDateTime adminCheck10At;

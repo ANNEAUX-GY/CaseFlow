@@ -162,7 +162,10 @@ public class SchemaMigration implements ApplicationRunner {
             {"case_info", "undertake_unit", "VARCHAR(128) NULL"},
             {"case_info", "accept_time", "DATETIME NULL"},
             {"case_info", "punish_time", "DATETIME NULL"},
-            {"case_info", "external_id", "VARCHAR(32) NULL"}
+            {"case_info", "external_id", "VARCHAR(32) NULL"},
+            {"case_deadline_state", "pretrial_sent_at", "DATETIME NULL"},
+            {"case_deadline_state", "legal_sent_at", "DATETIME NULL"},
+            {"case_deadline_state", "admin_extended_at", "DATETIME NULL"}
     };
 
     /** 旧数据回填：把历史「案件类型」自由文本里的大类词归位到 case_type（小类位清空）。
@@ -200,6 +203,7 @@ public class SchemaMigration implements ApplicationRunner {
                     log.info("[SchemaMigration] 已补列：{}", key);
                 }
             }
+            migrateLegacyDeadlineReceipts(conn, existing);
             migrateCategory(conn, existing);
             removeCivilType(conn);
             seedCategories(conn, existing);
@@ -211,6 +215,19 @@ public class SchemaMigration implements ApplicationRunner {
             // 报错信息会明确指出，不会静默损坏数据。
             log.error("[SchemaMigration] 增量建列失败，撤回功能可能不可用：{}。"
                     + "可手动执行：{}", e.getMessage(), describeAll());
+        }
+    }
+
+    /** 旧版本的 received_at 由移交按钮写入；没有审核回执，不能视为审核通过。 */
+    void migrateLegacyDeadlineReceipts(Connection conn, Set<String> existing) throws Exception {
+        if (!existing.contains("case_deadline_state.pretrial_received_at")
+                || !existing.contains("case_deadline_state.legal_received_at")) return;
+        try (Statement st = conn.createStatement()) {
+            int pretrial = st.executeUpdate("UPDATE case_deadline_state SET pretrial_sent_at = pretrial_received_at, "
+                    + "pretrial_received_at = NULL WHERE pretrial_sent_at IS NULL AND pretrial_received_at IS NOT NULL");
+            int legal = st.executeUpdate("UPDATE case_deadline_state SET legal_sent_at = legal_received_at, "
+                    + "legal_received_at = NULL WHERE legal_sent_at IS NULL AND legal_received_at IS NOT NULL");
+            if (pretrial + legal > 0) log.info("[SchemaMigration] 已将 {} 条旧版收件记录改为待确认移交记录", pretrial + legal);
         }
     }
 

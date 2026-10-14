@@ -86,7 +86,7 @@ public class ApprovalService {
                 c.setInvestigationStatus("INVESTIGATING");
                 break;
             case "SUBMIT":
-                // 刑拘：预审或法制任一方已收即可申请；其他案件沿用完成计划校验。
+                // 刑拘：预审或法制任一方审核通过并接收后才可申请。
                 if (!"DETENTION".equals(c.getCaseMeasure())) {
                     requireState(cur, "INVESTIGATING");
                 } else if (cur != null && !"PENDING_INITIAL".equals(cur) && !"INVESTIGATING".equals(cur)) {
@@ -95,8 +95,8 @@ public class ApprovalService {
                 checkHandlerOrManager(c);
                 if ("DETENTION".equals(c.getCaseMeasure())) {
                     CaseDeadlineState state = deadlineStateMapper.selectById(caseId);
-                    if (state == null || (state.getPretrialReceivedAt() == null && state.getLegalReceivedAt() == null)) {
-                        throw new BizException("预审或法制至少一方收件后才能申请已提交审核");
+                    if (!CaseDeadlineService.acceptedByReviewer(state)) {
+                        throw new BizException("刑拘变更为7天或30天案后，预审或法制至少一方审核通过并接收，才能申请已提交审核");
                     }
                     state.setSubmittedAt(LocalDateTime.now());
                     state.setUpdatedAt(state.getSubmittedAt());
@@ -207,7 +207,7 @@ public class ApprovalService {
     private LocalDateTime defaultDeadline(String measure, LocalDateTime base) {
         switch (measure) {
             case "DETENTION":
-                return base.plusDays(3).toLocalDate().atTime(23, 59, 59);
+                return base.plusDays(2).toLocalDate().atTime(23, 59, 59);
             case "ARREST":
                 return base.plusMonths(2);
             case "BAIL":
