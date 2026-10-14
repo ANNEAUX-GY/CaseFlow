@@ -165,7 +165,11 @@ export const caseApi = {
   stats: (params) => http.get('/cases/stats', { params }),
   dashboard: (params) => http.get('/cases/dashboard', { params }),
   /** 民警承办负荷详情（点主办人/协办人时用）；caseId 传入会标记 isCurrent */
-  staffWorkload: (employeeId, caseId) => http.get(`/cases/staff/${employeeId}/workload`, { params: { caseId } })
+  staffWorkload: (employeeId, caseId) => http.get(`/cases/staff/${employeeId}/workload`, { params: { caseId } }),
+  /** 案件 Excel 导入（2026-10-14）：14 列，幂等键=案件编号 */
+  importExcel: (formData) =>
+    http.post('/cases/import', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  templateUrl: () => `${import.meta.env.VITE_API_BASE || '/api'}/cases/template`
 }
 
 export const suspectApi = {
@@ -198,6 +202,10 @@ export const watchApi = {
   transition: (caseId, data) => http.post(`/watch/cases/${caseId}/transition`, data),
   /** 强制措施登记 / 变更（管理层） */
   measure: (caseId, data) => http.post(`/watch/cases/${caseId}/measure`, data),
+  deadlines: (caseId) => http.get(`/watch/cases/${caseId}/deadlines`),
+  deadlineAlerts: (params) => http.get('/watch/deadline-alerts', { params }),
+  changeTerm: (caseId, action) => http.post(`/watch/cases/${caseId}/deadlines/term`, { action }),
+  recordDeadline: (caseId, key, at) => http.post(`/watch/cases/${caseId}/deadlines/record`, { key, at }),
   // ---- 办案阶段推进（2026-10-12：阶段任务 = 案件待办）----
   /** 阶段视图：当前阶段 + 本阶段待办进度 + 可选流转分支 */
   flow: (caseId) => http.get(`/watch/cases/${caseId}/flow`),

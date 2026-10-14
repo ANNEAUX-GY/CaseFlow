@@ -36,6 +36,15 @@
         </el-descriptions-item>
         <el-descriptions-item label="来源">{{ sourceLabel }}</el-descriptions-item>
         <el-descriptions-item label="案件编号">{{ detail.filingNo || '-' }}</el-descriptions-item>
+        <!-- Excel 导入字段（2026-10-14）：只有导入进来的案件有值。
+             手工建的案件这五项全空，整组不渲染，不占版面。 -->
+        <template v-if="hasImportFields">
+          <el-descriptions-item label="发案地点" :span="2">{{ detail.occurPlace || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="发案时间">{{ fmtOrDash(detail.occurTime) }}</el-descriptions-item>
+          <el-descriptions-item label="承办单位">{{ detail.undertakeUnit || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="受理时间">{{ fmtOrDash(detail.acceptTime) }}</el-descriptions-item>
+          <el-descriptions-item label="处罚时间">{{ fmtOrDash(detail.punishTime) }}</el-descriptions-item>
+        </template>
         <!-- 强制措施（2026-10-09）：建案表单与盯办共用同一个字段，这里如实显示 -->
         <el-descriptions-item label="强制措施">
           <el-tag v-if="detail.caseMeasure && detail.caseMeasure !== 'NONE'" size="small"
@@ -358,7 +367,7 @@ import { caseApi, fileApi, suspectApi, timeNodeApi, logApi, watchApi } from '../
 import CaseTodoPanel from './CaseTodoPanel.vue'
 import FocusStar from './FocusStar.vue'
 import { STATUS_META, PRIORITY_META, SOURCE_META, DUE_META, CASE_TYPE_META, MEASURE_META, dueText,
-  TIME_NODE_PRESETS, REMIND_DAY_PRESETS } from '../utils/format'
+  deadlineTextOf, TIME_NODE_PRESETS, REMIND_DAY_PRESETS } from '../utils/format'
 import { useUserStore } from '../store/user'
 import { useEventStore } from '../store/events'
 
@@ -384,6 +393,11 @@ const detail = ref({})
 const statusMeta = computed(() => STATUS_META[detail.value.status] || { label: '-', type: 'info' })
 const priorityMeta = computed(() => PRIORITY_META[detail.value.priority] || { label: '-', color: '#646a73' })
 const sourceLabel = computed(() => SOURCE_META[detail.value.sourceType] || detail.value.sourceType || '-')
+// Excel 导入字段（2026-10-14）：五项里任一个有值就渲染整组
+const hasImportFields = computed(() => !!(detail.value.occurPlace || detail.value.occurTime
+  || detail.value.undertakeUnit || detail.value.acceptTime || detail.value.punishTime))
+/** 时间列展示：ISO -> "yyyy-MM-dd HH:mm"；空值给横杠 */
+const fmtOrDash = (t) => (t ? deadlineTextOf(t) : '-')
 const dueClass = computed(() => {
   const meta = DUE_META[detail.value.dueLevel] || DUE_META.NONE
   return meta.color === 'danger' ? 'cf-danger' : meta.color === 'warn' ? 'cf-warn' : 'cf-muted'

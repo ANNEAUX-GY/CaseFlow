@@ -148,7 +148,21 @@ public class SchemaMigration implements ApplicationRunner {
             // 原先阶段进度算在 case_plan（阶段→环节→标准任务）上，等于和「案件待办」
             // 并行维护两套任务清单，用户要求删掉那套。现在判据统一落在 case_todo：
             // 加 flow_stage 记录这条待办属于哪个阶段，NULL=存量按案件当前阶段处理。
-            {"case_todo", "flow_stage", "VARCHAR(24) NULL"}
+            {"case_todo", "flow_stage", "VARCHAR(24) NULL"},
+            // 案件 Excel 导入（2026-10-14）：源系统 14 个字段里，有 5 个在库里没有落脚点，
+            // 一并补列。六列全部可空——存量案件没有这些信息，读取时不判空也不炸：
+            //   occur_place    发案地点；
+            //   occur_time     发案时间；
+            //   undertake_unit 承办单位（分局/大队一级，与「主办人」的员工档案互补）；
+            //   accept_time    受理时间；
+            //   punish_time    处罚时间；
+            //   external_id    源系统主键，导入时原样留存，用于与旧系统对账溯源。
+            {"case_info", "occur_place", "VARCHAR(255) NULL"},
+            {"case_info", "occur_time", "DATETIME NULL"},
+            {"case_info", "undertake_unit", "VARCHAR(128) NULL"},
+            {"case_info", "accept_time", "DATETIME NULL"},
+            {"case_info", "punish_time", "DATETIME NULL"},
+            {"case_info", "external_id", "VARCHAR(32) NULL"}
     };
 
     /** 旧数据回填：把历史「案件类型」自由文本里的大类词归位到 case_type（小类位清空）。

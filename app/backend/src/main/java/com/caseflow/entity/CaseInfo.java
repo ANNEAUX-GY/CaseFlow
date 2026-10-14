@@ -84,6 +84,20 @@ public class CaseInfo implements Serializable {
     private Integer focus;
     private String status;
     private String remark;
+    // ---- Excel 导入补充字段（2026-10-14）----
+    // 源系统导出 14 列里，这 5 项没有现成落脚点，统一补在 status 之前入库。
+    /** 发案地点 */
+    private String occurPlace;
+    /** 发案时间 */
+    private LocalDateTime occurTime;
+    /** 承办单位（分局/大队一级） */
+    private String undertakeUnit;
+    /** 受理时间 */
+    private LocalDateTime acceptTime;
+    /** 处罚时间 */
+    private LocalDateTime punishTime;
+    /** 源系统主键：Excel 的「id」列原样留存，用于与旧系统对账溯源 */
+    private String externalId;
     private Long createdBy;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

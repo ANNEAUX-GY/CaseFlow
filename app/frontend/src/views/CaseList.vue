@@ -13,6 +13,20 @@
       <span class="cf-spacer"></span>
       <el-button link type="primary" @click="gotoBoards">选择小类</el-button>
       <span class="cf-gatebar__tip">退回上一级或换类型，请用顶部类型条右侧的按钮</span>
+      <!-- 案件导入（2026-10-14）：与员工图谱同款 el-upload 直传。
+           放在 gatebar 而不是工具栏：工具栏 1440 宽度下已经贴边，
+           再加按钮会换行把重置挤到第二行（新建案件就是这么搬过来的）。 -->
+      <el-button link type="primary" @click="downloadTemplate">下载导入模板</el-button>
+      <el-upload
+        :action="`${importBase}/cases/import`"
+        :headers="uploadHeaders"
+        :show-file-list="false"
+        :on-success="onImportSuccess"
+        :on-error="onImportError"
+        style="display: inline-flex"
+      >
+        <el-button size="small">案件导入</el-button>
+      </el-upload>
       <el-button type="primary" size="small" @click="onCreate">新建案件</el-button>
     </div>
 
@@ -414,6 +428,34 @@ const reset = () => {
 const onCreate = () => {
   editId.value = null
   formVisible.value = true
+}
+
+// ---- 案件导入（2026-10-14）----
+// el-upload 直传 /api/cases/import（与员工图谱导入同一套路：不走 axios 实例，
+// 所以 X-Token 要手工带上；模板下载是 window.open，只能拼在 query 里）。
+const importBase = '/api'
+const uploadHeaders = { 'X-Token': localStorage.getItem('cf_token') || '' }
+const downloadTemplate = () => {
+  window.open(`${importBase}/cases/template?token=${encodeURIComponent(uploadHeaders['X-Token'])}`, '_blank')
+}
+const onImportSuccess = (res) => {
+  if (res && res.code === 0) {
+    const d = res.data
+    ElMessage.success(`导入完成：成功 ${d.success} 条 / 共 ${d.total} 条`)
+    // 部分行有修正（时间没解析出来、主办人没匹配上…）：弹清单让人回头逐条修。
+    // 只列前 10 条——一份文件几十行错误时，全列会弹出一屏关不掉的框。
+    if (d.errors && d.errors.length) {
+      ElMessageBox.alert(d.errors.slice(0, 10).join('<br/>'), '部分数据被修正', {
+        dangerouslyUseHTMLString: true
+      })
+    }
+    reload()
+  } else {
+    ElMessage.error(res?.msg || '导入失败')
+  }
+}
+const onImportError = (err) => {
+  ElMessage.error('导入失败：' + (err?.message || '未知错误'))
 }
 
 const openDetail = (row) => {

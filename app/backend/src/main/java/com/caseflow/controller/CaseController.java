@@ -15,6 +15,7 @@ import com.caseflow.service.CaseService;
 import com.caseflow.service.SuspectService;
 import com.caseflow.vo.CaseVO;
 import com.caseflow.vo.DashboardVO;
+import com.caseflow.vo.ImportResultVO;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -25,8 +26,11 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
+import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -120,6 +124,22 @@ public class CaseController {
     @PostMapping
     public Result<CaseVO> create(@Validated @RequestBody CaseSaveRequest req) {
         return Result.ok(caseService.save(req));
+    }
+
+    /**
+     * 案件 Excel 导入（2026-10-14）。字段清单 14 列，见 CaseExcelRow。
+     * 幂等键 = 案件编号；只给管理层（与删除/指派同级的管理动作）。
+     */
+    @PostMapping("/import")
+    @FullAccessOnly("导入案件")
+    public Result<ImportResultVO> importExcel(@RequestParam("file") MultipartFile file) {
+        return Result.ok(caseService.importExcel(file));
+    }
+
+    /** 下载案件导入模板（带一行示例） */
+    @GetMapping("/template")
+    public void template(HttpServletResponse response) throws IOException {
+        caseService.writeTemplate(response);
     }
 
     @PutMapping("/{id}")

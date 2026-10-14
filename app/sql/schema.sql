@@ -77,11 +77,37 @@ CREATE TABLE IF NOT EXISTS case_info (
     deadline_label VARCHAR(64) DEFAULT NULL COMMENT '期限节点名称（自己填：受案时间 / 变更羁押期限时间…）',
     remind_days   INT          DEFAULT NULL COMMENT '该节点提前多少天提醒（NULL=不提醒）',
     focus         TINYINT      NOT NULL DEFAULT 0 COMMENT '重点关注：0否/1是（一键标注，属标记类操作，不在可撤回白名单）',
+    -- 案件 Excel 导入补充字段（2026-10-14）：源系统导出的 14 列里有 5 个在库里没有落脚点
+    occur_place   VARCHAR(255) DEFAULT NULL COMMENT '发案地点',
+    occur_time    DATETIME     DEFAULT NULL COMMENT '发案时间',
+    undertake_unit VARCHAR(128) DEFAULT NULL COMMENT '承办单位',
+    accept_time   DATETIME     DEFAULT NULL COMMENT '受理时间',
+    punish_time   DATETIME     DEFAULT NULL COMMENT '处罚时间',
+    external_id   VARCHAR(32)  DEFAULT NULL COMMENT '源系统主键（导入溯源用）',
     status        VARCHAR(16)  NOT NULL DEFAULT 'PENDING_ASSIGN' COMMENT 'PENDING_ASSIGN/ASSIGNED/IN_PROGRESS/DONE/CANCELLED',
     remark        VARCHAR(512) DEFAULT NULL COMMENT '处理结论/归档备注',
     created_by    BIGINT       DEFAULT NULL COMMENT '创建人（boss）',
     created_at    DATETIME     DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     updated_at    DATETIME     DEFAULT CURRENT_TIMESTAMP COMMENT '更新时间'
+);
+
+-- 具体时限办理状态：每案一行，日期均为实际办理/收件时间。
+CREATE TABLE IF NOT EXISTS case_deadline_state (
+    case_id BIGINT PRIMARY KEY COMMENT '案件 ID',
+    detention_term VARCHAR(8) DEFAULT NULL COMMENT '刑拘 3/7/30 天；暂停另记 paused_at',
+    paused_at DATETIME DEFAULT NULL COMMENT '精神病鉴定停止计算起点',
+    paused_deadline DATETIME DEFAULT NULL COMMENT '停止前的期限届满日',
+    paused_seconds BIGINT NOT NULL DEFAULT 0 COMMENT '累计停止计算秒数',
+    pretrial_received_at DATETIME DEFAULT NULL COMMENT '预审收件时间',
+    legal_received_at DATETIME DEFAULT NULL COMMENT '法制收件时间',
+    submitted_at DATETIME DEFAULT NULL COMMENT '提交审核时间',
+    last_summons_at DATETIME DEFAULT NULL COMMENT '最近一次传讯时间',
+    admin_30_doc_at DATETIME DEFAULT NULL COMMENT '30日延长文书呈报时间',
+    admin_60_doc_at DATETIME DEFAULT NULL COMMENT '60日延长文书呈报时间',
+    admin_check_3_at DATETIME DEFAULT NULL COMMENT '第3日内部监督完成时间',
+    admin_check_10_at DATETIME DEFAULT NULL COMMENT '第10日内部监督完成时间',
+    admin_check_20_at DATETIME DEFAULT NULL COMMENT '第20日内部监督完成时间',
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '更新时间'
 );
 
 -- 4. 指派关系（一次案件可多人；改派保留历史记录，为后续追溯留痕）

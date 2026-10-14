@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.alibaba.excel.EasyExcel;
 import com.caseflow.common.PageResult;
 import com.caseflow.dto.AssignRequest;
 import com.caseflow.dto.CaseQuery;
@@ -15,6 +16,8 @@ import com.caseflow.entity.CaseInfo;
 import com.caseflow.entity.CaseSuspect;
 import com.caseflow.entity.OrgEmployee;
 import com.caseflow.entity.SysUser;
+import com.caseflow.excel.CaseExcelListener;
+import com.caseflow.excel.CaseExcelRow;
 import com.caseflow.exception.BizException;
 import com.caseflow.mapper.CaseAssigneeMapper;
 import com.caseflow.mapper.CaseInfoMapper;
@@ -26,12 +29,18 @@ import com.caseflow.support.LogService;
 import com.caseflow.vo.AssigneeVO;
 import com.caseflow.vo.CaseVO;
 import com.caseflow.vo.DashboardVO;
+import com.caseflow.vo.ImportResultVO;
 import com.caseflow.vo.SuspectVO;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
+import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.URLEncoder;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -413,6 +422,13 @@ public class CaseService {
         vo.setFlowStage(stage);
         vo.setFlowStageName(com.caseflow.flow.CaseFlowTemplate.stageLabel(stage));
         vo.setRemark(c.getRemark());
+        // Excel 导入字段（2026-10-14）：原样透出，前端详情页展示；列表不带（一列塞不下）
+        vo.setOccurPlace(c.getOccurPlace());
+        vo.setOccurTime(c.getOccurTime());
+        vo.setUndertakeUnit(c.getUndertakeUnit());
+        vo.setAcceptTime(c.getAcceptTime());
+        vo.setPunishTime(c.getPunishTime());
+        vo.setExternalId(c.getExternalId());
         vo.setCreatedByName(userName(c.getCreatedBy()));
         vo.setCreatedAt(c.getCreatedAt());
         vo.setUpdatedAt(c.getUpdatedAt());
@@ -697,6 +713,357 @@ public class CaseService {
         logService.log("CASE", isNew ? "CREATE" : "UPDATE", "CASE", c.getId(),
                 (isNew ? "创建案件：" : "更新案件：") + c.getName(), beforeSnapshot, after);
         return detail(c.getId());
+    }
+
+    // ------------------------------------------------------------------
+    // Excel 导入（2026-10-14）
+    // ------------------------------------------------------------------
+
+    /**
+     * 案件 Excel 导入。字段清单（14 列）：
+     * id / 案件编号 / 案件名称 / 发案地点 / 承办单位 / 主办人 / 案件状态 /
+     * 嫌疑人身份证号 / 嫌疑人 / 受理时间 / 处罚时间 / 案件类型 / 发案时间 / 简要案情。
+     *
+     * <p><b>幂等键 = 案件编号（case_no）</b>：已存在则只更新基础信息字段，
+     * 不重复指派、不重复录入嫌疑人；不存在才新建。编号为空时自动生成。
+     *
+     * <p><b>逐行容错</b>：单行写库失败只记 errors，不影响其他行——
+     * 与员工图谱导入同一口径（能导的先进来，错误清单回头逐条修）。
+     */
+    public ImportResultVO importExcel(MultipartFile file) {
+        ImportResultVO result = new ImportResultVO();
+        List<String> errors = new ArrayList<>();
+        if (file == null || file.isEmpty()) {
+            throw new BizException("请选择要导入的 Excel 文件");
+        }
+        String original = file.getOriginalFilename() == null ? "" : file.getOriginalFilename().toLowerCase();
+        if (!original.endsWith(".xls") && !original.endsWith(".xlsx") && !original.endsWith(".csv")) {
+            throw new BizException("仅支持 .xls / .xlsx / .csv 文件");
+        }
+        CaseExcelListener listener = new CaseExcelListener();
+        try (InputStream in = file.getInputStream()) {
+            EasyExcel.read(in, CaseExcelRow.class, listener).sheet().doRead();
+        } catch (IOException e) {
+            throw new BizException("文件读取失败：" + e.getMessage());
+        }
+        List<CaseExcelRow> rows = listener.getRows();
+        result.setTotal(rows.size());
+        if (rows.isEmpty()) {
+            throw new BizException("未解析到任何有效数据行");
+        }
+
+        // 员工姓名 -> 档案列表。值是 List 而不是单个：重名要能发现，
+        // 悄悄取第一个会把案件派错给同名的另一个人。
+        Map<String, List<OrgEmployee>> employeesByName = new HashMap<>();
+        for (OrgEmployee e : employeeService.employeeMap().values()) {
+            if (StringUtils.hasText(e.getName())) {
+                employeesByName.computeIfAbsent(e.getName().trim(), k -> new ArrayList<>()).add(e);
+            }
+        }
+        // 已有案件编号 -> 案件（幂等键）
+        Map<String, CaseInfo> byCaseNo = new HashMap<>();
+        for (CaseInfo c : caseMapper.selectList(null)) {
+            if (StringUtils.hasText(c.getCaseNo())) {
+                byCaseNo.put(c.getCaseNo(), c);
+            }
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        int success = 0;
+        for (int i = 0; i < rows.size(); i++) {
+            int lineNo = i + 2; // 表头占第 1 行
+            try {
+                importOne(rows.get(i), lineNo, employeesByName, byCaseNo, now, errors);
+                success++;
+            } catch (Exception ex) {
+                errors.add("第 " + lineNo + " 行导入失败：" + ex.getMessage());
+            }
+        }
+        result.setSuccess(success);
+        result.setFailed(rows.size() - success);
+        result.setErrors(errors);
+        logService.log("CASE", "IMPORT", "CASE", null,
+                "导入案件：共 " + rows.size() + " 行，成功 " + success + " 行");
+        return result;
+    }
+
+    /**
+     * 导入单行。非致命问题（时间解析不了、主办人没匹配上……）只记 errors 不抛异常，
+     * 保证「能导的先进来」；缺案件名称这类必填问题才抛，由调用方记为失败行。
+     */
+    private void importOne(CaseExcelRow row, int lineNo,
+                           Map<String, List<OrgEmployee>> employeesByName,
+                           Map<String, CaseInfo> byCaseNo, LocalDateTime now,
+                           List<String> errors) {
+        if (!StringUtils.hasText(row.getName())) {
+            throw new BizException("缺少案件名称");
+        }
+        // ---- 案件类型：刑事/行政/初查；空或映射不上按「未分类」入库（OTHER 口径）----
+        String caseType = mapCaseType(row.getCaseTypeText());
+        if (!StringUtils.hasText(row.getCaseTypeText())) {
+            errors.add("第 " + lineNo + " 行：未填案件类型，按「未分类」入库");
+        } else if (caseType == null) {
+            errors.add("第 " + lineNo + " 行：无法识别的案件类型「" + row.getCaseTypeText() + "」，按「未分类」入库");
+        }
+        // ---- 时间列：宽松解析，失败记 error 后按 null 入库 ----
+        LocalDateTime occurTime = parseExcelTime(row.getOccurTime());
+        if (StringUtils.hasText(row.getOccurTime()) && occurTime == null) {
+            errors.add("第 " + lineNo + " 行：发案时间「" + row.getOccurTime() + "」无法解析，已留空");
+        }
+        LocalDateTime acceptTime = parseExcelTime(row.getAcceptTime());
+        if (StringUtils.hasText(row.getAcceptTime()) && acceptTime == null) {
+            errors.add("第 " + lineNo + " 行：受理时间「" + row.getAcceptTime() + "」无法解析，已留空");
+        }
+        LocalDateTime punishTime = parseExcelTime(row.getPunishTime());
+        if (StringUtils.hasText(row.getPunishTime()) && punishTime == null) {
+            errors.add("第 " + lineNo + " 行：处罚时间「" + row.getPunishTime() + "」无法解析，已留空");
+        }
+        // ---- 主办人：按姓名匹配员工档案；重名/查无此人都不指派，只记提示 ----
+        Long ownerId = null;
+        if (StringUtils.hasText(row.getOwnerName())) {
+            List<OrgEmployee> hits = employeesByName.get(row.getOwnerName());
+            if (hits == null || hits.isEmpty()) {
+                errors.add("第 " + lineNo + " 行：员工档案中找不到「" + row.getOwnerName() + "」，未指派主办人");
+            } else if (hits.size() > 1) {
+                errors.add("第 " + lineNo + " 行：员工档案中「" + row.getOwnerName() + "」重名 " + hits.size()
+                        + " 人，未自动指派，请导入后手动指派");
+            } else {
+                ownerId = hits.get(0).getId();
+            }
+        }
+
+        CaseInfo existing = StringUtils.hasText(row.getCaseNo()) ? byCaseNo.get(row.getCaseNo()) : null;
+        if (existing != null) {
+            // 已存在：只更新基础信息。状态/指派/嫌疑人一律不碰——
+            // 那些是办理过程中产生的数据，被一次导入覆盖会毁掉留痕。
+            existing.setName(row.getName());
+            if (caseType != null) {
+                existing.setCaseType(caseType);
+            }
+            existing.setOccurPlace(row.getOccurPlace());
+            existing.setOccurTime(occurTime);
+            existing.setUndertakeUnit(row.getUndertakeUnit());
+            existing.setAcceptTime(acceptTime);
+            existing.setPunishTime(punishTime);
+            existing.setExternalId(row.getId());
+            if (StringUtils.hasText(row.getDescription())) {
+                existing.setDescription(row.getDescription());
+            }
+            existing.setUpdatedAt(now);
+            caseMapper.updateById(existing);
+            errors.add("第 " + lineNo + " 行：案件编号「" + row.getCaseNo() + "」已存在，已更新基础信息"
+                    + "（状态 / 指派 / 嫌疑人未动）");
+            return;
+        }
+
+        // 新建。状态映射 + 无人承办降级（与 save() 同一套约束：
+        // 在办/办结必须有人承办，已指派也必须有人，否则造出查不到责任人的记录）
+        String status = mapStatus(row.getStatusText());
+        if (StringUtils.hasText(row.getStatusText()) && status == null) {
+            errors.add("第 " + lineNo + " 行：无法识别的案件状态「" + row.getStatusText() + "」，按「待指派」入库");
+        }
+        if (status == null) {
+            status = "PENDING_ASSIGN";
+        } else if (ownerId == null && (NEED_ASSIGNEE_STATUS.contains(status) || "ASSIGNED".equals(status))) {
+            errors.add("第 " + lineNo + " 行：状态「" + row.getStatusText() + "」需要承办人，但未匹配到主办人，"
+                    + "已按「待指派」入库");
+            status = "PENDING_ASSIGN";
+        }
+
+        CaseInfo c = new CaseInfo();
+        c.setCaseNo(StringUtils.hasText(row.getCaseNo()) ? row.getCaseNo() : generateCaseNo());
+        c.setName(row.getName());
+        c.setCaseType(caseType);
+        c.setOccurPlace(row.getOccurPlace());
+        c.setOccurTime(occurTime);
+        c.setUndertakeUnit(row.getUndertakeUnit());
+        c.setAcceptTime(acceptTime);
+        c.setPunishTime(punishTime);
+        c.setExternalId(row.getId());
+        c.setDescription(row.getDescription());
+        c.setSourceType("EXCEL");
+        c.setPriority("NORMAL");
+        c.setStatus(status);
+        c.setCreatedBy(AuthContext.userId());
+        c.setCreatedAt(now);
+        c.setUpdatedAt(now);
+        caseMapper.insert(c);
+        byCaseNo.put(c.getCaseNo(), c);
+
+        // 主办人 -> 指派关系（OWNER）。放在 insert 之后：拿得到案件 id
+        if (ownerId != null) {
+            CaseAssignee a = new CaseAssignee();
+            a.setCaseId(c.getId());
+            a.setEmployeeId(ownerId);
+            a.setAssignRole("OWNER");
+            a.setStatus("ACTIVE");
+            a.setAssignedBy(AuthContext.userId());
+            a.setAssignedAt(now);
+            assigneeMapper.insert(a);
+        }
+        // 嫌疑人（单人列：姓名 + 身份证号）。只有姓名没有身份证号也录——
+        // 身份证可以后补；只有身份证号没有姓名是废数据，不录。
+        if (StringUtils.hasText(row.getSuspectName())) {
+            CaseSuspect s = new CaseSuspect();
+            s.setCaseId(c.getId());
+            s.setName(row.getSuspectName());
+            s.setIdCard(row.getSuspectIdCard());
+            s.setCreatedBy(AuthContext.userId());
+            s.setCreatedAt(now);
+            s.setUpdatedAt(now);
+            suspectMapper.insert(s);
+        } else if (StringUtils.hasText(row.getSuspectIdCard())) {
+            errors.add("第 " + lineNo + " 行：填了嫌疑人身份证号但姓名为空，未录入嫌疑人");
+        }
+    }
+
+    /**
+     * 案件类型中文映射：刑事 / 行政 / 初查（未立案）。
+     * 其余值返回 null = 未分类（前端「其他案件」口径：NOT IN(刑事,行政) OR IS NULL）。
+     */
+    private String mapCaseType(String raw) {
+        if (raw == null || raw.trim().isEmpty()) {
+            return null;
+        }
+        String s = raw.trim();
+        // 本系统自己导出的文件里躺着的可能是英文码，先按码认
+        String up = s.toUpperCase();
+        if ("CRIMINAL".equals(up) || "ADMINISTRATIVE".equals(up) || "PRELIMINARY".equals(up)) {
+            return up;
+        }
+        if (s.contains("刑")) {
+            return "CRIMINAL";
+        }
+        if (s.contains("行政")) {
+            return "ADMINISTRATIVE";
+        }
+        if (s.contains("初查") || s.contains("未立案")) {
+            return "PRELIMINARY";
+        }
+        return null;
+    }
+
+    /**
+     * 案件状态中文宽松映射（导入用）。
+     *
+     * <p><b>否定词必须最先判</b>：「未办结」里同时含「未」和「办结」，
+     * 若先匹配「办结」会把没办结的案件打成已办结——这是状态映射里最坑的一种错法。
+     */
+    private String mapStatus(String raw) {
+        if (raw == null || raw.trim().isEmpty()) {
+            return null;
+        }
+        String s = raw.trim();
+        String up = s.toUpperCase();
+        if (VALID_STATUS.contains(up)) {
+            return up;
+        }
+        if (s.contains("未") || s.contains("待")) {
+            // 否定/将来时：只可能在办或还没开始，绝不可能是终态
+            if (s.contains("办理") || s.contains("在办") || s.contains("侦")) {
+                return "IN_PROGRESS";
+            }
+            return "PENDING_ASSIGN";
+        }
+        if (s.contains("办结") || s.contains("结案")) {
+            return "DONE";
+        }
+        if (s.contains("撤销") || s.contains("撤案")) {
+            return "CANCELLED";
+        }
+        if (s.contains("办理") || s.contains("在办") || s.contains("侦查中") || s.contains("侦办")) {
+            return "IN_PROGRESS";
+        }
+        if (s.contains("受理") || s.contains("指派")) {
+            return "ASSIGNED";
+        }
+        return null;
+    }
+
+    /**
+     * 时间列宽松解析：常见字符串格式 + Excel 序列号 + Date.toString 形态。
+     * 解析不了返回 null，由调用方记 error 后按空入库（不阻断整行）。
+     *
+     * <p>pattern 一律用宽松模式（M/d/H/m 而不是 MM/dd/HH/mm）：
+     * 源系统导出常出现 "2026/1/5 9:03" 这种不补零的写法。
+     */
+    private LocalDateTime parseExcelTime(String raw) {
+        if (raw == null || raw.trim().isEmpty()) {
+            return null;
+        }
+        String s = raw.trim().replace('T', ' ');
+        // 纯日期 pattern（无时分秒）必须走 LocalDate.parse 再补 00:00——
+        // LocalDateTime.parse 遇到 "2026-09-15" 这种没有时间段的串会直接抛异常
+        // （实测坑：第一批烟测里三个纯日期全被误报「无法解析」）。
+        for (String p : new String[]{"yyyy-M-d", "yyyy/M/d", "yyyyMMdd"}) {
+            try {
+                return LocalDate.parse(s, DateTimeFormatter.ofPattern(p)).atStartOfDay();
+            } catch (Exception ignored) {
+                // 换下一个 pattern
+            }
+        }
+        for (String p : new String[]{"yyyy-M-d H:m:s", "yyyy-M-d H:m",
+                "yyyy/M/d H:m:s", "yyyy/M/d H:m", "yyyyMMddHHmmss"}) {
+            try {
+                return LocalDateTime.parse(s, DateTimeFormatter.ofPattern(p));
+            } catch (Exception ignored) {
+                // 换下一个 pattern
+            }
+        }
+        // Excel 序列号（日期单元格被存成文本时常见，如 45000 / 45000.5），原点 1899-12-30
+        if (s.matches("\\d+(\\.\\d+)?")) {
+            try {
+                double v = Double.parseDouble(s);
+                if (v > 20000 && v < 80000) {
+                    LocalDate base = LocalDate.of(1899, 12, 30).plusDays((long) v);
+                    double frac = v - Math.floor(v);
+                    return frac <= 0 ? base.atStartOfDay()
+                            : base.atStartOfDay().plusSeconds((long) Math.round(frac * 86400));
+                }
+            } catch (Exception ignored) {
+                // 序列号换算失败，走最后兜底
+            }
+        }
+        // 最后兜底：java.util.Date#toString 形态（"Wed Jan 15 10:30:00 CST 2026"）
+        try {
+            java.util.Date d = new java.text.SimpleDateFormat(
+                    "EEE MMM dd HH:mm:ss zzz yyyy", java.util.Locale.ENGLISH).parse(s);
+            if (d != null) {
+                return LocalDateTime.ofInstant(d.toInstant(), java.time.ZoneId.systemDefault());
+            }
+        } catch (Exception ignored) {
+            // 放弃
+        }
+        return null;
+    }
+
+    /** 下载案件导入模板（14 列，带一行示例数据） */
+    public void writeTemplate(HttpServletResponse response) throws IOException {
+        List<CaseExcelRow> demo = new ArrayList<>(java.util.Arrays.asList(oneTemplateRow()));
+        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        response.setCharacterEncoding("UTF-8");
+        String name = URLEncoder.encode("案件导入模板", "UTF-8").replaceAll("\\+", "%20");
+        response.setHeader("Content-disposition", "attachment;filename=" + name + ".xlsx");
+        EasyExcel.write(response.getOutputStream(), CaseExcelRow.class).sheet("案件").doWrite(demo);
+    }
+
+    private CaseExcelRow oneTemplateRow() {
+        CaseExcelRow r = new CaseExcelRow();
+        r.setId("1001");
+        r.setCaseNo("A20260115001");
+        r.setName("张三盗窃案");
+        r.setOccurPlace("XX市XX区XX路12号");
+        r.setUndertakeUnit("XX分局刑事侦查大队");
+        r.setOwnerName("张伟");
+        r.setStatusText("办理中");
+        r.setSuspectIdCard("110101199001011234");
+        r.setSuspectName("张三");
+        r.setAcceptTime("2026-01-15 09:30:00");
+        r.setPunishTime("");
+        r.setCaseTypeText("刑事");
+        r.setOccurTime("2026-01-14 21:10:00");
+        r.setDescription("嫌疑人潜入某小区储藏室实施盗窃，涉案财物价值约3000元。");
+        return r;
     }
 
     // ------------------------------------------------------------------
