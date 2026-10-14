@@ -13,8 +13,13 @@
 - 远程 https://github.com/ANNEAUX-GY/CaseFlow （public，main）。push 细节见 LESSONS.md。
 - 本机专属排除写 `.git/info/exclude`（**不改被跟踪的 .gitignore**）。已排除
   `app/backend/src/main/resources/sql/`、`shots/`、`ppt/*/preview/`。
+  **规则必须锚定**：写 `deploy/` 会匹配任意层级的 deploy 目录，
+  曾把新增的 `app/deploy/`（部署脚本源文件）静默吞掉；正确写法是 `/deploy/`。
+  新增排除规则后一律 `git check-ignore -v <路径>` 反查，确认没误伤源码。
 - `app/backend/data/h2/caseflow.mv.db` 演示库被后端进程占用，**每次提交手动跳过**。
-- Windows 建目录链接必须 PowerShell Junction；给 Windows 写 `.bat`/`.ps1` 必须 **GBK + CRLF**。
+- Windows 建目录链接必须 PowerShell Junction；给 Windows 写 `.bat`/`.ps1` 必须 **GBK + CRLF**
+  （现状不统一：`ppt/技术路线/export.ps1` 是 GBK+CRLF，`ppt/技术汇报/export.ps1`
+  与 `app/deploy/*.ps1` 是 UTF-8 无 BOM + LF，后者在 PS 5.1 下中文提示会乱码，待统一）。
 
 ## 常用命令（均在 `app/` 下）
 - 开发：`.venv\Scripts\python.exe scripts\dev.py [--profile mysql] [--seed] [--check]
