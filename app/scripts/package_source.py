@@ -18,7 +18,7 @@
 排除项（可再生成 / 本地状态，一律不打）：
   frontend/node_modules/  frontend/dist/  backend/target/  app/.venv/
   **/__pycache__/  *.pyc  *.log  *.tmp  .workbuddy/
-  backend/data/uploads/   backend/data/h2/*.trace.db
+  backend/data/uploads/   backend/data/h2/*.trace.db / *.bak-*（运行中的数据库备份）
   （以上与 app/.gitignore 保持一致；.env / .env.local 等真实密钥文件也不打）
 """
 import argparse
@@ -58,6 +58,10 @@ def _rel(root: Path, p: Path) -> str:
 
 
 def _should_exclude(rel_path: str, name: str) -> bool:
+    # H2 运行时可能留下备份库或锁/诊断文件；源码包只允许携带明确命名的
+    # caseflow.mv.db，且它在数据库没有被运行中进程锁定时才会被复制。
+    if rel_path.startswith("backend/data/h2/") and name != "caseflow.mv.db":
+        return True
     # 目录排除（匹配任何一级的相对路径前缀）
     for d in EXCLUDE_DIRS:
         if rel_path == d or rel_path.startswith(d + "/") or name == d:
@@ -184,7 +188,9 @@ def main():
         for b in bad[:10]:
             print("    -", b)
     else:
-        print("  ✔ 校验通过：无 node_modules/dist/target/.venv/日志/密钥 混入")
+        # Windows 默认 GBK 控制台无法编码 ✔，源码包脚本应能在未配置 UTF-8
+        # 的新电脑终端里完成收尾，而不是打包成功后因输出异常退出。
+        print("  OK 校验通过：无 node_modules/dist/target/.venv/日志/密钥 混入")
 
     print(f"\n完成：{zip_path}")
     print("新电脑接手：解压后参考包内 README-开发包.md 或 app/README.md，")
