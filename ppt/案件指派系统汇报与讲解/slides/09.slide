@@ -1,0 +1,63 @@
+<Slide style={{ width: 1280, height: 720, position: 'relative', background: 'linear-gradient(160deg, #12294A 0%, #1B4A8C 100%)', overflow: 'hidden' }}>
+    <svg width={1280} height={720} viewBox='0 0 1280 720' style={{ position: 'absolute', left: 0, top: 0 }}>
+        <g fill='none' stroke='#C8A45C' strokeWidth='1' opacity='0.14'>
+            <circle cx='1120' cy='140' r='180' />
+            <circle cx='1120' cy='140' r='240' />
+        </g>
+        <g stroke='#FFFFFF' strokeWidth='1' opacity='0.05'>
+            <line x1='0' y1='360' x2='1280' y2='360' />
+        </g>
+    </svg>
+    <Box style={{ position: 'absolute', left: 64, top: 44, width: 1152, flexDirection: 'row', alignItems: 'center', gap: 20 }}>
+        <Box style={{ width: 6, height: 44, background: '#C8A45C' }} />
+        <Box style={{ flexDirection: 'column' }}>
+            <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#FFFFFF', lineHeight: 1.2 }}>办理时限：刑事、行政两套时钟</Text>
+            <Text style={{ fontSize: 16, color: '#8FB0D9', marginTop: 6 }}>同一套系统，跑两套计时基准；超期不是事后统计，而是事前提醒</Text>
+        </Box>
+    </Box>
+    {/* 巨型锚点数字 */}
+    <Box style={{ position: 'absolute', left: 64, top: 146, width: 560, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 18, color: '#C8A45C', letterSpacing: 3 }}>刑事案件 · 关键节点</Text>
+        <Box style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 18, marginTop: 16 }}>
+            <Text style={{ fontSize: 112, fontWeight: 'bold', color: '#FFFFFF', lineHeight: 1, letterSpacing: -2 }}>3</Text>
+            <Text style={{ fontSize: 24, color: '#C8A45C', marginBottom: 20 }}>天</Text>
+            <Box style={{ width: 2, height: 54, background: 'rgba(255,255,255,0.25)', marginBottom: 26 }} />
+            <Text style={{ fontSize: 112, fontWeight: 'bold', color: '#FFFFFF', lineHeight: 1, letterSpacing: -2 }}>7</Text>
+            <Text style={{ fontSize: 24, color: '#C8A45C', marginBottom: 20 }}>天</Text>
+            <Box style={{ width: 2, height: 54, background: 'rgba(255,255,255,0.25)', marginBottom: 26 }} />
+            <Text style={{ fontSize: 112, fontWeight: 'bold', color: '#FFFFFF', lineHeight: 1, letterSpacing: -2 }}>30</Text>
+            <Text style={{ fontSize: 24, color: '#C8A45C', marginBottom: 20 }}>天</Text>
+        </Box>
+        <Text style={{ fontSize: 17, color: '#C9D6E8', lineHeight: 1.6, marginTop: 18 }}>刑拘变更羁押 3 天 · 取保 7 天 · 取保/监居长周期 30 天</Text>
+    </Box>
+    {/* 图表 */}
+    <Box style={{ position: 'absolute', left: 660, top: 146, width: 556, flexDirection: 'column', background: 'rgba(255,255,255,0.06)', borderRadius: 10, border: '1px solid rgba(200,164,92,0.28)', padding: 18 }}>
+        <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#FFFFFF', marginBottom: 6 }}>行政案件 · 办理时限阶梯（天）</Text>
+        <Chart style={{ width: '100%', height: 268 }} chartType='barChart' barDirection='bar' grouping='clustered' title='' showLegend={false} showDataLabels={true} axisColor='#8FB0D9' dataLabelColor='#FFFFFF' colors={['#C8A45C']} background='transparent' data={[['时限档位', '天数'], ['简易程序', 3], ['一般程序', 10], ['调查取证', 20], ['办案期限', 30], ['延期上限', 60]]} />
+    </Box>
+    {/* 底部洞察 */}
+    <Box style={{ position: 'absolute', left: 660, top: 468, width: 556, flexDirection: 'row', gap: 14 }}>
+        <Box style={{ flex: 1, flexDirection: 'column', background: 'rgba(255,255,255,0.06)', borderRadius: 8, padding: 16 }}>
+            <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <FAIcon name='hourglass-half' style={{ fill: '#C8A45C', width: 18, height: 18 }} />
+                <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#FFFFFF' }}>倒计时口径</Text>
+            </Box>
+            <Text style={{ fontSize: 15, color: '#C9D6E8', lineHeight: 1.6, marginTop: 8 }}>到期日按工作日/自然日分别计算，系统自动倒推。</Text>
+        </Box>
+        <Box style={{ flex: 1, flexDirection: 'column', background: 'rgba(255,255,255,0.06)', borderRadius: 8, padding: 16 }}>
+            <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <FAIcon name='exclamation-triangle' style={{ fill: '#C8A45C', width: 18, height: 18 }} />
+                <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#FFFFFF' }}>变色规则</Text>
+            </Box>
+            <Text style={{ fontSize: 15, color: '#C9D6E8', lineHeight: 1.6, marginTop: 8 }}>7 天内到期变橙，已逾期变红，未登记期限灰显。</Text>
+        </Box>
+    </Box>
+    {/* 页脚 */}
+    <Box style={{ position: 'absolute', left: 64, top: 660, width: 1152, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <FAIcon name='shield' style={{ fill: '#C8A45C', width: 20, height: 20 }} />
+            <Text style={{ fontSize: 14, color: '#8FB0D9' }}>案件指派系统　·　功能汇报与使用讲解</Text>
+        </Box>
+        <Text style={{ fontSize: 14, color: '#8FB0D9' }}>09 / 16</Text>
+    </Box>
+</Slide>

@@ -1,0 +1,70 @@
+<Slide style={{ width: 1280, height: 720, position: 'relative', background: '#FFFFFF', overflow: 'hidden' }}>
+    <Box style={{ position: 'absolute', left: 0, top: 0, width: 1280, height: 8, flexDirection: 'row' }}>
+        <Box style={{ width: '55%', height: 8, background: '#1B4A8C' }} />
+        <Box style={{ width: '25%', height: 8, background: '#2E6BB0' }} />
+        <Box style={{ width: '20%', height: 8, background: '#C8A45C' }} />
+    </Box>
+    <Box style={{ position: 'absolute', left: 96, top: 66, flexDirection: 'row', alignItems: 'flex-end', gap: 24 }}>
+        <Box style={{ width: 6, height: 46, background: '#1B4A8C' }} />
+        <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#1F2733', lineHeight: 1.2 }}>目录</Text>
+        <Text style={{ fontSize: 16, color: '#8A94A6', marginBottom: 6 }}>CONTENTS　·　四章 16 页</Text>
+    </Box>
+    <Box style={{ position: 'absolute', left: 96, top: 148, width: 1088, flexDirection: 'column', gap: 18 }}>
+        <Box style={{ width: '100%', height: 108, flexDirection: 'row', alignItems: 'center', background: '#F4F6F9', borderRadius: 10, border: '1px solid #E3E8F0', padding: 22 }}>
+            <Box style={{ width: 76, height: 64, borderRadius: 8, background: 'linear-gradient(135deg, #1B4A8C 0%, #2E6BB0 100%)', justifyContent: 'center', alignItems: 'center' }}>
+                <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#FFFFFF', lineHeight: 1 }}>01</Text>
+            </Box>
+            <Box style={{ marginLeft: 26, flexDirection: 'column' }}>
+                <Text style={{ fontSize: 26, fontWeight: 'bold', color: '#1F2733', lineHeight: 1.3 }}>系统全貌</Text>
+                <Text style={{ fontSize: 17, color: '#8A94A6', marginTop: 6 }}>系统定位 · 从收到案子到办结的全链路</Text>
+            </Box>
+            <Box style={{ marginLeft: 'auto', flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={{ fontSize: 15, color: '#8A94A6', marginRight: 14 }}>P03 – P05</Text>
+                <FAIcon name='chevron-right' style={{ fill: '#C8A45C', width: 20, height: 20 }} />
+            </Box>
+        </Box>
+        <Box style={{ width: '100%', height: 108, flexDirection: 'row', alignItems: 'center', background: '#FFFFFF', borderRadius: 10, border: '1px solid #E3E8F0', padding: 22 }}>
+            <Box style={{ width: 76, height: 64, borderRadius: 8, background: '#1B4A8C', justifyContent: 'center', alignItems: 'center' }}>
+                <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#FFFFFF', lineHeight: 1 }}>02</Text>
+            </Box>
+            <Box style={{ marginLeft: 26, flexDirection: 'column' }}>
+                <Text style={{ fontSize: 26, fontWeight: 'bold', color: '#1F2733', lineHeight: 1.3 }}>核心机制</Text>
+                <Text style={{ fontSize: 17, color: '#8A94A6', marginTop: 6 }}>两类案件分野 · 案件盯办 · 办理时限</Text>
+            </Box>
+            <Box style={{ marginLeft: 'auto', flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={{ fontSize: 15, color: '#8A94A6', marginRight: 14 }}>P06 – P09</Text>
+                <FAIcon name='chevron-right' style={{ fill: '#C8A45C', width: 20, height: 20 }} />
+            </Box>
+        </Box>
+        <Box style={{ width: '100%', height: 108, flexDirection: 'row', alignItems: 'center', background: '#F4F6F9', borderRadius: 10, border: '1px solid #E3E8F0', padding: 22 }}>
+            <Box style={{ width: 76, height: 64, borderRadius: 8, background: 'linear-gradient(135deg, #1B4A8C 0%, #2E6BB0 100%)', justifyContent: 'center', alignItems: 'center' }}>
+                <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#FFFFFF', lineHeight: 1 }}>03</Text>
+            </Box>
+            <Box style={{ marginLeft: 26, flexDirection: 'column' }}>
+                <Text style={{ fontSize: 26, fontWeight: 'bold', color: '#1F2733', lineHeight: 1.3 }}>协作与治理</Text>
+                <Text style={{ fontSize: 17, color: '#8A94A6', marginTop: 6 }}>意见→待办闭环 · 办案阶段流转 · 权限与追溯</Text>
+            </Box>
+            <Box style={{ marginLeft: 'auto', flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={{ fontSize: 15, color: '#8A94A6', marginRight: 14 }}>P10 – P13</Text>
+                <FAIcon name='chevron-right' style={{ fill: '#C8A45C', width: 20, height: 20 }} />
+            </Box>
+        </Box>
+        <Box style={{ width: '100%', height: 108, flexDirection: 'row', alignItems: 'center', background: '#FFFFFF', borderRadius: 10, border: '1px solid #E3E8F0', padding: 22 }}>
+            <Box style={{ width: 76, height: 64, borderRadius: 8, background: '#1B4A8C', justifyContent: 'center', alignItems: 'center' }}>
+                <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#FFFFFF', lineHeight: 1 }}>04</Text>
+            </Box>
+            <Box style={{ marginLeft: 26, flexDirection: 'column' }}>
+                <Text style={{ fontSize: 26, fontWeight: 'bold', color: '#1F2733', lineHeight: 1.3 }}>使用讲解</Text>
+                <Text style={{ fontSize: 17, color: '#8A94A6', marginTop: 6 }}>民警日常三件事：看红点 · 办待办 · 盯到期</Text>
+            </Box>
+            <Box style={{ marginLeft: 'auto', flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={{ fontSize: 15, color: '#8A94A6', marginRight: 14 }}>P14 – P16</Text>
+                <FAIcon name='chevron-right' style={{ fill: '#C8A45C', width: 20, height: 20 }} />
+            </Box>
+        </Box>
+    </Box>
+    <Box style={{ position: 'absolute', left: 96, bottom: 54, width: 1088, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Text style={{ fontSize: 14, color: '#8A94A6' }}>案件指派系统　·　功能汇报与使用讲解</Text>
+        <Text style={{ fontSize: 14, color: '#8A94A6' }}>02 / 16</Text>
+    </Box>
+</Slide>

@@ -1,0 +1,64 @@
+<Slide style={{ width: 1280, height: 720, position: 'relative', background: '#FFFFFF', overflow: 'hidden' }}>
+    <Box style={{ position: 'absolute', left: 0, top: 0, width: 1280, height: 8, flexDirection: 'row' }}>
+        <Box style={{ width: '55%', height: 8, background: '#1B4A8C' }} />
+        <Box style={{ width: '25%', height: 8, background: '#2E6BB0' }} />
+        <Box style={{ width: '20%', height: 8, background: '#C8A45C' }} />
+    </Box>
+    <Box style={{ position: 'absolute', left: 64, top: 40, width: 1152, height: 76, flexDirection: 'row', alignItems: 'center', gap: 20 }}>
+        <Box style={{ width: 6, height: 44, background: '#1B4A8C' }} />
+        <Box style={{ flexDirection: 'column' }}>
+            <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#1F2733', lineHeight: 1.2 }}>民警日常三件事</Text>
+            <Text style={{ fontSize: 16, color: '#8A94A6', marginTop: 6 }}>登录后不用到处找，照着这三步走，手头的活儿就不会漏</Text>
+        </Box>
+        <Box style={{ marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 10, background: '#F4F6F9', borderRadius: 6, paddingLeft: 14, paddingRight: 14, paddingTop: 8, paddingBottom: 8 }}>
+            <FAIcon name='list-check' style={{ fill: '#1B4A8C', width: 18, height: 18 }} />
+            <Text style={{ fontSize: 14, color: '#1B4A8C' }}>第 4 章 · 使用讲解</Text>
+        </Box>
+    </Box>
+    <Box style={{ position: 'absolute', left: 64, top: 132, width: 1152, height: 532, flexDirection: 'column', gap: 16 }}>
+        {/* 上大图 */}
+        <Box style={{ width: '100%', height: 252, flexDirection: 'row', borderRadius: 10, overflow: 'hidden', border: '1px solid #E3E8F0', background: '#F4F6F9' }}>
+            <Box style={{ flex: 1, overflow: 'hidden' }}>
+                <Image src='assets/ui-staff-cases.png' style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'left top' }} />
+            </Box>
+            <Box style={{ width: 300, flexDirection: 'column', justifyContent: 'center', background: 'linear-gradient(135deg, #12294A 0%, #1B4A8C 100%)', padding: 22 }}>
+                <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#FFFFFF', lineHeight: 1.4 }}>我的案件</Text>
+                <Box style={{ width: 60, height: 4, background: '#C8A45C', marginTop: 14, marginBottom: 14 }} />
+                <Text style={{ fontSize: 16, color: '#C9D6E8', lineHeight: 1.7 }}>名下案件数、在办数、已逾期、3 天内到期——四个数字就是今天的作业量。</Text>
+            </Box>
+        </Box>
+        {/* 下三卡 */}
+        <Box style={{ width: '100%', flex: 1, flexDirection: 'row', gap: 18 }}>
+            <Box style={{ flex: 1, flexDirection: 'column', background: '#F4F6F9', borderRadius: 10, border: '1px solid #E3E8F0', borderTop: '5px solid #1B4A8C', padding: 18 }}>
+                <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <FAIcon name='bell' style={{ fill: '#1B4A8C', width: 24, height: 24 }} />
+                    <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#1F2733' }}>一、看红点</Text>
+                </Box>
+                <Text style={{ fontSize: 16, color: '#5A6478', lineHeight: 1.7, marginTop: 10 }}>顶栏铃铛上的红点 = 有新的意见 / 待办 / 到期提醒。先点开，别让它积着。</Text>
+            </Box>
+            <Box style={{ flex: 1, flexDirection: 'column', background: '#FFFFFF', borderRadius: 10, border: '1px solid #E3E8F0', borderTop: '5px solid #2E6BB0', padding: 18 }}>
+                <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <FAIcon name='clipboard-check' style={{ fill: '#2E6BB0', width: 24, height: 24 }} />
+                    <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#1F2733' }}>二、办待办</Text>
+                </Box>
+                <Text style={{ fontSize: 16, color: '#5A6478', lineHeight: 1.7, marginTop: 10 }}>进「我的待办」，按系统排好的顺序处理；每条都要写反馈、勾子任务，再等领导确认。</Text>
+            </Box>
+            <Box style={{ flex: 1, flexDirection: 'column', background: '#F4F6F9', borderRadius: 10, border: '1px solid #E3E8F0', borderTop: '5px solid #C8A45C', padding: 18 }}>
+                <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <FAIcon name='hourglass-end' style={{ fill: '#C8A45C', width: 24, height: 24 }} />
+                    <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#1F2733' }}>三、盯到期</Text>
+                </Box>
+                <Text style={{ fontSize: 16, color: '#5A6478', lineHeight: 1.7, marginTop: 10 }}>「到期提醒」页看临期与逾期，橙的抓紧办、红的马上报，避免超期。</Text>
+            </Box>
+        </Box>
+    </Box>
+    <Box style={{ position: 'absolute', left: 64, top: 676, width: 1152, height: 32, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Text style={{ fontSize: 14, color: '#8A94A6' }}>案件指派系统　·　功能汇报与使用讲解</Text>
+        <Text style={{ fontSize: 14, color: '#8A94A6' }}>15 / 16</Text>
+    </Box>
+    <Box style={{ position: 'absolute', left: 64, top: 712, width: 1152, height: 6, flexDirection: 'row' }}>
+        <Box style={{ width: '55%', height: 6, background: '#1B4A8C' }} />
+        <Box style={{ width: '25%', height: 6, background: '#2E6BB0' }} />
+        <Box style={{ width: '20%', height: 6, background: '#C8A45C' }} />
+    </Box>
+</Slide>

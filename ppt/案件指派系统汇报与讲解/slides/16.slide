@@ -1,0 +1,32 @@
+<Slide style={{ width: 1280, height: 720, position: 'relative', background: 'linear-gradient(135deg, #12294A 0%, #1B4A8C 100%)', overflow: 'hidden' }}>
+    <Box style={{ position: 'absolute', right: -140, top: -100, width: 660, height: 660, borderRadius: 330, background: 'radial-gradient(circle, rgba(200,164,92,0.20) 0%, rgba(200,164,92,0) 70%)' }} />
+    <Box style={{ position: 'absolute', right: 40, bottom: -80, width: 380, height: 380, borderRadius: 190, background: 'rgba(46,107,176,0.35)' }} />
+    <svg width={1280} height={720} viewBox='0 0 1280 720' style={{ position: 'absolute', left: 0, top: 0 }}>
+        <g fill='none' stroke='#C8A45C' strokeWidth='1' opacity='0.16'>
+            <circle cx='1000' cy='360' r='210' />
+            <circle cx='1000' cy='360' r='268' />
+            <circle cx='1000' cy='360' r='326' />
+        </g>
+    </svg>
+    <Box style={{ position: 'absolute', left: 96, top: 176, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+        <Box style={{ width: 62, height: 62, borderRadius: 31, border: '2px solid #C8A45C', justifyContent: 'center', alignItems: 'center' }}>
+            <FAIcon name='shield' style={{ fill: '#C8A45C', width: 32, height: 32 }} />
+        </Box>
+        <Box style={{ width: 3, height: 40, background: '#C8A45C' }} />
+        <Text style={{ fontSize: 22, color: '#C8A45C', letterSpacing: 5 }}>CASE FLOW</Text>
+    </Box>
+    <Box style={{ position: 'absolute', left: 96, top: 288, width: 880, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 64, fontWeight: 'bold', color: '#FFFFFF', lineHeight: 1.22, letterSpacing: 2 }}>让每一件案子</Text>
+        <Text style={{ fontSize: 64, fontWeight: 'bold', color: '#FFFFFF', lineHeight: 1.22, letterSpacing: 2 }}>都办得有据可查</Text>
+        <Box style={{ width: 160, height: 6, background: '#C8A45C', marginTop: 30, marginBottom: 26 }} />
+        <Text style={{ fontSize: 24, color: '#C9D6E8', lineHeight: 1.6 }}>收得进 · 派得准 · 盯得住 · 结得清</Text>
+    </Box>
+    <Box style={{ position: 'absolute', left: 96, bottom: 96, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 20, color: '#FFFFFF' }}>案件指派系统　·　功能汇报与使用讲解</Text>
+        <Text style={{ fontSize: 16, color: '#8A94A6', marginTop: 10 }}>案件管理中心　·　演示数据　·　2026-10</Text>
+    </Box>
+    <Box style={{ position: 'absolute', right: 96, bottom: 96, flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+        <Text style={{ fontSize: 15, color: '#8A94A6' }}>感谢聆听</Text>
+        <Text style={{ fontSize: 14, color: '#8A94A6' }}>16 / 16</Text>
+    </Box>
+</Slide>

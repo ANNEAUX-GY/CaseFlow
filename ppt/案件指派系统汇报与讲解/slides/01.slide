@@ -1,0 +1,39 @@
+<Slide style={{ width: 1280, height: 720, position: 'relative', background: 'linear-gradient(135deg, #12294A 0%, #1B4A8C 100%)', overflow: 'hidden' }}>
+    {/* 背景装饰：右侧警徽光环 */}
+    <Box style={{ position: 'absolute', right: -120, top: -80, width: 620, height: 620, borderRadius: 310, background: 'radial-gradient(circle, rgba(200,164,92,0.20) 0%, rgba(200,164,92,0) 70%)' }} />
+    <Box style={{ position: 'absolute', right: 60, bottom: -60, width: 360, height: 360, borderRadius: 180, background: 'rgba(46,107,176,0.35)' }} />
+    <svg width={1280} height={720} viewBox='0 0 1280 720' style={{ position: 'absolute', left: 0, top: 0 }}>
+        <g fill='none' stroke='#C8A45C' strokeWidth='1' opacity='0.18'>
+            <circle cx='1050' cy='330' r='210' />
+            <circle cx='1050' cy='330' r='265' />
+            <circle cx='1050' cy='330' r='320' />
+        </g>
+        <g stroke='#FFFFFF' strokeWidth='1' opacity='0.06'>
+            <line x1='0' y1='180' x2='1280' y2='180' />
+            <line x1='0' y1='540' x2='1280' y2='540' />
+        </g>
+    </svg>
+    {/* 警徽印记 L3 */}
+    <Box style={{ position: 'absolute', left: 96, top: 118, flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+        <Box style={{ width: 54, height: 54, borderRadius: 27, border: '2px solid #C8A45C', justifyContent: 'center', alignItems: 'center' }}>
+            <FAIcon name='shield' style={{ fill: '#C8A45C', width: 28, height: 28 }} />
+        </Box>
+        <Box style={{ width: 3, height: 34, background: '#C8A45C' }} />
+        <Text style={{ fontSize: 20, color: '#C8A45C', letterSpacing: 4 }}>POLICE CASE FLOW</Text>
+    </Box>
+    {/* 主标题 */}
+    <Box style={{ position: 'absolute', left: 96, top: 236, width: 760, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 72, fontWeight: 'bold', color: '#FFFFFF', lineHeight: 1.16, letterSpacing: 4 }}>案件指派系统</Text>
+        <Box style={{ width: 140, height: 6, background: '#C8A45C', marginTop: 26, marginBottom: 26 }} />
+        <Text style={{ fontSize: 26, color: '#C9D6E8', lineHeight: 1.6 }}>收案 · 指派 · 盯办 · 办结　全链路闭环管理</Text>
+    </Box>
+    {/* 底部信息 */}
+    <Box style={{ position: 'absolute', left: 96, bottom: 96, flexDirection: 'column' }}>
+        <Text style={{ fontSize: 20, color: '#FFFFFF' }}>功能汇报 ｜ 使用讲解</Text>
+        <Text style={{ fontSize: 16, color: '#8A94A6', marginTop: 10 }}>案件管理中心　·　演示数据　·　2026-10</Text>
+    </Box>
+    <Box style={{ position: 'absolute', right: 96, bottom: 96, flexDirection: 'column', alignItems: 'flex-end' }}>
+        <Text style={{ fontSize: 64, fontWeight: 'bold', color: '#FFFFFF', opacity: 0.9, lineHeight: 1 }}>16</Text>
+        <Text style={{ fontSize: 14, color: '#8A94A6', marginTop: 8 }}>页　·　四章</Text>
+    </Box>
+</Slide>

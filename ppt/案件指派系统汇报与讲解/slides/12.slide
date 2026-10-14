@@ -1,0 +1,91 @@
+<Slide style={{ width: 1280, height: 720, position: 'relative', background: '#FFFFFF', overflow: 'hidden' }}>
+    <Box style={{ position: 'absolute', left: 0, top: 0, width: 1280, height: 8, flexDirection: 'row' }}>
+        <Box style={{ width: '55%', height: 8, background: '#1B4A8C' }} />
+        <Box style={{ width: '25%', height: 8, background: '#2E6BB0' }} />
+        <Box style={{ width: '20%', height: 8, background: '#C8A45C' }} />
+    </Box>
+    <Box style={{ position: 'absolute', left: 64, top: 40, width: 1152, height: 76, flexDirection: 'row', alignItems: 'center', gap: 20 }}>
+        <Box style={{ width: 6, height: 44, background: '#1B4A8C' }} />
+        <Box style={{ flexDirection: 'column' }}>
+            <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#1F2733', lineHeight: 1.2 }}>办案阶段：初查 → 刑拘 → 取保</Text>
+            <Text style={{ fontSize: 16, color: '#8A94A6', marginTop: 6 }}>阶段不是手填的状态，而是由任务完成情况自动推进</Text>
+        </Box>
+        <Box style={{ marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 10, background: '#F4F6F9', borderRadius: 6, paddingLeft: 14, paddingRight: 14, paddingTop: 8, paddingBottom: 8 }}>
+            <FAIcon name='random' style={{ fill: '#1B4A8C', width: 18, height: 18 }} />
+            <Text style={{ fontSize: 14, color: '#1B4A8C' }}>任务驱动流转</Text>
+        </Box>
+    </Box>
+    <Box style={{ position: 'absolute', left: 64, top: 132, width: 1152, height: 532, flexDirection: 'column', gap: 18 }}>
+        {/* 刑事主干 */}
+        <Box style={{ width: '100%', flexDirection: 'column', background: '#F4F6F9', borderRadius: 10, border: '1px solid #E3E8F0', paddingTop: 18, paddingBottom: 18, paddingLeft: 24, paddingRight: 24 }}>
+            <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+                <Box style={{ width: 4, height: 20, background: '#1B4A8C' }} />
+                <Text style={{ fontSize: 19, fontWeight: 'bold', color: '#1B4A8C' }}>刑事案件 · 主干流转</Text>
+                <Text style={{ fontSize: 14, color: '#8A94A6' }}>建案即铺任务，全流程完成 → 领导确认 → 阶段推进</Text>
+            </Box>
+            <svg width={1100} height={104} viewBox='0 0 1100 104'>
+                <defs>
+                    <marker id='arw2' markerWidth='9' markerHeight='9' refX='7' refY='4.5' orient='auto'>
+                        <path d='M0,0 L9,4.5 L0,9 z' fill='#2E6BB0' />
+                    </marker>
+                </defs>
+                <line x1='236' y1='44' x2='290' y2='44' stroke='#2E6BB0' strokeWidth='2.5' markerEnd='url(#arw2)' />
+                <line x1='516' y1='44' x2='570' y2='44' stroke='#2E6BB0' strokeWidth='2.5' markerEnd='url(#arw2)' />
+                <line x1='796' y1='44' x2='850' y2='44' stroke='#2E6BB0' strokeWidth='2.5' markerEnd='url(#arw2)' />
+                <rect x='10' y='18' width='226' height='52' rx='8' fill='#1B4A8C' />
+                <text x='123' y='50' fill='#FFFFFF' fontSize='19' fontWeight='bold' textAnchor='middle'>初查</text>
+                <rect x='290' y='18' width='226' height='52' rx='8' fill='#1B4A8C' />
+                <text x='403' y='50' fill='#FFFFFF' fontSize='19' fontWeight='bold' textAnchor='middle'>刑事拘留</text>
+                <rect x='570' y='18' width='226' height='52' rx='8' fill='#2E6BB0' />
+                <text x='683' y='50' fill='#FFFFFF' fontSize='19' fontWeight='bold' textAnchor='middle'>取保候审 / 监视居住</text>
+                <rect x='850' y='18' width='240' height='52' rx='8' fill='#C8A45C' />
+                <text x='970' y='50' fill='#FFFFFF' fontSize='19' fontWeight='bold' textAnchor='middle'>移送审查起诉</text>
+                <text x='123' y='92' fill='#8A94A6' fontSize='14' textAnchor='middle'>锁人 · 定证据方向</text>
+                <text x='403' y='92' fill='#8A94A6' fontSize='14' textAnchor='middle'>3 天 / 30 天关键窗口</text>
+                <text x='683' y='92' fill='#8A94A6' fontSize='14' textAnchor='middle'>7 天 / 30 天届满节点</text>
+                <text x='970' y='92' fill='#8A94A6' fontSize='14' textAnchor='middle'>案卷归档留痕</text>
+            </svg>
+        </Box>
+        {/* 行政单线 + 驱动说明 */}
+        <Box style={{ width: '100%', flexDirection: 'row', gap: 20 }}>
+            <Box style={{ flex: 1, flexDirection: 'column', background: '#FFFFFF', border: '1px solid #E3E8F0', borderRadius: 10, paddingTop: 18, paddingBottom: 18, paddingLeft: 22, paddingRight: 22 }}>
+                <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                    <Box style={{ width: 4, height: 20, background: '#C8A45C' }} />
+                    <Text style={{ fontSize: 19, fontWeight: 'bold', color: '#C8A45C' }}>行政案件 · 单线</Text>
+                </Box>
+                <svg width={500} height={60} viewBox='0 0 500 60'>
+                    <defs>
+                        <marker id='arw3' markerWidth='9' markerHeight='9' refX='7' refY='4.5' orient='auto'>
+                            <path d='M0,0 L9,4.5 L0,9 z' fill='#C8A45C' />
+                        </marker>
+                    </defs>
+                    <line x1='146' y1='30' x2='182' y2='30' stroke='#C8A45C' strokeWidth='2.5' markerEnd='url(#arw3)' />
+                    <line x1='326' y1='30' x2='362' y2='30' stroke='#C8A45C' strokeWidth='2.5' markerEnd='url(#arw3)' />
+                    <rect x='6' y='10' width='140' height='40' rx='8' fill='#F4F6F9' stroke='#C8A45C' strokeWidth='1.5' />
+                    <text x='76' y='36' fill='#8A6A24' fontSize='16' fontWeight='bold' textAnchor='middle'>呈批材料</text>
+                    <rect x='182' y='10' width='144' height='40' rx='8' fill='#F4F6F9' stroke='#C8A45C' strokeWidth='1.5' />
+                    <text x='254' y='36' fill='#8A6A24' fontSize='16' fontWeight='bold' textAnchor='middle'>行政处罚</text>
+                    <rect x='362' y='10' width='132' height='40' rx='8' fill='#C8A45C' />
+                    <text x='428' y='36' fill='#FFFFFF' fontSize='16' fontWeight='bold' textAnchor='middle'>执行归档</text>
+                </svg>
+                <Text style={{ fontSize: 15, color: '#5A6478', lineHeight: 1.6, marginTop: 8 }}>30 / 60 天时限，节点单一但同样逾期提醒。</Text>
+            </Box>
+            <Box style={{ flex: 1, flexDirection: 'column', background: '#F4F6F9', border: '1px solid #E3E8F0', borderRadius: 10, paddingTop: 18, paddingBottom: 18, paddingLeft: 22, paddingRight: 22 }}>
+                <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <FAIcon name='check-double' style={{ fill: '#1B4A8C', width: 20, height: 20 }} />
+                    <Text style={{ fontSize: 19, fontWeight: 'bold', color: '#1F2733' }}>为什么这么设计</Text>
+                </Box>
+                <Text style={{ fontSize: 16, color: '#5A6478', lineHeight: 1.75, marginTop: 12 }}>阶段进度不落库、实时算：任务完成度一到，阶段条自动变长；<br />要推进阶段，必须由领导点确认——避免「自己说自己办完了」。</Text>
+            </Box>
+        </Box>
+    </Box>
+    <Box style={{ position: 'absolute', left: 64, top: 676, width: 1152, height: 32, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Text style={{ fontSize: 14, color: '#8A94A6' }}>案件指派系统　·　功能汇报与使用讲解</Text>
+        <Text style={{ fontSize: 14, color: '#8A94A6' }}>12 / 16</Text>
+    </Box>
+    <Box style={{ position: 'absolute', left: 64, top: 712, width: 1152, height: 6, flexDirection: 'row' }}>
+        <Box style={{ width: '55%', height: 6, background: '#1B4A8C' }} />
+        <Box style={{ width: '25%', height: 6, background: '#2E6BB0' }} />
+        <Box style={{ width: '20%', height: 6, background: '#C8A45C' }} />
+    </Box>
+</Slide>
