@@ -161,7 +161,7 @@
                     :class="{ 'is-done': s.status === 'DONE' }">
                     <el-checkbox class="cf-check"
                       :model-value="s.status === 'DONE'"
-                      :disabled="savingSubId === s.id"
+                      :disabled="!isAdmin || savingSubId === s.id"
                       @change="(v) => toggleSub(t, s, v)" />
                     <span class="cf-todo__sub-name">{{ s.content }}</span>
                     <span v-if="s.status === 'DONE' && s.doneAt" class="cf-todo__sub-done">
@@ -438,6 +438,9 @@ const fmtTime = (s) => (s ? String(s).replace('T', ' ').slice(0, 16) : '-')
  * 2) 子任务全完成才能完成主任务
  */
 const blockReason = (t) => {
+  // 标记完成只归领导/管理员（2026-10-14 用户要求）：民警只管干活和交反馈，
+  // 勾掉任务的最后一步由领导拍板（后端 done() 有同样的校验，这里是第一道门）
+  if (!isAdmin.value) return '完成需由领导或管理员确认'
   const total = t.subtaskTotal || 0
   const dn = t.subtaskDone || 0
   if (total > 0 && dn < total) {
@@ -450,6 +453,7 @@ const blockReason = (t) => {
 }
 
 const canToggle = (t) => {
+  if (!isAdmin.value) return false
   if (t.status === 'DONE') return isAdmin.value   // 撤销完成仅管理层
   return !blockReason(t)
 }

@@ -105,11 +105,11 @@
           <li v-for="s in subtasks" :key="s.id" class="cf-td__sub"
             :class="{ 'is-done': s.status === 'DONE' }" :data-cf-subid="s.id">
             <!-- 勾选 = 走同一个落实反馈弹窗（选「完成」才真正勾上）；
-                 取消勾选 = 撤销该子任务完成（承办人本人与管理员均可） -->
+                 标记完成/撤销完成都归管理层（2026-10-14），民警只读 -->
             <el-checkbox
               class="cf-check"
               :model-value="s.status === 'DONE'"
-              :disabled="savingId === s.id"
+              :disabled="!isAdmin || savingId === s.id"
               @change="(v) => toggleSub(s, v)" />
             <span class="cf-td__sub-text">{{ s.content }}</span>
             <span v-if="s.status === 'DONE' && s.doneAt" class="cf-muted">
@@ -167,7 +167,7 @@
             提交反馈（选落实状态）
           </el-button>
           <span class="cf-muted cf-td__hint">
-            {{ isParent ? '反馈与完成是两个动作：先反馈说明，再点下方「标记完成」' : '' }}
+            {{ isParent ? '反馈与完成是两个动作：反馈由你提交，标记完成由领导或管理员确认' : '' }}
           </span>
         </div>
       </div>
@@ -185,7 +185,7 @@
         撤销完成
       </el-button>
       <el-button
-        v-if="isParent && !done"
+        v-if="isParent && !done && isAdmin"
         type="primary"
         size="small"
         :loading="savingDone"

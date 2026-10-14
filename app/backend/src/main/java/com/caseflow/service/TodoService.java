@@ -533,6 +533,14 @@ public class TodoService {
         CaseTodo t = requireTodo(todoId);
         CaseInfo c = requireCase(t.getCaseId());
         checkOperate(c);
+        // 标记完成只允许领导/管理员（2026-10-14 用户要求）：办案民警可以提交反馈、
+        // 把落实状态填成"完成"，但勾掉任务的最后一步必须由领导拍板——
+        // 防止承办人自己把活儿勾掉了事，完成与否回到管理层手里。
+        // 主任务与子任务的完成都汇聚到本方法（toggleSubtask 的 done=true 也走这里），
+        // 在这一处拦即可全覆盖。撤销完成（reopen / toggle false）不受此限。
+        if (!AuthContext.isFullAccess()) {
+            throw new BizException("标记完成需由领导或管理员确认，办案民警不能自行勾选完成");
+        }
         if ("DONE".equals(t.getStatus())) {
             throw new BizException("该待办已完成，无需重复操作");
         }
@@ -1011,7 +1019,11 @@ public class TodoService {
         if (done) {
             return done(subId, null);
         }
-        // 撤销子任务完成：承办人或管理层（与勾选完成同一套 checkOperate 判定）
+        // 撤销子任务完成：与标记完成同口径归管理层（2026-10-14）——
+        // 民警连勾都不能勾，让他能取消别人的完成只会制造口径混乱
+        if (!AuthContext.isFullAccess()) {
+            throw new BizException("撤销完成需由领导或管理员操作");
+        }
         CaseInfo c = requireCase(s.getCaseId());
         checkOperate(c);
         if (!"DONE".equals(s.getStatus())) {
