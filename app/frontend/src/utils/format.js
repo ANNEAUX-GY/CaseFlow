@@ -44,6 +44,28 @@ export const INVEST_STATUS_META = {
   INVESTIGATION_DONE: { label: '侦查终结', type: 'success' }
 }
 
+/**
+ * 初查状态四态（盯办初查页签，2026-10-14）。
+ * 由后端按「无主办人→未分配；有反馈→已反馈；有待办→已签收；其余→已分配」判定，
+ * 前端只映射标签与颜色，不重复判定逻辑（避免两处口径打架）。
+ */
+export const INVEST_STAGE_META = {
+  UNASSIGNED: { label: '未分配', type: 'info' },
+  ASSIGNED: { label: '已分配', type: 'primary' },
+  RECEIVED: { label: '已签收', type: 'warning' },
+  FEEDBACK: { label: '已反馈', type: 'success' }
+}
+
+/**
+ * 办理/追踪进度三态（刑拘在办、取保及监居页签，2026-10-14）。
+ * 口径 = 当前阶段待办完成情况：没铺任务=未开始，铺了没做完=进行中，全做完=已完结。
+ */
+export const PROGRESS_STAGE_META = {
+  NOT_STARTED: { label: '未开始', type: 'info' },
+  IN_PROGRESS: { label: '进行中', type: 'primary' },
+  FINISHED: { label: '已完结', type: 'success' }
+}
+
 /** 领导意见的落实反馈状态（办案人对每条意见标记） */
 export const FEEDBACK_STATUS_META = {
   DONE: { label: '已完成', type: 'success' },
@@ -182,6 +204,23 @@ export function dueText(row) {
   }
   if (row.dueLevel === 'TODAY') return `${label}${row.deadlineText}（今天到期）`
   return `${label}${row.deadlineText}（剩 ${row.daysLeft} 天）`
+}
+
+/**
+ * 截止期限单元格——相对天数版（2026-10-14）。
+ *
+ * <p>用户要求：列表里**不露具体日期**，只说「剩余 N 天 / 已逾期 N 天」，
+ * 具体哪天截止点进案件详情看（详情抽屉仍用 {@link dueText}，日期在那里）。
+ * 与 dueText 的唯一差别就是去掉日期段。
+ */
+export function dueDaysText(row) {
+  if (!row.deadlineText) return '未设期限'
+  const label = row.deadlineLabel ? `${row.deadlineLabel} ` : ''
+  if (row.dueLevel === 'OVERDUE') {
+    return `${label}已逾期 ${Math.abs(row.daysLeft || 0)} 天`
+  }
+  if (row.dueLevel === 'TODAY') return `${label}今天到期`
+  return `${label}剩余 ${row.daysLeft} 天`
 }
 
 export function rowClassOf(row) {

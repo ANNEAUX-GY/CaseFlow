@@ -50,6 +50,19 @@ public class CaseVO implements Serializable {
     private String status;
     private String statusName;
     private String remark;
+    // ---- Excel 导入字段（2026-10-14）：源系统 14 列的落脚处 ----
+    /** 发案地点 */
+    private String occurPlace;
+    /** 发案时间 */
+    private LocalDateTime occurTime;
+    /** 承办单位 */
+    private String undertakeUnit;
+    /** 受理时间 */
+    private LocalDateTime acceptTime;
+    /** 处罚时间 */
+    private LocalDateTime punishTime;
+    /** 源系统主键（Excel「id」列，对账溯源用） */
+    private String externalId;
     private String createdByName;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
@@ -73,6 +86,18 @@ public class CaseVO implements Serializable {
     /** 强制措施：NONE / DETENTION / BAIL / RESIDENCE（盯办模块） */
     private String caseMeasure;
     private String caseMeasureName;
+
+    /**
+     * 初查状态（盯办初查页签，2026-10-14）：
+     * UNASSIGNED 未分配 / ASSIGNED 已分配 / RECEIVED 已签收 / FEEDBACK 已反馈。
+     *
+     * <p>判定链（后端算，前端只映射标签）：无主办人 → 未分配；
+     * 有反馈 → 已反馈；有阶段待办（意见已派生、任务已到承办人手里）→ 已签收；
+     * 其余（指派了但还没派活）→ 已分配。
+     */
+    private String investStage;
+    /** 该案反馈条数（初查状态判定用，也供列表展示） */
+    private Integer feedbackCount;
     /** 采取强制措施日期 */
     private LocalDateTime measureDate;
     /** 强制措施期限届满日（含倒计时字段） */

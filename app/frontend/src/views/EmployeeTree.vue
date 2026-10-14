@@ -601,10 +601,11 @@ const loadMyCases = async (employeeId) => {
 const dueText = (c) => {
   if (c.status === 'DONE') return c.statusName
   if (c.status === 'CANCELLED') return c.statusName
+  // 2026-10-14：与案件列表同口径——只显示剩余/已逾期天数，具体日期进详情看
   if (c.daysLeft == null) return '无期限'
-  if (c.daysLeft < 0) return `逾期 ${-c.daysLeft} 天`
+  if (c.daysLeft < 0) return `已逾期 ${-c.daysLeft} 天`
   if (c.daysLeft === 0) return '今天到期'
-  return `剩 ${c.daysLeft} 天`
+  return `剩余 ${c.daysLeft} 天`
 }
 const dueClass = (c) => {
   if (c.status === 'DONE') return 'cf-ok'

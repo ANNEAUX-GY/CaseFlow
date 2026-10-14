@@ -33,6 +33,17 @@
       </el-col>
     </el-row>
 
+    <div v-if="deadlineAlerts.length" class="cf-panel" style="margin-bottom:12px">
+      <div class="cf-panel__head"><span>具体时限提醒（{{ deadlineAlerts.length }}）</span></div>
+      <div style="padding:8px 16px;max-height:230px;overflow:auto">
+        <div v-for="(alert, i) in deadlineAlerts" :key="alert.caseId + '-' + alert.item.key + '-' + i" style="padding:5px 0">
+          <el-tag size="small" :type="alert.item.overdue ? 'danger' : 'warning'">{{ alert.item.overdue ? '已逾期' : '提醒中' }}</el-tag>
+          <el-button link type="primary" @click="openDrawer({ id: alert.caseId })">{{ alert.caseNo }} · {{ alert.caseName }}</el-button>
+          {{ alert.item.label }}（{{ (alert.item.dueAt || '').slice(0, 10) }}）
+        </div>
+      </div>
+    </div>
+
     <!-- 可视化：三张图与上方卡片同源同口径（都带当前类型 + 小类），
          结构（占比） / 期限（紧迫度） / 分类（横向比较）三个角度互补，
          卡片上已有的数字不再重复画一遍，图只补数字表达不出来的分布信息 -->
@@ -43,7 +54,7 @@
         </ChartPanel>
       </el-col>
       <el-col :span="8" :xs="24">
-        <ChartPanel :title="'措施期限分布' + (scopeCategory ? '（' + scopeCategoryLabel + '）' : '')"
+        <ChartPanel :title="'办案期限分布' + (scopeCategory ? '（' + scopeCategoryLabel + '）' : '')"
           :empty="!dueTotal">
           <EChart :option="dueBarOption" :height="196" />
         </ChartPanel>
@@ -136,13 +147,23 @@
           <el-table-column label="经办人" width="100">
             <template #default="{ row }">{{ row.owner ? row.owner.employeeName : '未指派' }}</template>
           </el-table-column>
-          <el-table-column label="侦查状态" width="95" align="center">
+          <!-- 初查状态 / 办理进度 / 追踪进度（2026-10-14）：列名与口径随页签切换。
+               初查 = 指派→签收→反馈四态（后端 investStage）；
+               刑拘在办与取保及监居 = 当前阶段待办完成度三态。 -->
+          <el-table-column :label="stateColumnLabel" width="100" align="center">
             <template #default="{ row }">
-              <el-tag v-if="row.investigationStatus" size="small"
-                :type="(INVEST_STATUS_META[row.investigationStatus] || {}).type">
-                {{ (INVEST_STATUS_META[row.investigationStatus] || {}).label }}
-              </el-tag>
-              <span v-else class="cf-muted">未开始</span>
+              <template v-if="module === 'INITIAL'">
+                <el-tag v-if="row.investStage" size="small"
+                  :type="(INVEST_STAGE_META[row.investStage] || {}).type">
+                  {{ (INVEST_STAGE_META[row.investStage] || {}).label }}
+                </el-tag>
+                <span v-else class="cf-muted">未分配</span>
+              </template>
+              <template v-else>
+                <el-tag size="small" :type="(PROGRESS_STAGE_META[progressStage(row)] || {}).type">
+                  {{ (PROGRESS_STAGE_META[progressStage(row)] || {}).label }}
+                </el-tag>
+              </template>
             </template>
           </el-table-column>
           <el-table-column label="办案阶段" width="186">
@@ -168,7 +189,7 @@
               </el-tooltip>
             </template>
           </el-table-column>
-          <el-table-column label="措施期限" width="140">
+          <el-table-column label="办案期限" width="140">
             <template #default="{ row }">
               <template v-if="row.caseMeasure && row.caseMeasure !== 'NONE'">
                 <el-tag size="small" :type="(MEASURE_META[row.caseMeasure] || {}).type" effect="plain">
@@ -217,7 +238,7 @@ import { useRoute } from 'vue-router'
 import { watchApi, employeeApi } from '../api'
 import { useCategoryStore } from '../store/category'
 import { withCaseType, useCaseTypeStore } from '../store/caseType'
-import { CASE_TYPE_META, INVEST_STATUS_META, MEASURE_META, STAGE_META, stageLabel, suspectLabel, suspectNamesText } from '../utils/format'
+import { CASE_TYPE_META, INVEST_STATUS_META, INVEST_STAGE_META, PROGRESS_STAGE_META, MEASURE_META, STAGE_META, stageLabel, suspectLabel, suspectNamesText } from '../utils/format'
 import { useUserStore } from '../store/user'
 import FocusStar from '../components/FocusStar.vue'
 import FocusOnlyToggle from '../components/FocusOnlyToggle.vue'
@@ -239,6 +260,7 @@ const rows = ref([])
 const total = ref(0)
 const loading = ref(false)
 const board = ref({})
+const deadlineAlerts = ref([])
 const drawerVisible = ref(false)
 const currentId = ref(null)
 
@@ -501,6 +523,9 @@ const loadBoard = async () => {
     category: query.category,
     focusOnly: query.focusOnly || undefined
   }))
+  deadlineAlerts.value = await watchApi.deadlineAlerts(withCaseType({
+    category: query.category, focusOnly: query.focusOnly || undefined
+  }))
 }
 const reset = () => {
   // 不重置 caseType：它归门控管，重置筛选不该把类型也放开
@@ -520,8 +545,17 @@ const refreshAll = () => { load(); loadBoard() }
 const openDrawer = (row) => { currentId.value = row.id; drawerVisible.value = true }
 
 // ---- 进度/预警展示规则 ----
-const planProgressStatus = (row) => {
-  if (row.planOverdue > 0 || measureOverdue(row)) return 'exception'
+// 状态列名随页签（2026-10-14）：初查看「初查状态」，刑拘在办看「办理进度」，取保及监居看「追踪进度」
+const stateColumnLabel = computed(() => (
+  module.value === 'INITIAL' ? '初查状态'
+    : module.value === 'DETENTION' ? '办理进度' : '追踪进度'
+))
+/** 刑拘在办 / 取保及监居的进度三态：没铺任务=未开始，铺了没做完=进行中，全做完=已完结 */
+const progressStage = (row) => {
+  if (!row.flowTotal || row.flowTotal <= 0) return 'NOT_STARTED'
+  return row.flowDone >= row.flowTotal ? 'FINISHED' : 'IN_PROGRESS'
+}
+const planProgressStatus = (row) => {  if (row.planOverdue > 0 || measureOverdue(row)) return 'exception'
   if (measureDueSoon(row)) return 'warning'
   return ''
 }
@@ -536,8 +570,11 @@ const deadlineClass = (row) => {
 }
 const deadlineText = (row) => {
   if (row.detainDaysLeft == null) return '未登记期限'
-  if (row.detainDaysLeft < 0) return `已超期 ${Math.abs(row.detainDaysLeft)} 天`
-  return `剩 ${row.detainDaysLeft} 天（${(row.detainDeadlineText || '').slice(0, 10)}）`
+  // 2026-10-14：列表不露具体日期（用户要求），只显示剩余/已逾期天数；
+  // 具体哪天届满点「侦查详情」看（WatchDrawer 里带日期）。
+  if (row.detainDaysLeft < 0) return `已逾期 ${Math.abs(row.detainDaysLeft)} 天`
+  if (row.detainDaysLeft === 0) return '今天到期'
+  return `剩余 ${row.detainDaysLeft} 天`
 }
 
 onMounted(async () => {

@@ -180,10 +180,11 @@ const openCase = (row) => {
 }
 
 const dueText = (row) => {
-  const dt = String(row.deadline).replace('T', ' ').slice(5, 16)
-  if (row.overdue) return `${dt}（已超期 ${-row.daysLeft} 天）`
-  if (row.daysLeft === 0) return `${dt}（今天）`
-  return `${dt}（剩 ${row.daysLeft} 天）`
+  // 2026-10-14：与案件列表同口径——不露具体日期，只显示剩余/已逾期天数，
+  // 点案件名（openCase）进详情才能看到哪天截止。
+  if (row.overdue) return `已逾期 ${-row.daysLeft} 天`
+  if (row.daysLeft === 0) return '今天到期'
+  return `剩余 ${row.daysLeft} 天`
 }
 
 const dueCls = (row) => {

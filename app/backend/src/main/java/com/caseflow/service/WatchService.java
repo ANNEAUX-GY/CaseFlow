@@ -39,6 +39,8 @@ public class WatchService {
     private CasePlanMapper planMapper;
     @Resource
     private CaseTodoMapper todoMapper;
+    @Resource
+    private com.caseflow.mapper.CaseTodoFeedbackMapper feedbackMapper;
 
     /** 盯办列表 = 通用分页查询 + 计划进度填充（done/total/overdue） */
     public PageResult<CaseVO> page(CaseQuery query) {
@@ -50,6 +52,7 @@ public class WatchService {
         Map<Long, PlanStat> stats = planStats(list.stream().map(CaseVO::getId).collect(Collectors.toList()));
         List<Long> ids = list.stream().map(CaseVO::getId).collect(Collectors.toList());
         Map<Long, TodoStat> todoStats = todoStats(ids, list);
+        Map<Long, Integer> fbCounts = feedbackCounts(ids);
         LocalDateTime now = LocalDateTime.now();
         for (CaseVO vo : list) {
             PlanStat st = stats.get(vo.getId());
@@ -75,8 +78,36 @@ public class WatchService {
             // 阶段做完不自动跳（出口要人拍板），但必须让领导看得见「这个案子在等你确认流转」
             vo.setFlowFinished(fTotal > 0 && fDone == fTotal
                     && !com.caseflow.flow.CaseFlowTemplate.STAGE_CLOSED.equals(fs));
+            // 初查状态四态（2026-10-14）：未分配 → 已分配 → 已签收 → 已反馈。
+            // 与 CaseVO.investStage 注释里的判定链保持一致
+            int fb = fbCounts.getOrDefault(vo.getId(), 0);
+            vo.setFeedbackCount(fb);
+            if (vo.getOwner() == null) {
+                vo.setInvestStage("UNASSIGNED");
+            } else if (fb > 0) {
+                vo.setInvestStage("FEEDBACK");
+            } else if (fTotal > 0) {
+                vo.setInvestStage("RECEIVED");
+            } else {
+                vo.setInvestStage("ASSIGNED");
+            }
         }
         return r;
+    }
+
+    /** 批量反馈计数：按案件 id 一次 group by，避免逐案查库 */
+    private Map<Long, Integer> feedbackCounts(List<Long> caseIds) {
+        Map<Long, Integer> map = new HashMap<>();
+        if (caseIds == null || caseIds.isEmpty()) {
+            return map;
+        }
+        List<com.caseflow.entity.CaseTodoFeedback> all = feedbackMapper.selectList(
+                new LambdaQueryWrapper<com.caseflow.entity.CaseTodoFeedback>()
+                        .in(com.caseflow.entity.CaseTodoFeedback::getCaseId, caseIds));
+        for (com.caseflow.entity.CaseTodoFeedback f : all) {
+            map.merge(f.getCaseId(), 1, Integer::sum);
+        }
+        return map;
     }
 
     /**

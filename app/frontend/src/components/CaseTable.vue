@@ -62,9 +62,11 @@
           </span>
         </template>
       </el-table-column>
-      <el-table-column label="截止期限" width="190">
+      <el-table-column label="截止期限" width="150">
         <template #default="{ row }">
-          <span :class="dueClass(row)">{{ dueText(row) }}</span>
+          <!-- 2026-10-14：列表只显示剩余/已逾期天数，具体哪天截止点详情看
+               （详情抽屉 CaseDetailDrawer 用 dueText，那里带日期） -->
+          <span :class="dueClass(row)">{{ dueDaysText(row) }}</span>
         </template>
       </el-table-column>
       <el-table-column label="状态" width="86">
@@ -88,7 +90,7 @@
 
 <script setup>
 import { computed } from 'vue'
-import { DUE_META, STATUS_META, PRIORITY_META, SOURCE_META, CASE_TYPE_META, STAGE_META, dueText, rowClassOf, stageLabel, suspectLabel, suspectNamesText } from '../utils/format'
+import { DUE_META, STATUS_META, PRIORITY_META, SOURCE_META, CASE_TYPE_META, STAGE_META, dueDaysText, rowClassOf, stageLabel, suspectLabel, suspectNamesText } from '../utils/format'
 import { useUserStore } from '../store/user'
 import FocusStar from './FocusStar.vue'
 
