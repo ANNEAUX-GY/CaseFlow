@@ -157,7 +157,9 @@ const DEFAULT_SORT = 'urgency,importance,deadline'
 
 const query = reactive({
   keyword: '',
-  status: '',
+  // 默认只看待办（PENDING）：与侧栏红点同口径，红点数 = 默认列表条数；
+  // 已完成的可从筛选器切出来看。
+  status: 'PENDING',
   sortBy: DEFAULT_SORT,
   urgencyOrder: 'desc',
   importanceOrder: 'desc'

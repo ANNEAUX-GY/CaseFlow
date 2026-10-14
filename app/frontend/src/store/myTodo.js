@@ -32,10 +32,10 @@ export const useMyTodoStore = defineStore('myTodo', {
       try {
         const s = await todoApi.welcomeSummary()
         this.summary = s || this.summary
-        // 红点用 dueSoon（含今天到期与已超期）作为"需要尽快处理"的规模。
-        // 不要再加 todayTodoCount：它的口径（截止≤今天）完全落在 dueSoon 里，
-        // 相加会把同一条待办数两遍，红点虚高。
-        this.count = (s?.dueSoonCount || 0)
+        // 红点 = 未完成待办总数（pendingCount，不限期限）——与「我的待办」页
+        // 的条目口径一致，点进去数字才能对上。旧口径 dueSoonCount（限 3 天内）
+        // 会出现侧栏 3、列表 6 的"对不上"困惑；dueSoon 仍保留在 summary 里给欢迎弹窗用。
+        this.count = (s?.pendingCount ?? s?.dueSoonCount ?? 0)
       } catch (e) {
         this.count = 0
         this.summary = {

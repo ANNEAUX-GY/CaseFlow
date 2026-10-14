@@ -326,6 +326,7 @@ public class StaffTodoService {
      *   <li>{@code todayTodoCount}：今日需完成 = 待办未完成 且 截止为今天</li>
      *   <li>{@code dueSoonCount}：即将超期 = 未完成 且 距截止 ≤ 3 天（含已超期）</li>
      *   <li>{@code newOpinionCount}：新增领导审批意见 = 本人承办案件里、反馈状态为空的意见条数</li>
+     *   <li>{@code pendingCount}：未完成待办总数（不限期限）——侧栏红点口径</li>
      * </ul>
      * 点条目跳转时用{@code linkType/linkQuery} 让前端直接带上筛选条件跳过去。
      */
@@ -337,11 +338,16 @@ public class StaffTodoService {
             m.put("dueSoonCount", 0);
             m.put("newOpinionCount", 0);
             m.put("overdueCount", 0);
+            m.put("pendingCount", 0);
             return m;
         }
         List<CaseTodo> todos = todoMapper.selectList(new LambdaQueryWrapper<CaseTodo>()
                 .in(CaseTodo::getCaseId, mine)
                 .eq(CaseTodo::getStatus, "PENDING"));   // 只算未完成的
+        // 未完成待办总数（不限期限）：侧栏「我的待办」红点用这个口径——
+        // 红点数字必须与「我的待办」页的条目数对得上（都数未完成），
+        // 之前用 dueSoonCount（限 3 天内）会出现侧栏 3、列表 6 的"对不上"困惑。
+        m.put("pendingCount", todos.size());
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime dayStart = now.toLocalDate().atStartOfDay();
         LocalDateTime todayEnd = now.toLocalDate().atTime(23, 59, 59);
