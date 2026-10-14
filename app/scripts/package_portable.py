@@ -3,6 +3,9 @@
 面向完全不懂技术的使用单位：解压 -> 双击【启动.bat】-> 浏览器打开即用。
 目标机不需要安装 Java / Maven / Node，试用模式连数据库也不用装。
 
+同时产出一个体积很小的「部署资料包」，只含部署说明与建库语句，便于单独
+发给负责建库的同事或打印留存。
+
 与 package_deployment.py 的分工：
   - package_deployment.py：轻量包，依赖目标机已装 Java 8，用 PowerShell 启停；
   - package_portable.py  ：便携包，自带 JRE、零依赖，双击 bat 启停（本脚本）。
@@ -28,18 +31,22 @@ JAR = BACKEND_DIR / "target" / "case-flow-backend.jar"
 JRE = TOOLS_DIR / "jdk8" / "jre"
 SCHEMA = ROOT / "sql" / "schema.sql"
 SCHEMA_INDEX = ROOT / "sql" / "index-mysql.sql"
-DEFAULT_TUTORIAL = PROJECT_DIR / "docs" / "manual-v3" / "部署教程.docx"
+TUTORIAL_DOCX = PROJECT_DIR / "docs" / "manual-v3" / "部署教程.docx"
+TUTORIAL_MD = PROJECT_DIR / "docs" / "manual-v3" / "部署教程.md"
 
-# 包内顶层目录名（与既有交付物保持一致）
 TOP = "CaseFlow-1.0.0"
+DOCS_DIR = "部署说明"          # 部署说明与建库语句集中放这里
+SQL_DIR = f"{DOCS_DIR}/建库语句"
+DOCS_PKG_TOP = "CaseFlow-部署资料"
 PORT = 8080
 
 
 # --------------------------------------------------------------------------
-# 包内文本资源。bat 一律按项目约定写 GBK + CRLF，其余写 UTF-8。
+# 包内文本资源。bat 一律按项目约定写 GBK + CRLF；txt 写 UTF-8+BOM（记事本友好）；
+# sql / md 写 UTF-8 无 BOM（SQL 带 BOM 可能被客户端当语法错误）。
 # --------------------------------------------------------------------------
 
-README_FIRST = """\
+README_FIRST = f"""\
 ========================================================
  CaseFlow 案件指派系统 —— 请先看我（30 秒看完）
 ========================================================
@@ -55,7 +62,7 @@ README_FIRST = """\
 
   第 3 步  打开浏览器，地址栏输入：
 
-               http://localhost:8080/api/
+               http://localhost:{PORT}/api/
 
            出现登录页就成功了。
 
@@ -75,14 +82,14 @@ README_FIRST = """\
 
    2 = 正式模式   连接单位自己的 MySQL 数据库。
                   适合多人正式使用。需要先建好数据库，
-                  并填好【数据库配置.bat】（见 部署教程）。
+                  并填好【数据库配置.bat】。
 
 --------------------------------------------------------
  想让同事也能打开
 --------------------------------------------------------
   1. 双击【放行防火墙.bat】（只需做一次）
   2. 把地址里的 localhost 换成本机内网 IP，例如
-         http://192.168.1.100:8080/api/
+         http://192.168.1.100:{PORT}/api/
 
   本机 IP 查法：开始菜单搜 cmd，打开后敲 ipconfig，看“IPv4 地址”。
 
@@ -92,7 +99,18 @@ README_FIRST = """\
   直接关掉那个黑色窗口就行。
   如果窗口找不到了，双击【停止.bat】。
 
-  详细图文步骤见同目录下《部署教程.docx》
+--------------------------------------------------------
+ {DOCS_DIR}\\ 文件夹里是什么
+--------------------------------------------------------
+   部署教程.docx          完整的图文部署教程，遇到问题先翻它
+   建库语句\\             正式模式建 MySQL 库用的脚本（三步）
+       00-建库怎么用（先看我）.txt   先看这个
+       1-建库和账号.sql              第 1 步
+       2-建表.sql                    第 2 步
+       3-建索引.sql                  第 3 步（正式库必做）
+
+   只需要说明和建库脚本的话，另外那个
+   【CaseFlow-部署资料】压缩包里就是这些，体积很小。
 ========================================================
 """
 
@@ -114,47 +132,104 @@ LOGS_README = """\
 能很快定位问题。
 """
 
-DB_README = """\
+DB_HELP = """\
 ========================================================
- 正式模式（MySQL）建库怎么做
+ 建库怎么用（正式模式 / MySQL）
 ========================================================
 只有当你在【启动.bat】里选了 2（正式模式），才需要看这个。
 
-需要做三件事：建库、建账号、建索引。
+下面三个文件，按顺序执行，一个都别跳：
+
+    1-建库和账号.sql    建数据库 + 建应用账号
+    2-建表.sql          建表（19 张）
+    3-建索引.sql        建索引  ← 正式库必做，不做数据一多就慢
 
 --------------------------------------------------------
- 第 1 步  建库
+ 用什么执行
 --------------------------------------------------------
-用数据库管理工具（Navicat、DBeaver 都行）连上 MySQL，
-执行下面两句：
+MySQL 命令行、Navicat、DBeaver 都行。
+用数据库管理员账号（root 或同等权限）执行前两个；
+第 3 个连到 case_flow 库执行即可。
 
-    CREATE DATABASE case_flow
-      DEFAULT CHARACTER SET utf8mb4
-      DEFAULT COLLATE utf8mb4_general_ci;
+命令行示例（在部署包根目录打开 cmd）：
 
---------------------------------------------------------
- 第 2 步  建账号
---------------------------------------------------------
-    CREATE USER 'caseflow'@'%' IDENTIFIED BY '你设定的口令';
-    GRANT ALL PRIVILEGES ON case_flow.* TO 'caseflow'@'%';
-    FLUSH PRIVILEGES;
-
-把“你设定的口令”换成你自己的口令，记住它，
-等下要填进【数据库配置.bat】。
+    mysql -uroot -p < "部署说明\\建库语句\\1-建库和账号.sql"
+    mysql -uroot -p case_flow < "部署说明\\建库语句\\2-建表.sql"
+    mysql -uroot -p case_flow < "部署说明\\建库语句\\3-建索引.sql"
 
 --------------------------------------------------------
- 第 3 步  建索引（正式库必做）
+ 两件必须注意的事
 --------------------------------------------------------
-连接 case_flow 库，执行本文件夹里的 index-mysql.sql。
+1. 执行 1-建库和账号.sql 之前，先打开它，
+   把里面的口令改成你自己的，并记住它。
+   ★ 这个口令等下要填进部署包里的【数据库配置.bat】。
 
-    ★ 不做这一步，数据一多系统就会变慢。★
+2. 表不用手工建也基本能用（程序启动时会自动建），
+   但 3-建索引.sql 一定要单独执行一遍。
 
 --------------------------------------------------------
- 表结构不用手工建
+ 建完应该是什么样
 --------------------------------------------------------
-表会在服务启动时自动创建（schema.sql 已经打进程序里了）。
-schema.sql 也放在这里，供你核对或在别的工具里手工执行。
-建完是 19 张表。
+数据库：case_flow
+账号  ：caseflow
+表    ：19 张
+"""
+
+SETUP_SQL = f"""\
+-- =====================================================================
+--  CaseFlow 建库脚本   第 1 步 / 共 3 步
+--  作用：建立数据库和应用账号
+--  用谁执行：数据库管理员账号（root 或同等权限）
+--  在哪执行：MySQL 命令行，或 Navicat / DBeaver 的 SQL 窗口
+-- =====================================================================
+
+-- ---------------------------------------------------------------------
+--  ① 建库
+-- ---------------------------------------------------------------------
+CREATE DATABASE IF NOT EXISTS case_flow
+    DEFAULT CHARACTER SET utf8mb4
+    DEFAULT COLLATE utf8mb4_general_ci;
+
+-- ---------------------------------------------------------------------
+--  ② 建应用账号
+--
+--  ★★ 下面这行里的口令，请改成你自己的 ★★
+--     改完记住它 —— 这个口令还要填进部署包里的【数据库配置.bat】
+-- ---------------------------------------------------------------------
+CREATE USER IF NOT EXISTS 'caseflow'@'%' IDENTIFIED BY '请改成你自己的口令';
+
+-- ---------------------------------------------------------------------
+--  ③ 授权
+-- ---------------------------------------------------------------------
+GRANT ALL PRIVILEGES ON case_flow.* TO 'caseflow'@'%';
+FLUSH PRIVILEGES;
+
+-- ---------------------------------------------------------------------
+--  执行完本文件，接着执行 2-建表.sql
+-- ---------------------------------------------------------------------
+"""
+
+SCHEMA_HEADER = """\
+-- =====================================================================
+--  CaseFlow 建库脚本   第 2 步 / 共 3 步
+--  作用：建表（19 张）
+--  用谁执行：case_flow 库的管理员账号
+--  说明：程序启动时也会自动执行同样内容（幂等，重复跑没关系），
+--        这里放一份，方便你核对或在别的工具里手工执行。
+-- =====================================================================
+
+"""
+
+INDEX_HEADER = """\
+-- =====================================================================
+--  CaseFlow 建库脚本   第 3 步 / 共 3 步
+--  作用：建二级索引
+--
+--  ★ 正式库必做：不做索引，数据一多系统会明显变慢。★
+--
+--  注意：程序启动时【不会】自动执行本文件，必须手工跑一遍。
+-- =====================================================================
+
 """
 
 
@@ -312,6 +387,8 @@ rem  数据库配置 —— 只有【正式模式】才用得到
 rem
 rem  用记事本打开本文件，把下面几行的值改成你自己的，
 rem  改完保存即可。口令那一行务必要改。
+rem
+rem  建库步骤见  部署说明\\建库语句\\00-建库怎么用（先看我）.txt
 rem ============================================================
 
 set "MYSQL_HOST=127.0.0.1"
@@ -329,11 +406,11 @@ BAT_FILES = {
     "数据库配置.bat": _bat_dbconfig,
 }
 
-TEXT_FILES = {
+# txt 走 UTF-8 + BOM（记事本一定能正确显示）
+TXT_FILES = {
     "★ 先看我.txt": README_FIRST,
     "data/说明.txt": DATA_README,
     "logs/说明.txt": LOGS_README,
-    "建库脚本/怎么建库.txt": DB_README,
 }
 
 
@@ -348,10 +425,14 @@ def sha256(path: Path) -> str:
     return d.hexdigest()
 
 
-def write_text(path: Path, text: str, encoding: str, newline: str) -> None:
+def write_text(path: Path, text: str, encoding: str = "utf-8",
+               newline: str = "\r\n", bom: bool = False) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     data = text.replace("\r\n", "\n").replace("\n", newline)
-    path.write_bytes(data.encode(encoding))
+    payload = data.encode(encoding)
+    if bom:
+        payload = b"\xef\xbb\xbf" + payload
+    path.write_bytes(payload)
 
 
 def build_source() -> int:
@@ -359,26 +440,82 @@ def build_source() -> int:
     return subprocess.run([sys.executable, str(script)], cwd=str(ROOT)).returncode
 
 
+def fill_docs_dir(target: Path, tutorial: Path) -> None:
+    """把「部署说明」内容填进指定目录：教程 + 建库语句（三步）。"""
+    sql_dir = target / "建库语句"
+    sql_dir.mkdir(parents=True, exist_ok=True)
+
+    if tutorial.exists():
+        shutil.copy2(tutorial, target / "部署教程.docx")
+    if TUTORIAL_MD.exists():
+        write_text(target / "部署教程.md", TUTORIAL_MD.read_text(encoding="utf-8"))
+
+    # 建库语句：三步，序号在文件名里，按顺序做就行
+    write_text(sql_dir / "00-建库怎么用（先看我）.txt", DB_HELP, bom=True)
+    write_text(sql_dir / "1-建库和账号.sql", SETUP_SQL)
+    write_text(sql_dir / "2-建表.sql",
+               SCHEMA_HEADER + SCHEMA.read_text(encoding="utf-8"))
+    write_text(sql_dir / "3-建索引.sql",
+               INDEX_HEADER + SCHEMA_INDEX.read_text(encoding="utf-8"))
+
+
+def make_zip(zip_path: Path, top: str, root: Path) -> None:
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as z:
+        for f in sorted(root.rglob("*")):
+            if f.is_file():
+                z.write(f, f"{top}/{f.relative_to(root).as_posix()}")
+
+
 def main() -> int:
-    ap = argparse.ArgumentParser(description="构建 CaseFlow 便携部署包（自带 Java）")
+    ap = argparse.ArgumentParser(description="构建 CaseFlow 便携部署包")
     ap.add_argument("--skip-build", action="store_true", help="复用已有的 target jar")
     ap.add_argument("--out", default=None, help="输出目录，默认项目根 release")
-    ap.add_argument("--tutorial", default=None, help="要放进包里的部署教程 .docx 路径")
+    ap.add_argument("--tutorial", default=None, help="部署教程 .docx 路径")
     ap.add_argument("--keep-staging", action="store_true", help="保留未压缩的 staging 目录")
+    ap.add_argument("--docs-only", action="store_true", help="只出小体积资料包，不重打大包")
     args = ap.parse_args()
+
+    global TUTORIAL_DOCX
+    if args.tutorial:
+        TUTORIAL_DOCX = Path(args.tutorial)
 
     print("=" * 60)
     print(" CaseFlow 便携部署包构建")
     print("=" * 60)
 
-    if not args.skip_build:
-        print("\n[1/5] 构建前端与后端 ...")
+    if not args.skip_build and not args.docs_only:
+        print("\n[1/6] 构建前端与后端 ...")
         if build_source() != 0:
             print("  构建失败，已中止。")
             return 1
     else:
-        print("\n[1/5] 跳过构建（--skip-build）")
+        print("\n[1/6] 跳过构建")
 
+    out_dir = Path(args.out) if args.out else PROJECT_DIR / "release"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now().astimezone().strftime("%Y%m%d-%H%M%S")
+    stage_root = out_dir / f"_stage-{stamp}"
+    stage = stage_root / TOP
+    doc_pkg = out_dir / f"_stage-{stamp}" / DOCS_PKG_TOP
+
+    # ---- 小资料包（增量、便宜，先做）----
+    print("\n[2/6] 组装部署资料包（说明 + 建库语句）...")
+    doc_pkg.mkdir(parents=True, exist_ok=True)
+    fill_docs_dir(doc_pkg, TUTORIAL_DOCX)
+    docs_zip = out_dir / f"CaseFlow-部署资料-{stamp}.zip"
+    make_zip(docs_zip, DOCS_PKG_TOP, doc_pkg)
+    print(f"      {docs_zip.name}（{docs_zip.stat().st_size/1024:.0f} KB）")
+
+    if args.docs_only:
+        if not args.keep_staging:
+            try:
+                shutil.rmtree(stage_root)
+            except Exception as exc:                              # noqa: BLE001
+                print(f"      [提示] 中间目录未删除：{stage_root}（{exc}）")
+        print("\n完成（仅资料包）：", docs_zip)
+        return 0
+
+    # ---- 大包 ----
     if not JAR.exists():
         print(f"  找不到成品：{JAR}\n  请先跑 package_release.py", file=sys.stderr)
         return 1
@@ -386,54 +523,31 @@ def main() -> int:
         print(f"  找不到自带运行环境：{JRE}\n  请检查 tools\\jdk8 是否完整", file=sys.stderr)
         return 1
 
-    tutorial = Path(args.tutorial) if args.tutorial else DEFAULT_TUTORIAL
-    if not tutorial.exists():
-        print(f"  [警告] 教程文件不存在，包里将不含部署教程：{tutorial}")
-
-    out_dir = Path(args.out) if args.out else PROJECT_DIR / "release"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now().astimezone().strftime("%Y%m%d-%H%M%S")
-    stage = out_dir / f"_stage-{stamp}" / TOP
-    zip_path = out_dir / f"caseflow-portable-1.0.0-{stamp}.zip"
-
-    # ---- 组装 ----
-    print("\n[2/5] 组装包内容 ...")
-    if stage.parent.exists():
-        shutil.rmtree(stage.parent)
-    stage.mkdir(parents=True)
-
+    print("\n[3/6] 组装便携部署包 ...")
+    stage.mkdir(parents=True, exist_ok=True)
     shutil.copy2(JAR, stage / "case-flow-backend.jar")
-    print(f"      程序：case-flow-backend.jar  ({JAR.stat().st_size/1024/1024:.1f} MB)")
+    print(f"      程序：case-flow-backend.jar（{JAR.stat().st_size/1024/1024:.1f} MB）")
 
-    print("      运行环境：runtime/  (复制中，约 200MB，需要一会儿) ...")
+    print("      运行环境：runtime/（复制中，约 200MB，需要一会儿）...")
     shutil.copytree(JRE, stage / "runtime")
 
-    write_text(stage / "建库脚本" / "schema.sql", SCHEMA.read_text(encoding="utf-8"),
-               "utf-8", "\r\n")
-    write_text(stage / "建库脚本" / "index-mysql.sql", SCHEMA_INDEX.read_text(encoding="utf-8"),
-               "utf-8", "\r\n")
+    # 部署说明：教程 + 建库语句集中放一起
+    fill_docs_dir(stage / DOCS_DIR, TUTORIAL_DOCX)
+    print(f"      {DOCS_DIR}/：部署教程 + 建库语句")
 
-    for rel, text in TEXT_FILES.items():
-        write_text(stage / rel, text, "utf-8", "\r\n")
+    for rel, text in TXT_FILES.items():
+        write_text(stage / rel, text, bom=True)
     for rel, maker in BAT_FILES.items():
-        write_text(stage / rel, maker(), "gbk", "\r\n")
+        write_text(stage / rel, maker(), encoding="gbk")
 
     for d in ("data/h2", "data/uploads", "logs"):
         (stage / d).mkdir(parents=True, exist_ok=True)
 
-    if tutorial.exists():
-        shutil.copy2(tutorial, stage / "部署教程.docx")
-        print(f"      教程：部署教程.docx")
+    print("\n[4/6] 压缩 ...")
+    zip_path = out_dir / f"caseflow-portable-1.0.0-{stamp}.zip"
+    make_zip(zip_path, TOP, stage)
 
-    # ---- 打包 ----
-    print("\n[3/5] 压缩 ...")
-    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as z:
-        for f in sorted(stage.rglob("*")):
-            if f.is_file():
-                z.write(f, f"{TOP}/{f.relative_to(stage).as_posix()}")
-
-    # ---- 校验 ----
-    print("\n[4/5] 校验 ...")
+    print("\n[5/6] 校验 ...")
     with zipfile.ZipFile(zip_path) as z:
         names = set(z.namelist())
         must = [
@@ -444,8 +558,11 @@ def main() -> int:
             f"{TOP}/放行防火墙.bat",
             f"{TOP}/数据库配置.bat",
             f"{TOP}/★ 先看我.txt",
-            f"{TOP}/建库脚本/schema.sql",
-            f"{TOP}/建库脚本/index-mysql.sql",
+            f"{TOP}/{DOCS_DIR}/部署教程.docx",
+            f"{TOP}/{SQL_DIR}/00-建库怎么用（先看我）.txt",
+            f"{TOP}/{SQL_DIR}/1-建库和账号.sql",
+            f"{TOP}/{SQL_DIR}/2-建表.sql",
+            f"{TOP}/{SQL_DIR}/3-建索引.sql",
         ]
         missing = [m for m in must if m not in names]
         if missing:
@@ -456,27 +573,23 @@ def main() -> int:
         print(f"      必需文件齐全（共 {len(names)} 项）")
 
     if not args.keep_staging:
-        # 清理未压缩的中间目录。这一步失败不影响交付物，只提示即可
-        # （某些环境的安全策略会拦截批量删除）。
         try:
-            shutil.rmtree(stage.parent)
+            shutil.rmtree(stage_root)
         except Exception as exc:                                  # noqa: BLE001
-            print()
-            print(f"      [提示] 中间目录未能自动删除：{stage.parent}")
-            print(f"             不影响部署包，可稍后手工删除。原因：{exc}")
+            print(f"\n      [提示] 中间目录未能自动删除：{stage_root}")
+            print(f"             不影响交付物，可稍后手工删除。原因：{exc}")
 
-    # ---- 报告 ----
-    size_mb = zip_path.stat().st_size / 1024 / 1024
-    print("\n[5/5] 完成")
+    print("\n[6/6] 完成")
     print("=" * 60)
-    print(f" 部署包：{zip_path}")
-    print(f" 大小  ：{size_mb:.1f} MB")
-    print(f" 校验  ：{sha256(zip_path)[:16]}...")
+    print(f" 便携部署包：{zip_path.name}")
+    print(f"              {zip_path.stat().st_size/1024/1024:.1f} MB")
+    print(f" 部署资料包：{docs_zip.name}")
+    print(f"              {docs_zip.stat().st_size/1024:.0f} KB")
     print("=" * 60)
     print(" 交付给使用单位后，对方只需：")
     print("   1) 解压到 D:\\CaseFlow")
     print("   2) 双击【启动.bat】")
-    print("   3) 浏览器打开 http://localhost:8080/api/")
+    print(f"   3) 浏览器打开 http://localhost:{PORT}/api/")
     return 0
 
 
