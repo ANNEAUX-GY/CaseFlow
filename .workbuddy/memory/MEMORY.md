@@ -30,9 +30,15 @@
 ## 技术栈与硬约定
 - **Spring Boot 2.7 + JDK8**。新建后端文件：`javax.annotation.Resource`（非 jakarta）、
   `com.caseflow.security.AuthContext`、JDK8 无 `List.of()` 用 `new ArrayList<>()`。
-- 加字段统一走 `bootstrap/SchemaMigration.NEW_COLUMNS`；**schema.sql 双副本**
-  （`app/backend/src/main/resources/sql/` 与 `app/sql/`）必须同步改；
-  二级索引只能放 `sql/index-mysql.sql`。
+- 加字段统一走 `bootstrap/SchemaMigration.NEW_COLUMNS`，**并同步 `app/sql/schema.sql`**
+  （两处要一致；比对脚本见 2026-10-16 日志思路：解析 NEW_COLUMNS 三元组 vs 建表列）。
+  **建表脚本唯一数据源是 `app/sql/`**：pom 把 `../sql` 映射进 `classpath:/sql/`，
+  并已 exclude 掉 `src/main/resources/sql/` 下的同名文件。
+  **切勿再往 `src/main/resources/sql/` 放副本** —— maven-resources-plugin 默认
+  `overwrite=false`，同名**先写入者胜**，陈旧副本会顶掉正确版本（2026-10-16 因此
+  让 jar 缺 5 张表、启动迁移整体中断）。二级索引只能放 `app/sql/index-mysql.sql`。
+- `SchemaMigration.ensureColumns` 是**逐列容错**的（单列失败只 WARN 不中断）；
+  新增迁移步骤时保持这个风格，别让一处失败带走后面所有步骤。
 - 前端 Vue3 + Element Plus + Pinia + ECharts 5.5.1。**新图表类型必须先在 `EChart.vue`
   注册**，否则静默不渲染零报错；主题 `utils/chart.js`，组件 `EChart.vue`（notMerge=true）。
 - 公安配色：警蓝 `#1b4a8c` / 深藏蓝 `#12294a` / 警徽金 `#c8a45c`；布局基准全在
