@@ -4,7 +4,8 @@
 目标机不需要安装 Java / Maven / Node，试用模式连数据库也不用装。
 
 同时产出一个体积很小的「部署资料包」，只含部署说明与建库语句，便于单独
-发给负责建库的同事或打印留存。
+发给负责建库的同事或打印留存；以及一个「升级补丁包」，只含新 jar 与升级
+说明，用于已部署系统的版本更新（内网传输体积最小）。
 
 与 package_deployment.py 的分工：
   - package_deployment.py：轻量包，依赖目标机已装 Java 8，用 PowerShell 启停；
@@ -15,6 +16,8 @@
     .venv\\Scripts\\python.exe scripts/package_portable.py --skip-build   # 复用已有 jar
     .venv\\Scripts\\python.exe scripts/package_portable.py --out D:\\交付
     .venv\\Scripts\\python.exe scripts/package_portable.py --tutorial <教程.docx>
+    .venv\\Scripts\\python.exe scripts/package_portable.py --docs-only    # 只出资料包
+    .venv\\Scripts\\python.exe scripts/package_portable.py --patch-only   # 只出升级补丁包
 """
 import argparse
 import hashlib
@@ -38,6 +41,7 @@ TOP = "CaseFlow-1.0.0"
 DOCS_DIR = "部署说明"          # 部署说明与建库语句集中放这里
 SQL_DIR = f"{DOCS_DIR}/建库语句"
 DOCS_PKG_TOP = "CaseFlow-部署资料"
+PATCH_TOP = "CaseFlow-升级补丁"
 PORT = 8080
 
 
@@ -399,6 +403,95 @@ set "MYSQL_PASSWORD=请改成你自己的数据库口令"
 """
 
 
+UPGRADE_TXT = """\
+========================================================
+ CaseFlow 案件指派系统 —— 升级说明（照着做就行）
+========================================================
+
+这个补丁包是用来【更新已有系统】的。
+如果是要装一套新的，请看完整部署包里的《部署教程》。
+
+
+包里有什么
+--------------------------------------------------------
+  case-flow-backend.jar   新的程序本体（就替换这一个文件）
+  升级说明.txt            就是本文件
+  建库语句\\              一般用不上；只有本说明特别提示时才跑
+
+
+升级四步
+--------------------------------------------------------
+  第 1 步  停服
+           在您原来的安装目录（比如 D:\\CaseFlow）里，
+           双击【停止.bat】，等它显示已停止。
+
+  第 2 步  备份（铁律，不能省）
+           ① 数据库：
+              - 正式模式（MySQL）：用 mysqldump 导出 case_flow 库，
+                或者直接在数据库服务器上做个快照。
+              - 试用模式：把安装目录里的 data\\ 文件夹整个复制一份即可。
+           ② 附件：把 data\\uploads\\ 文件夹复制一份。
+
+  第 3 步  覆盖
+           把本包里的 case-flow-backend.jar 复制到安装目录，
+           替换掉旧的同名文件。
+
+           ★ 建议先把旧的改个名留着，比如改成：
+                 case-flow-backend.jar.old
+             万一新版有问题，改回来重启就恢复了。
+
+  第 4 步  启动并验证
+           双击【启动.bat】，等 30 秒左右，
+           浏览器打开原来的地址，能正常登录、能打开案件列表，
+           就说明升级成功了。
+
+
+三个绝对不能覆盖的东西
+--------------------------------------------------------
+  数据库配置.bat    里面有数据库口令，覆盖了就得重填
+  data\\ 文件夹      所有业务数据和附件都在这里
+  runtime\\ 文件夹   自带的 Java 运行环境，升级时不用换
+
+  只替换 case-flow-backend.jar 这一个文件，其它一律不动，
+  就绝对不会出问题。
+
+
+数据库要不要手工改？
+--------------------------------------------------------
+  一般不用。
+
+  程序每次启动时会自己检查并升级表结构：
+    有新表      -> 自动建好
+    老表加字段  -> 自动补齐
+
+  所以换完 jar 重启，数据库就跟着升级好了，
+  您不需要手工执行任何建表语句。
+
+  唯一例外：如果这次更新带来了新的查询索引，本说明末尾会单独列出，
+  那时才需要手工跑一次 建库语句\\3-建索引.sql。
+  如果执行时报 Duplicate key name，说明索引早就有了，直接忽略，不是错误。
+
+
+出问题了怎么回退
+--------------------------------------------------------
+  把第 3 步留着的那份 case-flow-backend.jar.old
+  改名回 case-flow-backend.jar，重启即可。
+
+  注意：表结构升级之后不会自动回退（新表、新字段会留在数据库里）。
+  旧版程序一般不受影响，但仍建议一并恢复第 2 步的数据库备份。
+
+
+还搞不定？
+--------------------------------------------------------
+  联系技术人员时，请把下面三样一起发过去，能省很多时间：
+    ① logs\\ 文件夹里最新的日志文件
+    ② 报错窗口的截图
+    ③ 您刚才做了哪几步
+
+========================================================
+"""
+
+
 BAT_FILES = {
     "启动.bat": _bat_start,
     "停止.bat": _bat_stop,
@@ -459,6 +552,25 @@ def fill_docs_dir(target: Path, tutorial: Path) -> None:
                INDEX_HEADER + SCHEMA_INDEX.read_text(encoding="utf-8"))
 
 
+def fill_patch_dir(target: Path) -> None:
+    """填升级补丁包内容：新 jar + 升级说明 + 建库语句（备用）。
+
+    刻意不放部署教程（几百 KB 且对新装才有意义）与 runtime（每次升级都不用换），
+    让补丁包尽可能小，便于内网传输。
+    """
+    shutil.copy2(JAR, target / "case-flow-backend.jar")
+    write_text(target / "升级说明.txt", UPGRADE_TXT, bom=True)
+
+    sql_dir = target / "建库语句"
+    sql_dir.mkdir(parents=True, exist_ok=True)
+    write_text(sql_dir / "00-建库怎么用（先看我）.txt", DB_HELP, bom=True)
+    write_text(sql_dir / "1-建库和账号.sql", SETUP_SQL)
+    write_text(sql_dir / "2-建表.sql",
+               SCHEMA_HEADER + SCHEMA.read_text(encoding="utf-8"))
+    write_text(sql_dir / "3-建索引.sql",
+               INDEX_HEADER + SCHEMA_INDEX.read_text(encoding="utf-8"))
+
+
 def make_zip(zip_path: Path, top: str, root: Path) -> None:
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as z:
         for f in sorted(root.rglob("*")):
@@ -473,6 +585,8 @@ def main() -> int:
     ap.add_argument("--tutorial", default=None, help="部署教程 .docx 路径")
     ap.add_argument("--keep-staging", action="store_true", help="保留未压缩的 staging 目录")
     ap.add_argument("--docs-only", action="store_true", help="只出小体积资料包，不重打大包")
+    ap.add_argument("--patch-only", action="store_true",
+                    help="只出升级补丁包（新 jar + 升级说明 + 建库语句）")
     args = ap.parse_args()
 
     global TUTORIAL_DOCX
@@ -497,6 +611,44 @@ def main() -> int:
     stage_root = out_dir / f"_stage-{stamp}"
     stage = stage_root / TOP
     doc_pkg = out_dir / f"_stage-{stamp}" / DOCS_PKG_TOP
+
+    # ---- 升级补丁包（只出这一个，就返回）----
+    if args.patch_only:
+        if not JAR.exists():
+            print(f"  找不到成品：{JAR}\n  请先跑 package_release.py", file=sys.stderr)
+            return 1
+        print("\n[2/2] 组装升级补丁包（新 jar + 升级说明 + 建库语句）...")
+        patch_dir = stage_root / PATCH_TOP
+        patch_dir.mkdir(parents=True, exist_ok=True)
+        fill_patch_dir(patch_dir)
+        patch_zip = out_dir / f"{PATCH_TOP}-{stamp}.zip"
+        make_zip(patch_zip, PATCH_TOP, patch_dir)
+        print(f"      {patch_zip.name}（{patch_zip.stat().st_size/1024/1024:.1f} MB）")
+
+        with zipfile.ZipFile(patch_zip) as z:
+            names = set(z.namelist())
+            must = [
+                f"{PATCH_TOP}/case-flow-backend.jar",
+                f"{PATCH_TOP}/升级说明.txt",
+                f"{PATCH_TOP}/建库语句/3-建索引.sql",
+            ]
+            missing = [m for m in must if m not in names]
+            if missing:
+                print("  校验失败，缺少：", file=sys.stderr)
+                for m in missing:
+                    print(f"    - {m}", file=sys.stderr)
+                return 1
+            print(f"      必需文件齐全（共 {len(names)} 项）")
+
+        if not args.keep_staging:
+            try:
+                shutil.rmtree(stage_root)
+            except Exception as exc:                              # noqa: BLE001
+                print(f"      [提示] 中间目录未删除：{stage_root}（{exc}）")
+
+        print("\n完成。把这个补丁包发给使用单位，按包内《升级说明.txt》操作即可：")
+        print(f"   {patch_zip}")
+        return 0
 
     # ---- 小资料包（增量、便宜，先做）----
     print("\n[2/6] 组装部署资料包（说明 + 建库语句）...")

@@ -89,13 +89,21 @@
     <build>
         <finalName>case-flow-backend</finalName>
         <resources>
-            <!-- 常规资源 -->
+            <!-- 常规资源。
+                 显式排除 sql/schema.sql：src/main/resources/sql/ 下曾有一份手动拷贝的
+                 旧副本，会与 app/sql/schema.sql 漂移；而 maven-resources-plugin 默认
+                 overwrite=false，同名文件先写入者胜 —— 旧副本反而会顶掉下面 app/sql
+                 的正确版本，使 jar 内建表脚本缺表（曾缺 case_question 等 5 张表，
+                 导致启动时 SchemaMigration 因表不存在而整体中断）。
+                 建表脚本一律以 app/sql/ 为唯一数据源，这里排除掉防止再次踩坑。 -->
             <resource>
                 <directory>src/main/resources</directory>
+                <excludes>
+                    <exclude>sql/schema.sql</exclude>
+                    <exclude>sql/index-mysql.sql</exclude>
+                </excludes>
             </resource>
-            <!-- 建表脚本唯一数据源：app/sql/schema.sql 直接映射进 classpath:/sql/。
-                 此前 resources/sql/schema.sql 是手动拷贝的副本，两份会漂移
-                 （改了 app/sql 却没改 resources，启动时建不出新表）。 -->
+            <!-- 建表脚本唯一数据源：app/sql/*.sql 直接映射进 classpath:/sql/。 -->
             <resource>
                 <directory>${project.basedir}/../sql</directory>
                 <targetPath>sql</targetPath>

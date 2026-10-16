@@ -226,8 +226,15 @@ public class SchemaMigration implements ApplicationRunner {
         }
     }
 
-    /** 仅添加当前表缺少的列；tableFilter 供旧库回归测试使用。 */
+    /** 仅添加当前表缺少的列；tableFilter 供旧库回归测试使用。
+     *
+     * <p>单列失败不中断其余列：老库可能存在个别表缺失（手工建表漏了一张、
+     * 或中间版本删过表）。若一遇错就整体抛出，后面几十列连同其余迁移步骤
+     * 都会一起跳过，问题会被放大（曾因 case_question 缺表导致 60+ 列未补、
+     * 类别字典未种入）。这里逐列兜住，末尾汇总为一条 WARN，既不静默也不扩大故障面。
+     */
     void ensureColumns(Connection conn, Set<String> existing, String tableFilter) throws Exception {
+        List<String> failed = new ArrayList<>();
         for (String[] c : NEW_COLUMNS) {
             if (tableFilter != null && !tableFilter.equals(c[0])) continue;
             String key = c[0].toLowerCase() + "." + c[1].toLowerCase();
@@ -236,7 +243,13 @@ public class SchemaMigration implements ApplicationRunner {
             try (Statement st = conn.createStatement()) {
                 st.execute(ddl);
                 log.info("[SchemaMigration] 已补列：{}", key);
+            } catch (Exception e) {
+                failed.add(key + "（" + e.getMessage() + "）");
             }
+        }
+        if (!failed.isEmpty()) {
+            log.warn("[SchemaMigration] {} 列未能补齐，通常是这些表不存在，"
+                    + "请确认建表脚本已完整执行：{}", failed.size(), failed);
         }
     }
 

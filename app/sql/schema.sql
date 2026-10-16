@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS org_employee (
     dept          VARCHAR(128) DEFAULT NULL COMMENT '部门/团队',
     title         VARCHAR(64)  DEFAULT NULL COMMENT '职务：领导/副领导/组长/组员',
     police_group  VARCHAR(16)  DEFAULT NULL COMMENT '办案组别：INITIAL初查组/CLEAR清案组/NONE不限（NULL 视为 NONE 不限）',
+    origin        VARCHAR(16)  DEFAULT NULL COMMENT '档案来源：SELF_REGISTER 本人注册自建 / NULL 管理员建档',
     phone         VARCHAR(32)  DEFAULT NULL COMMENT '手机号',
     email         VARCHAR(128) DEFAULT NULL COMMENT '邮箱',
     level_no      INT          NOT NULL DEFAULT 1 COMMENT '层级深度，1 为顶层领导',
@@ -133,6 +134,7 @@ CREATE TABLE IF NOT EXISTS case_assignee (
 CREATE TABLE IF NOT EXISTS case_file (
     id            BIGINT       AUTO_INCREMENT PRIMARY KEY COMMENT '主键',
     case_id       BIGINT       DEFAULT NULL COMMENT '案件 ID',
+    todo_id       BIGINT       DEFAULT NULL COMMENT '所属待办 ID（佐证材料复用本表）',
     file_name     VARCHAR(255) NOT NULL COMMENT '原始文件名',
     file_type     VARCHAR(32)  DEFAULT NULL COMMENT '扩展名 pdf/xlsx/docx',
     file_size     BIGINT       DEFAULT 0 COMMENT '字节数',
