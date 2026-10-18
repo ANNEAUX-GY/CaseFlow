@@ -11,6 +11,9 @@
   PyCharm 必须打开 `app/`（`.idea/vcs.xml` 已把 Git 映射到上一级）。
 - 虚拟环境 **`app/.venv`（Python 3.10.11，不是 3.13）**；PyCharm SDK 显示几.x 不影响运行，别改。
 - 远程 https://github.com/ANNEAUX-GY/CaseFlow （public，main）。push 细节见 LESSONS.md。
+  **push 报 `CONNECT tunnel failed, response 502` 时先剥代理直连**（本机 http_proxy
+  对 GitHub 的通道时好时坏，直连 443 反而通）：
+  `env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u all_proxy GIT_TERMINAL_PROMPT=0 git push origin main`
 - 本机专属排除写 `.git/info/exclude`（**不改被跟踪的 .gitignore**）。已排除
   `app/backend/src/main/resources/sql/`、`shots/`、`ppt/*/preview/`。
   **规则必须锚定**：写 `deploy/` 会匹配任意层级的 deploy 目录，
