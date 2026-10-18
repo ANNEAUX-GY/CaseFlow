@@ -59,6 +59,10 @@
 - **待办是意见的唯一载体**（勿回退）：`case_todo.opinion_id` 派生；`parent_id` 两级。
   新增待办三处入口统一走「意见→派生待办」同一链路（批量录入见 `TodoBatchEditor.vue`）。
   主任务权限=管理层，子任务=承办人；`@FullAccessOnly` 在方法前拦截，Service 分层无效。
+- **阶段退回不另加状态字段**（2026-10-18）：`FlowService.returnBack` = 提一条
+  「【阶段退回】+意见」（重要性 A）→ 派生待办 → 阶段进度自然回落，退回记录留在意见列表可追溯。
+  别再引入 `flow_returned` 之类状态。`FlowService` 注入 `OpinionService` 必须 `@Lazy`
+  （链路 FlowService→OpinionService→StaffTodoService→FlowService，否则启动期成环）。
 - **案件类型门控**：5 栏目受门控；状态双写 store+localStorage；跨栏目跳转用 `gotoGated`。
 - **三级浏览**（2026-10-09 远程定型）：大类卡片页 `/case-type` → 小类卡片页 `/case-boards`
   （常量 `BOARDS_PATH`）→ 栏目页；选完大类一律先过小类页，最终落点含筛选用 `to` 参数带；
@@ -66,6 +70,9 @@
   「全部」卡且不显示案件数。「未分类」=`category=NONE`（IS NULL OR 空串）。
   已知坑：NONE 卡片进来会被级联反投影清空（CaseList/WatchView 均已修）。
 - **办案组别**：`org_employee.police_group` 为权威，NULL/非法归一「不限」，前后端口径必须一致。
+- **案件时间**（2026-10-18）：列表展示与默认排序统一读 `case_info.case_time`
+  （导入件=受案时间、手工建案=报案时间，存量回填 `COALESCE(accept_time, created_at)`）。
+  前端文案走 `utils/format.js#caseTimeText`；`case_no` 自动生成格式为 `yyyyMMdd-NNN`（已去 CA- 前缀）。
 - **流程流转**：办案阶段改由**待办驱动**（FlowPanel 已删，前端 `CaseStageBar.vue`）；
   建案即铺任务，阶段完成待领导确认流转；进度不落库实时算。
 
