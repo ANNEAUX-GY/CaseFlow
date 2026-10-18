@@ -83,6 +83,7 @@ CREATE TABLE IF NOT EXISTS case_info (
     occur_time    DATETIME     DEFAULT NULL COMMENT '发案时间',
     undertake_unit VARCHAR(128) DEFAULT NULL COMMENT '承办单位',
     accept_time   DATETIME     DEFAULT NULL COMMENT '受理时间',
+    case_time     DATETIME     DEFAULT NULL COMMENT '案件时间：已受案取受案时间，未受案取报案时间；列表展示与排序统一用这一列',
     punish_time   DATETIME     DEFAULT NULL COMMENT '处罚时间',
     external_id   VARCHAR(32)  DEFAULT NULL COMMENT '源系统主键（导入溯源用）',
     status        VARCHAR(16)  NOT NULL DEFAULT 'PENDING_ASSIGN' COMMENT 'PENDING_ASSIGN/ASSIGNED/IN_PROGRESS/DONE/CANCELLED',

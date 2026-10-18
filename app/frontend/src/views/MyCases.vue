@@ -61,7 +61,7 @@
         :rows="rows"
         :loading="loading"
         :min-body="360"
-        show-case-no
+        show-case-time
         @open="openDetail"
       />
       <div class="cf-pager">

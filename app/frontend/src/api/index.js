@@ -215,6 +215,8 @@ export const watchApi = {
   flow: (caseId) => http.get(`/watch/cases/${caseId}/flow`),
   /** 阶段流转（仅管理层）：刑事主干 DETAIN初查→刑拘 / BAIL刑拘→取保 */
   flowTransfer: (caseId, action) => http.post(`/watch/cases/${caseId}/flow/transfer`, { action }),
+  // 阶段退回（2026-10-18）：不打回上一阶段，而是留在本阶段并把退回意见派成待办
+  flowReturn: (caseId, comment) => http.post(`/watch/cases/${caseId}/flow/return`, { comment }),
   /** 勾选完成 / 撤销完成一条流程任务（双向切换） */
   planDone: (planId) => http.post(`/watch/plans/${planId}/done`),
   planRevert: (planId) => http.post(`/watch/plans/${planId}/revert`),

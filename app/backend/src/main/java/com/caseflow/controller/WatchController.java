@@ -231,6 +231,19 @@ public class WatchController {
         return Result.ok();
     }
 
+    /**
+     * 阶段退回（管理层，2026-10-18）：body.comment = 退回意见（必填）。
+     *
+     * <p>不进入下一阶段，把案子打回本阶段让承办人补办。
+     * 退回意见会落成一条领导意见并自动派生待办，承办人立刻在「我的待办」里看到。
+     */
+    @PostMapping("/cases/{caseId}/flow/return")
+    public Result<Void> flowReturn(@PathVariable Long caseId,
+                                   @RequestBody Map<String, Object> body) {
+        flowService.returnBack(caseId, str(body.get("comment")));
+        return Result.ok();
+    }
+
     // ---------------- 领导意见与落实反馈 ----------------
     // 提出 = 管理层；反馈（完成/进行中/未完成 + 说明）= 本案现职承办人（办案人）。
 

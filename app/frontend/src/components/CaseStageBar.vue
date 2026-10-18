@@ -47,6 +47,9 @@
             </el-dropdown-menu>
           </template>
         </el-dropdown>
+        <!-- 退回（2026-10-18）：确认过待办已办完、但领导认为没办到位时走这里。
+             退回不改阶段，而是把意见派成一条新待办，进度自然从 100% 掉回来。 -->
+        <el-button v-if="finished" size="small" type="danger" plain @click="openReturn">退回补办</el-button>
       </template>
       <el-tag v-else-if="finished" size="small" type="warning" effect="plain">
         待办已办完
@@ -69,6 +72,22 @@
       <template #footer>
         <el-button @click="ask.visible = false">取消</el-button>
         <el-button type="primary" :loading="ask.loading" @click="doTransfer">确认转入</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 退回补办（2026-10-18）：领导看过觉得没办到位，把案子留在本阶段并写明要补什么，
+         不让人"只能确认、不能打回" -->
+    <el-dialog v-model="ret.visible" title="退回补办" width="460px" append-to-body>
+      <p class="cf-muted" style="margin: 0 0 10px; font-size: 13px; line-height: 1.7">
+        退回后案件仍停留在「{{ flow.stageLabel || '本阶段' }}」，不会转入下一阶段。<br />
+        这条意见会生成一条待办派给承办人，并在案件的意见列表里留痕。
+      </p>
+      <el-input v-model="ret.comment" type="textarea" :rows="4" maxlength="300" show-word-limit
+        placeholder="请写明需要补办什么（必填），例如：缺少被害人询问笔录，补完再提交" />
+      <template #footer>
+        <el-button @click="ret.visible = false">取消</el-button>
+        <el-button type="danger" :loading="ret.loading" :disabled="!ret.comment.trim()"
+          @click="doReturn">确认退回</el-button>
       </template>
     </el-dialog>
   </div>
@@ -154,6 +173,34 @@ const doTransfer = async () => {
     emit('changed')
   } catch (e) { /* 拦截器已提示 */ } finally {
     ask.loading = false
+  }
+}
+
+// ---- 退回补办（2026-10-18）----
+// 退回不改阶段：意见派成待办后，本阶段进度从 100% 掉下来，
+// 界面自然回到「还有事没办完」，不需要额外的退回状态。
+const ret = reactive({ visible: false, loading: false, comment: '' })
+
+const openReturn = () => {
+  ret.comment = ''
+  ret.visible = true
+}
+
+const doReturn = async () => {
+  const comment = ret.comment.trim()
+  if (!comment) {
+    ElMessage.warning('请填写退回意见，说明需要补办什么')
+    return
+  }
+  ret.loading = true
+  try {
+    await watchApi.flowReturn(props.caseId, comment)
+    ElMessage.success('已退回，承办人待办里已收到这条意见')
+    ret.visible = false
+    await load()
+    emit('changed')
+  } catch (e) { /* 拦截器已提示 */ } finally {
+    ret.loading = false
   }
 }
 

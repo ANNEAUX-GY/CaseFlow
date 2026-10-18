@@ -45,6 +45,8 @@ public class CaseQuery {
     /** 只看「重点关注」的案件（2026-10-09）：TRUE 时只查 focus=1 */
     private Boolean focusOnly = false;
 
-    private String sortField = "created_at";
+    /** 排序字段：case_time 案件时间（默认）/ deadline 期限 / priority 优先级 / updated_at 更新时间 / created_at 创建时间 */
+    private String sortField = "case_time";
+    /** asc / desc，默认由新到旧 */
     private String sortOrder = "desc";
 }

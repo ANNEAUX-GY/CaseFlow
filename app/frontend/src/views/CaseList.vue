@@ -91,6 +91,12 @@
         <el-option label="7天内" value="D7" />
         <el-option label="未设期限" value="NONE" />
       </el-select>
+      <!-- 排序（2026-10-18）：默认由新到旧。案件时间 = 已受案取受案时间、未受案取报案时间 -->
+      <el-select v-model="sortValue" style="width: 132px" @change="onSortChange">
+        <el-option label="最新在前" value="case_time-desc" />
+        <el-option label="最早在前" value="case_time-asc" />
+        <el-option label="期限最近" value="deadline-asc" />
+      </el-select>
       <el-button @click="reset">重置</el-button>
       <!-- 新建案件（2026-10-14 用户指定）：放筛选行最右端。
            用 margin-left:auto 而不是 cf-spacer——spacer 在 flex-wrap 换行时
@@ -138,7 +144,7 @@
         :rows="rows"
         :loading="loading"
         :min-body="360"
-        show-case-no
+        show-case-time
         :details-only="isClosedPage"
         @open="openDetail"
         @assign="openAssign"
@@ -210,8 +216,25 @@ const query = reactive({
   hasSuspect: '',
   employeeId: null,
   dueBucket: '',
-  focusOnly: false
+  focusOnly: false,
+  // 排序（2026-10-18）：默认按「案件时间」由新到旧，用户可在工具栏切换升降序
+  sortField: 'case_time',
+  sortOrder: 'desc'
 })
+
+/** 排序下拉的合成值（字段-方向），与 query 的 sortField/sortOrder 双向绑定 */
+const sortValue = computed({
+  get: () => `${query.sortField}-${query.sortOrder}`,
+  set: (v) => {
+    const i = v.lastIndexOf('-')
+    query.sortField = v.slice(0, i)
+    query.sortOrder = v.slice(i + 1)
+  }
+})
+const onSortChange = () => {
+  query.page = 1
+  load()
+}
 
 // 经办人姓名远程搜索：从员工图谱按姓名联想，选中即过滤该民警经办的案件
 const employeeOptions = ref([])

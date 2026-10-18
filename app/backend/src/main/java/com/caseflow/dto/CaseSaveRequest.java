@@ -33,6 +33,15 @@ public class CaseSaveRequest {
     private String filingNo;
 
     /**
+     * 报案时间（2026-10-18）：手工录入警情时可填，留空 = 保存时按当前时间。
+     *
+     * <p>未受案的警情在列表「案件时间」列展示的就是它；已受案的案件以受案时间为准，
+     * 两个时间最终都汇总到 {@code case_info.case_time}，列表只读那一列。
+     */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
+    private LocalDateTime reportTime;
+
+    /**
      * 强制措施：NONE=未采取 / DETENTION拘留 / ARREST逮捕 / BAIL取保候审 / RESIDENCE监视居住 / SUMMONS拘传。
      *
      * <p>建案表单的「是否采取强制措施」：否 = NONE，是 = 具体措施。

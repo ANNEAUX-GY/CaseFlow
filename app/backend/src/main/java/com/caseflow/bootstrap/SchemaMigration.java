@@ -161,6 +161,9 @@ public class SchemaMigration implements ApplicationRunner {
             {"case_info", "occur_time", "DATETIME NULL"},
             {"case_info", "undertake_unit", "VARCHAR(128) NULL"},
             {"case_info", "accept_time", "DATETIME NULL"},
+            // 案件时间（2026-10-18）：列表「案件时间」列与排序的权威列。
+            // 已受案取 accept_time、未受案取报案时间；存量行由 backfillCaseTime 回填。
+            {"case_info", "case_time", "DATETIME NULL"},
             {"case_info", "punish_time", "DATETIME NULL"},
             {"case_info", "external_id", "VARCHAR(32) NULL"},
             // 老库的 case_deadline_state 可能建于行政/传讯节点加入之前；逐列补齐。
@@ -211,6 +214,7 @@ public class SchemaMigration implements ApplicationRunner {
         try (Connection conn = dataSource.getConnection()) {
             Set<String> existing = existingColumns(conn);
             ensureColumns(conn, existing, null);
+            backfillCaseTime(conn);
             migrateLegacyDeadlineReceipts(conn, existing);
             migrateCategory(conn, existing);
             removeCivilType(conn);
@@ -253,8 +257,30 @@ public class SchemaMigration implements ApplicationRunner {
         }
     }
 
-    /** 旧版本的 received_at 由移交按钮写入；没有审核回执，不能视为审核通过。 */
-    void migrateLegacyDeadlineReceipts(Connection conn, Set<String> existing) throws Exception {
+    /**
+     * 回填 case_time（2026-10-18）：存量案件没有这一列值时，用「受理时间优先、否则创建时间」补齐。
+     *
+     * <p>只补 NULL 行，可重复执行。列表的「案件时间」列与默认排序都读这一列，
+     * 不回填会让老案件排到最后/显示空白。
+     */
+    void backfillCaseTime(Connection conn) {
+        try {
+            if (!hasColumn(conn, "case_info", "case_time")) {
+                return;
+            }
+            try (Statement st = conn.createStatement()) {
+                int n = st.executeUpdate(
+                        "UPDATE case_info SET case_time = COALESCE(accept_time, created_at) WHERE case_time IS NULL");
+                if (n > 0) {
+                    log.info("[SchemaMigration] 回填案件时间 {} 条", n);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[SchemaMigration] 回填案件时间失败（不影响启动）：{}", e.getMessage());
+        }
+    }
+
+    /** 旧版本的 received_at 由移交按钮写入；没有审核回执，不能视为审核通过。 */    void migrateLegacyDeadlineReceipts(Connection conn, Set<String> existing) throws Exception {
         if (!existing.contains("case_deadline_state.pretrial_received_at")
                 || !existing.contains("case_deadline_state.legal_received_at")) return;
         try (Statement st = conn.createStatement()) {

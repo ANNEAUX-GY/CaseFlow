@@ -45,7 +45,7 @@
         :rows="rows"
         :loading="loading"
         :min-body="300"
-        show-case-no
+        show-case-time
         @open="openDetail"
         @assign="openAssign"
         @remove="onRemove"

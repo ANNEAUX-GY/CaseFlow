@@ -59,6 +59,11 @@ public class CaseVO implements Serializable {
     private String undertakeUnit;
     /** 受理时间 */
     private LocalDateTime acceptTime;
+    /**
+     * 案件时间（2026-10-18）：列表「案件时间」列的唯一数据源。
+     * 已受案取受案时间、未受案取报案时间，前端据此决定显示「受案」还是「报案」。
+     */
+    private LocalDateTime caseTime;
     /** 处罚时间 */
     private LocalDateTime punishTime;
     /** 源系统主键（Excel「id」列，对账溯源用） */

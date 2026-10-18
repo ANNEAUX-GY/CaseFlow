@@ -17,7 +17,20 @@
           <FocusStar :row="row" @changed="(p) => emit('focus', p)" />
         </template>
       </el-table-column>
-      <el-table-column v-if="showCaseNo && !compact" prop="caseNo" label="编号" width="150" />
+      <!-- 报案 / 受案时间（2026-10-18 用户要求）：原来的「编号」（CA-xxx）业务意义不大，
+           换成业务上真正要看的那个时间点。已受案的取受案时间，未受案的手工警情取报案时间，
+           两者在后端都已汇总到 caseTime，这里只负责按有无 acceptTime 决定标签。 -->
+      <el-table-column v-if="showCaseTime && !compact" label="报案/受案时间" width="152">
+        <template #default="{ row }">
+          <template v-if="caseTimeText(row)">
+            <el-tag size="small" :type="row.acceptTime ? 'primary' : 'info'" effect="plain">
+              {{ row.acceptTime ? '受案' : '报案' }}
+            </el-tag>
+            <div class="cf-muted" style="font-size: 12px">{{ caseTimeText(row) }}</div>
+          </template>
+          <span v-else class="cf-muted">—</span>
+        </template>
+      </el-table-column>
       <el-table-column label="案件名称" :min-width="compact ? 170 : 220" show-overflow-tooltip>
         <template #default="{ row }">
           <span :style="{ color: priorityColor(row), fontWeight: row.priority === 'URGENT' ? 600 : 400 }">
@@ -90,7 +103,7 @@
 
 <script setup>
 import { computed } from 'vue'
-import { DUE_META, STATUS_META, PRIORITY_META, SOURCE_META, CASE_TYPE_META, STAGE_META, dueDaysText, rowClassOf, stageLabel, suspectLabel, suspectNamesText } from '../utils/format'
+import { DUE_META, STATUS_META, PRIORITY_META, SOURCE_META, CASE_TYPE_META, STAGE_META, caseTimeText, dueDaysText, rowClassOf, stageLabel, suspectLabel, suspectNamesText } from '../utils/format'
 import { useUserStore } from '../store/user'
 import FocusStar from './FocusStar.vue'
 
@@ -102,7 +115,7 @@ const canManage = computed(() => userStore.isFullAccess)
 const props = defineProps({
   rows: { type: Array, default: () => [] },
   height: { type: [String, Number], default: undefined },
-  showCaseNo: { type: Boolean, default: false },
+  showCaseTime: { type: Boolean, default: false },
   showActions: { type: Boolean, default: true },
   detailsOnly: { type: Boolean, default: false },
   /**

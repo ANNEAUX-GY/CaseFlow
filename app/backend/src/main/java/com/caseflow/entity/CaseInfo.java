@@ -94,6 +94,11 @@ public class CaseInfo implements Serializable {
     private String undertakeUnit;
     /** 受理时间 */
     private LocalDateTime acceptTime;
+    /**
+     * 案件时间（2026-10-18）：列表展示与排序的权威时间。
+     * 已受案的取受案时间，未受案的手工警情取报案时间；存量数据回填为创建时间。
+     */
+    private LocalDateTime caseTime;
     /** 处罚时间 */
     private LocalDateTime punishTime;
     /** 源系统主键：Excel 的「id」列原样留存，用于与旧系统对账溯源 */

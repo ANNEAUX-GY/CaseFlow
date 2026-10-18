@@ -72,12 +72,21 @@
       </el-row>
 
       <el-row :gutter="12">
-        <el-col :span="12" :xs="24">
+        <el-col :span="10" :xs="24">
           <el-form-item label="案件编号">
             <el-input v-model="form.filingNo" placeholder="案件编号（选填）" maxlength="64" />
           </el-form-item>
         </el-col>
-        <el-col :span="12" :xs="24">
+        <!-- 报案时间（2026-10-18）：手工录入的警情通常还没受案，列表「报案/受案时间」列
+             显示的就是这个时间（已受案的案件以受案时间为准）。留空 = 保存时按当前时间。 -->
+        <el-col v-if="!isEdit" :span="8" :xs="24">
+          <el-form-item label="报案时间">
+            <el-date-picker v-model="form.reportTime" type="datetime"
+              value-format="YYYY-MM-DD HH:mm:ss" placeholder="默认当前时间" clearable
+              style="width: 100%" />
+          </el-form-item>
+        </el-col>
+        <el-col :span="6" :xs="24">
           <!-- 是否采取强制措施（2026-10-09）：选「是」才出现具体措施下拉。
                值就写进 case_info.case_measure——与盯办模块共用同一个字段，
                两个入口各存一份只会互相打架（这边写"逮捕"、盯办还停在"未采取措施"）。 -->
@@ -291,6 +300,9 @@ const emptyForm = () => ({
   caseType: '',
   category: '',
   filingNo: '',
+  // 报案时间（2026-10-18）：仅新建时填（编辑改时间走详情页的「时间节点」面板）。
+  // 留空 = 后端按保存时刻兜底，列表「报案/受案时间」列读的就是它。
+  reportTime: '',
   // 强制措施：'NONE'/空 = 未采取；具体取值见 MEASURE_CHOICES
   caseMeasure: 'NONE',
   description: '',
@@ -476,6 +488,9 @@ const submit = async () => {
   loading.value = true
   try {
     const payload = { ...form.value }
+    // 报案时间留空就不传：空串反序列化成 LocalDateTime 会直接报错，
+    // 后端对 null 的处理是「按保存时刻兜底」，正是我们要的默认行为
+    if (!payload.reportTime) delete payload.reportTime
     if (!assignNow.value) {
       payload.ownerId = null
       payload.memberIds = []

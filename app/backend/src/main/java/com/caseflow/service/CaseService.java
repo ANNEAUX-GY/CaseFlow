@@ -363,9 +363,15 @@ public class CaseService {
             q.eq(CaseInfo::getFocus, 1);
         }
 
-        String field = query.getSortField() == null ? "created_at" : query.getSortField();
+        String field = query.getSortField() == null ? "case_time" : query.getSortField();
         boolean asc = "asc".equalsIgnoreCase(query.getSortOrder());
         switch (field) {
+            case "case_time":
+                // 案件时间（2026-10-18）：列表默认排序。同一时刻的案件再按创建时间兜一层，
+                // 保证分页翻页时顺序稳定（否则同值行在页间会来回跳）
+                q.orderBy(true, asc, CaseInfo::getCaseTime);
+                q.orderBy(true, false, CaseInfo::getCreatedAt);
+                break;
             case "deadline":
                 q.orderBy(true, asc, CaseInfo::getDeadline);
                 q.orderBy(true, false, CaseInfo::getCreatedAt);
@@ -439,6 +445,7 @@ public class CaseService {
         vo.setOccurTime(c.getOccurTime());
         vo.setUndertakeUnit(c.getUndertakeUnit());
         vo.setAcceptTime(c.getAcceptTime());
+        vo.setCaseTime(c.getCaseTime());
         vo.setPunishTime(c.getPunishTime());
         vo.setExternalId(c.getExternalId());
         vo.setCreatedByName(userName(c.getCreatedBy()));
@@ -594,6 +601,14 @@ public class CaseService {
         c.setCaseType(req.getCaseType());
         c.setCategory(req.getCategory());
         c.setFilingNo(req.getFilingNo());
+        // 案件时间（2026-10-18）：已受案的以受案时间为准（导入时写入 accept_time），
+        // 未受案的手工警情取报案时间，两者都汇总到这里，列表只读这一列。
+        // 编辑时前端没传 reportTime 就不动——updateById 跳过 null，不会把已确认的时间抹成"现在"
+        if (isNew) {
+            c.setCaseTime(req.getReportTime() != null ? req.getReportTime() : now);
+        } else if (req.getReportTime() != null) {
+            c.setCaseTime(req.getReportTime());
+        }
         // 调解书（mediationNo）2026-10-09 起不再由建案表单填写：这里**干脆不写**，
         // 免得表单一去掉该字段、保存时就把历史值抹成 null。列保留只为看得见老数据。
         c.setDescription(req.getDescription());
@@ -890,6 +905,8 @@ public class CaseService {
         c.setOccurTime(occurTime);
         c.setUndertakeUnit(row.getUndertakeUnit());
         c.setAcceptTime(acceptTime);
+        // 案件时间（2026-10-18）：导入件一律以受案时间为准，缺失时退回导入时刻
+        c.setCaseTime(acceptTime != null ? acceptTime : LocalDateTime.now());
         c.setPunishTime(punishTime);
         c.setExternalId(row.getId());
         c.setDescription(row.getDescription());
@@ -1116,7 +1133,9 @@ public class CaseService {
 
     private String generateCaseNo() {
         String day = LocalDate.now().format(DAY);
-        String prefix = "CA-" + day + "-";
+        // 2026-10-18：不再用「CA-」前缀（该编号无业务含义，且列表已改为展示案件时间）。
+        // 改成「日期-流水」，仅用于满足唯一约束与内部检索。
+        String prefix = day + "-";
         // 取当天编号最大值 +1，而不是 count+1：删除案件后 count 变小会导致编号复用
         List<CaseInfo> latest = caseMapper.selectList(new LambdaQueryWrapper<CaseInfo>()
                 .likeRight(CaseInfo::getCaseNo, prefix)

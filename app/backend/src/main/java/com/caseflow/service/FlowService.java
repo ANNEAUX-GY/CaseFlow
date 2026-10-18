@@ -10,6 +10,7 @@ import com.caseflow.mapper.CaseDeadlineStateMapper;
 import com.caseflow.mapper.CaseTodoMapper;
 import com.caseflow.security.AuthContext;
 import com.caseflow.support.LogService;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -47,6 +48,17 @@ public class FlowService {
     private CaseDeadlineStateMapper deadlineStateMapper;
     @Resource
     private LogService logService;
+
+    /**
+     * 领导意见服务。
+     *
+     * <p>退回动作要「提一条意见」才能让民警真的收到一件要办的事，
+     * 但 OpinionService → StaffTodoService → FlowService（stampStage）本身已构成一条链，
+     * 这里直接注入会成环，故用 {@link Lazy} 延迟到首次调用再取。
+     */
+    @Resource
+    @Lazy
+    private OpinionService opinionService;
 
     // ------------------------------------------------------------------
     // 进度
@@ -232,6 +244,43 @@ public class FlowService {
                 "流程流转：" + CaseFlowTemplate.stageLabel(stage)
                         + " → " + CaseFlowTemplate.stageLabel(targetStage)
                         + "（动作：" + CaseFlowTemplate.actionLabel(action) + "）");
+    }
+
+    /**
+     * 阶段退回（2026-10-18）：领导看过之后认为本阶段没办到位，不进下一阶段，
+     * 把案子打回让承办人继续补办，并可写下退回意见。
+     *
+     * <p><b>为什么不加「退回」状态字段</b>：待办是意见的唯一载体。退回的真实语义是
+     * 「还有一件具体的事没做」。顺着现有的 意见 → 派生待办 链路走，新待办的
+     * {@code flow_stage} 会被打成本阶段，阶段进度自然从 100% 掉下来，前端也就不再显示
+     * 「待办已办完，确认转入」——不需要第二套状态来表达同一件事，
+     * 退回记录也天然留在意见列表里可追溯。
+     *
+     * @param comment 退回意见（必填）：说清哪里不合格、要补办什么
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void returnBack(Long caseId, String comment) {
+        CaseInfo c = requireCase(caseId);
+        if (!AuthContext.isFullAccess()) {
+            throw new BizException(403, "阶段退回需领导确认");
+        }
+        if (!StringUtils.hasText(comment)) {
+            throw new BizException("请填写退回意见，说明需要补办什么");
+        }
+        String stage = stageOf(c);
+        if (CaseFlowTemplate.STAGE_CLOSED.equals(stage)) {
+            throw new BizException("案件已终结，无法退回");
+        }
+        // 正文带前缀：民警在「我的待办」里一眼能分辨这是被领导打回的，而不是一条普通新任务
+        opinionService.add(caseId, "【阶段退回】" + comment.trim(), null, "A");
+        logService.log("CASE", "FLOW_RETURN", "CASE", caseId,
+                "阶段退回（" + CaseFlowTemplate.stageLabel(stage) + "）：" + abbrev(comment));
+    }
+
+    /** 日志里的意见摘要：超长截断，避免整段退回意见挤占「案件最新一步」。 */
+    private String abbrev(String s) {
+        String t = s == null ? "" : s.trim();
+        return t.length() <= 60 ? t : t.substring(0, 60) + "…";
     }
 
     /**

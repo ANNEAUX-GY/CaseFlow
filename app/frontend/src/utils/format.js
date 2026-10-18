@@ -224,6 +224,18 @@ export function dueDaysText(row) {
   return `${label}剩余 ${row.daysLeft} 天`
 }
 
+/**
+ * 案件时间（2026-10-18）：列表「报案/受案时间」列的唯一文案来源。
+ * 已受案的取受案时间，未受案的手工警情取报案时间——两者后端都已汇总到 caseTime，
+ * 这里优先 acceptTime 是为了让"受案"标签与时间永远对得上。
+ * 后端 LocalDateTime 可能序列化成 2026-10-18T15:30:00，统一成 "2026-10-18 15:30"。
+ */
+export function caseTimeText(row) {
+  const t = row?.acceptTime || row?.caseTime
+  if (!t) return ''
+  return String(t).replace('T', ' ').slice(0, 16)
+}
+
 export function rowClassOf(row) {
   const meta = DUE_META[row.dueLevel] || DUE_META.NONE
   if (['DONE', 'CANCELLED'].includes(row.status)) return ''
