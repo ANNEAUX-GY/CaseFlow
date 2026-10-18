@@ -46,7 +46,7 @@ import java.util.stream.Collectors;
 @Service
 public class TimeNodeService {
 
-    private static final DateTimeFormatter DAY_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    private static final DateTimeFormatter DAY_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
     /**
      * 合法的预设节点类型（与 DictHolder 的 TIME_NODE 字典同步）。

@@ -92,6 +92,7 @@ import { ElMessage } from 'element-plus'
 import { Bell } from '@element-plus/icons-vue'
 import { watchApi } from '../api'
 import { useMyTodoStore } from '../store/myTodo'
+import { dateKeyOf, dayDiffOf, todayKey } from '../utils/format'
 
 const emit = defineEmits(['changed'])
 const router = useRouter()
@@ -103,15 +104,15 @@ const list = ref([])
 const expandedId = ref(null)
 const markingAll = ref(false)
 
-const fmt = (s) => (s ? String(s).replace('T', ' ').slice(0, 16) : '-')
+const fmt = (s) => (dateKeyOf(s) || '-')
 
-/** 紧急性：与意见面板同一套判定（已逾期红 / 3 天内临期橙 / 无期限不显示） */
+/** 紧急性：与意见面板同一套判定（已逾期红 / 3 天内临期橙 / 无期限不显示）。按天比较 */
 const urgencyOf = (o) => {
   if (!o.deadline) return null
-  const dl = new Date(String(o.deadline).replace(' ', 'T'))
-  const now = new Date()
-  if (dl < now) return { key: 'over', label: '已逾期' }
-  if (dl - now < 3 * 864e5) return { key: 'soon', label: '临期' }
+  const d = dayDiffOf(todayKey(), o.deadline)
+  if (d === null) return null
+  if (d < 0) return { key: 'over', label: '已逾期' }
+  if (d <= 3) return { key: 'soon', label: '临期' }
   return null
 }
 

@@ -15,6 +15,7 @@ import com.caseflow.mapper.CaseTodoFeedbackMapper;
 import com.caseflow.mapper.CaseTodoMapper;
 import com.caseflow.mapper.SysUserMapper;
 import com.caseflow.security.AuthContext;
+import com.caseflow.support.DayDate;
 import com.caseflow.support.LogService;
 import com.caseflow.vo.CaseTodoVO;
 import org.springframework.stereotype.Service;
@@ -411,8 +412,10 @@ public class TodoService {
         if (t.getOpinionId() != null) throw new BizException("盯办事项请在意见设置中修改截止时间");
         LocalDateTime deadline = null;
         if (StringUtils.hasText(value)) {
-            try { deadline = LocalDateTime.parse(value.trim().replace(' ', 'T')); }
-            catch (java.time.format.DateTimeParseException e) { throw new BizException("完成时限格式不正确"); }
+            // 精度到天：接受 2026-10-18 / 2026-10-18 18:00 / ISO，统一到当天 23:59:59
+            LocalDateTime parsed = DayDate.parseLenient(value);
+            if (parsed == null) throw new BizException("完成时限格式不正确，应为「2026-10-18」这样的日期");
+            deadline = DayDate.endOfDay(parsed);
         }
         t.setDeadline(deadline);
         t.setUpdatedAt(LocalDateTime.now());

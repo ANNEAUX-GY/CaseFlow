@@ -29,10 +29,9 @@
         <el-date-picker
           v-model="r.deadline"
           :class="c('date')"
-          type="datetime"
+          type="date"
           size="small"
-          format="YYYY-MM-DD HH:mm"
-          value-format="YYYY-MM-DDTHH:mm:ss"
+          value-format="YYYY-MM-DD"
           placeholder="选填"
           :clearable="true"
         />

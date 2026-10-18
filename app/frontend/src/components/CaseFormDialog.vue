@@ -78,11 +78,12 @@
           </el-form-item>
         </el-col>
         <!-- 报案时间（2026-10-18）：手工录入的警情通常还没受案，列表「报案/受案时间」列
-             显示的就是这个时间（已受案的案件以受案时间为准）。留空 = 保存时按当前时间。 -->
+             显示的就是这个时间（已受案的案件以受案时间为准）。留空 = 保存时按今天。
+             精度到天：只选日期，不选时分。 -->
         <el-col v-if="!isEdit" :span="8" :xs="24">
           <el-form-item label="报案时间">
-            <el-date-picker v-model="form.reportTime" type="datetime"
-              value-format="YYYY-MM-DD HH:mm:ss" placeholder="默认当前时间" clearable
+            <el-date-picker v-model="form.reportTime" type="date"
+              value-format="YYYY-MM-DD" placeholder="默认今天" clearable
               style="width: 100%" />
           </el-form-item>
         </el-col>
@@ -332,13 +333,13 @@ const recordRemindDays = (d) => {
   localStorage.setItem(REMIND_USED_KEY, JSON.stringify(usedDays.value))
 }
 
-/** 把行模型转成后端要的形状：日期补 23:59:59、自定义名兜底、剔掉前端键 */
+/** 把行模型转成后端要的形状：只传日期（后端归到当天 23:59:59）、自定义名兜底、剔掉前端键 */
 const buildTimeNodes = () => nodeRows.value
   .filter((r) => r.day)                       // 没选日期的半行跳过，不打断建案
   .map((r) => ({
     nodeKey: r.nodeKey || null,
     nodeName: r.nodeKey ? null : (r.nodeName || '').trim(),
-    nodeTime: `${r.day} 23:59:59`,
+    nodeTime: r.day,
     remindDays: r.remindDays || null
   }))
 

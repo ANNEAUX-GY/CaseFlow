@@ -24,6 +24,7 @@ import com.caseflow.mapper.CaseInfoMapper;
 import com.caseflow.mapper.SysUserMapper;
 import com.caseflow.security.AuthContext;
 import com.caseflow.security.Roles;
+import com.caseflow.support.DayDate;
 import com.caseflow.support.DictHolder;
 import com.caseflow.support.LogService;
 import com.caseflow.vo.AssigneeVO;
@@ -89,13 +90,8 @@ public class CaseService {
      * 只动「时间正好是 00:00:00」的值——历史数据里的 18:00:00 原样保留。
      */
     private LocalDateTime normalizeDeadline(LocalDateTime deadline) {
-        if (deadline == null) {
-            return null;
-        }
-        if (deadline.getHour() == 0 && deadline.getMinute() == 0 && deadline.getSecond() == 0) {
-            return deadline.toLocalDate().atTime(23, 59, 59);
-        }
-        return deadline;
+        // 统一口径见 support/DayDate：按天选的值补成当天 23:59:59，带时分的原样保留
+        return DayDate.endOfDayIfMidnight(deadline);
     }
 
     /**
@@ -424,7 +420,7 @@ public class CaseService {
         vo.setCaseMeasureName(DictHolder.name("CASE_MEASURE", c.getCaseMeasure()));
         vo.setMeasureDate(c.getMeasureDate());
         vo.setDetainDeadline(c.getDetainDeadline());
-        vo.setDetainDeadlineText(c.getDetainDeadline() == null ? null : c.getDetainDeadline().format(FMT));
+        vo.setDetainDeadlineText(c.getDetainDeadline() == null ? null : DayDate.text(c.getDetainDeadline()));
         vo.setDetainDaysLeft(DictHolder.daysLeft(c.getDetainDeadline(), now));
         vo.setInvestigationStatus(c.getInvestigationStatus());
         vo.setInvestigationStatusName(DictHolder.name("INVESTIGATION_STATUS", c.getInvestigationStatus()));
@@ -1332,11 +1328,11 @@ public class CaseService {
         String deadlineText = null;
         if (req.isDeadlineTouched()) {
             LocalDateTime old = c.getDeadline();
-            c.setDeadline(req.getDeadline());
+            c.setDeadline(normalizeDeadline(req.getDeadline()));
             deadlineText = req.getDeadline() == null
                     ? "清除截止期限"
-                    : "截止期限设为 " + req.getDeadline().format(FMT)
-                      + (old == null ? "" : "（原 " + old.format(FMT) + "）");
+                    : "截止期限设为 " + DayDate.text(req.getDeadline())
+                      + (old == null ? "" : "（原 " + DayDate.text(old) + "）");
         }
         caseMapper.updateById(c);
         // updateById 会跳过 null 字段，「清空期限」必须显式写 null

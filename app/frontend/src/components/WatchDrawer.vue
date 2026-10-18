@@ -152,7 +152,7 @@
 
     <!-- 强制措施登记 -->
     <el-dialog v-model="recordDlg.visible" :title="recordDlg.key === 'ARREST_TARGET' ? '领导确定拘捕目标时间' : managerRecordKeys.has(recordDlg.key) ? '确认审核或延长时间' : '录入办理时间'" width="410px" append-to-body>
-      <el-date-picker v-model="recordDlg.at" type="datetime" value-format="YYYY-MM-DD HH:mm:ss" style="width:100%" />
+      <el-date-picker v-model="recordDlg.at" type="date" value-format="YYYY-MM-DD" style="width:100%" />
       <div v-if="recordDlg.key === 'ARREST_TARGET'" class="cf-muted" style="margin-top:8px;font-size:12px">此时间由领导决定；实际执行拘捕后，再登记强制措施及执行日期。</div>
       <template #footer>
         <el-button @click="recordDlg.visible = false">取消</el-button>
@@ -174,7 +174,7 @@
             :disabled="measureDlg.measure === 'NONE'" style="width: 100%" />
         </el-form-item>
         <el-form-item label="期限届满">
-          <el-date-picker v-model="measureDlg.detainDeadline" type="datetime" value-format="YYYY-MM-DD HH:mm:ss"
+          <el-date-picker v-model="measureDlg.detainDeadline" type="date" value-format="YYYY-MM-DD"
             :disabled="measureDlg.measure === 'NONE'" placeholder="留空按默认推算（拘留先3天/逮捕2月/取保1年/监居6月）"
             style="width: 100%" />
         </el-form-item>
@@ -198,7 +198,7 @@ import CaseStageBar from './CaseStageBar.vue'
 import CaseTodoPanel from './CaseTodoPanel.vue'
 import StaffWorkloadDialog from './StaffWorkloadDialog.vue'
 import { useUserStore } from '../store/user'
-import { INVEST_STATUS_META, MEASURE_META, MEASURE_CHOICES, POLICE_GROUP_META, policeGroupLabel } from '../utils/format'
+import { INVEST_STATUS_META, MEASURE_META, MEASURE_CHOICES, POLICE_GROUP_META, policeGroupLabel, dateKeyOf } from '../utils/format'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -294,8 +294,8 @@ const submitApprove = async () => {
 const measureDlg = reactive({ visible: false, measure: 'DETENTION', measureDate: '', detainDeadline: '', comment: '', loading: false })
 const openMeasure = () => {
   measureDlg.measure = detail.value.caseMeasure || 'DETENTION'
-  measureDlg.measureDate = (detail.value.measureDate || '').slice(0, 10)
-  measureDlg.detainDeadline = (detail.value.detainDeadline || '').replace('T', ' ').slice(0, 19)
+  measureDlg.measureDate = dateKeyOf(detail.value.measureDate)
+  measureDlg.detainDeadline = dateKeyOf(detail.value.detainDeadline)
   measureDlg.comment = ''
   measureDlg.visible = true
 }

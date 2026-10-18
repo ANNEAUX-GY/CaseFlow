@@ -81,6 +81,7 @@ import { ElMessage } from 'element-plus'
 import { Bell } from '@element-plus/icons-vue'
 import { notificationApi } from '../api'
 import { useEventStore } from '../store/events'
+import { dateKeyOf } from '../utils/format'
 import { useUserStore } from '../store/user'
 
 const eventStore = useEventStore()
@@ -99,7 +100,7 @@ let unsubscribe = null
 const current = computed(() => (box.value === 'unread' ? unreadList.value : readList.value))
 
 const isRead = (n) => !!n.readAt
-const fmt = (s) => (s ? String(s).replace('T', ' ').slice(0, 16) : '-')
+const fmt = (s) => (dateKeyOf(s) || '-')
 
 /** QUESTION 仅作历史信件的显示兜底（疑问功能已下线，不会再产生新的疑问信件） */
 const typeLabel = (t) => ({

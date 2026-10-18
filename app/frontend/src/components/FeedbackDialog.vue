@@ -34,10 +34,10 @@
         执行记录<span class="cf-muted">（记录在哪个系统做了什么操作，选填）</span>
       </div>
       <div class="cf-fb__declare-tip">
-        请输入：于<el-date-picker v-model="declareTime" type="datetime" size="small"
-          format="YYYY-MM-DD HH:mm:ss" value-format="YYYY-MM-DD HH:mm:ss"
-          placeholder="点击选择时间" :clearable="false"
-          class="cf-fb__slot-time" style="width: 190px" />（不选则默认当前时间，精确到秒）在
+        请输入：于<el-date-picker v-model="declareTime" type="date" size="small"
+          value-format="YYYY-MM-DD"
+          placeholder="点击选择日期" :clearable="false"
+          class="cf-fb__slot-time" style="width: 160px" />（不选则默认今天）在
         <el-input v-model="declarePlatform" class="cf-fb__slot-input" size="small"
           placeholder="系统/平台名称，如：一体化办案平台" maxlength="100" style="width: 180px" /> 执行了
         <el-input v-model="declareFile" class="cf-fb__slot-input" size="small"
@@ -77,6 +77,7 @@
  */
 import { computed, reactive, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import { dateKeyOf } from '../utils/format'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -129,11 +130,8 @@ const declareFile = computed({
   set: (v) => { state.declareFile = v }
 })
 
-const pad = (n) => String(n).padStart(2, '0')
-const nowText = () => {
-  const d = new Date()
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
-}
+// 精度到天：执行记录只记到日期
+const nowText = () => dateKeyOf(new Date())
 
 // 打开时重置：新建则状态取 defaultStatus、说明留空、声明时间默认当前；
 // 修改则回填 initial 里的四项。

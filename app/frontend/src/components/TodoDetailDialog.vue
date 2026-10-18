@@ -217,6 +217,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { todoApi } from '../api'
 import { useUserStore } from '../store/user'
 import FeedbackDialog from './FeedbackDialog.vue'
+import { dateKeyOf } from '../utils/format'
 
 const emit = defineEmits(['changed'])
 
@@ -242,7 +243,7 @@ const STATUS_META = {
   PENDING: { label: '待办', type: 'info' }
 }
 
-const fmt = (s) => (s ? String(s).replace('T', ' ').slice(0, 16) : '-')
+const fmt = (s) => (dateKeyOf(s) || '-')
 const detail = computed(() => data.value || {})
 const feedbacks = computed(() => detail.value.feedbacks || [])
 const subtasks = computed(() => detail.value.subtasks || [])

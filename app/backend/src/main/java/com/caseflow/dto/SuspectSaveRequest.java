@@ -1,6 +1,5 @@
 package com.caseflow.dto;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -35,11 +34,9 @@ public class SuspectSaveRequest {
     private String measure;
 
     /** 本次措施开始时间 */
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private LocalDateTime measureStartAt;
 
     /** 下一节点：措施期满 / 结束时间 */
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private LocalDateTime measureEndAt;
 
     private String remark;

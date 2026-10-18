@@ -11,6 +11,7 @@ import com.caseflow.mapper.CaseInfoMapper;
 import com.caseflow.mapper.CaseLeaderOpinionMapper;
 import com.caseflow.mapper.CaseOpinionReadMapper;
 import com.caseflow.security.AuthContext;
+import com.caseflow.support.DayDate;
 import com.caseflow.support.LogService;
 import com.caseflow.vo.OpinionInboxVO;
 import org.springframework.stereotype.Service;
@@ -193,7 +194,7 @@ public class OpinionService {
 
         logService.log("CASE", "OPINION_ADD", "CASE", caseId,
       "提出意见：" + abbrev(o.getContent())
-      + (o.getDeadline() != null ? "（截止 " + o.getDeadline() + "）" : "")
+      + (o.getDeadline() != null ? "（截止 " + DayDate.text(o.getDeadline()) + "）" : "")
         + "（重要性 " + o.getImportance() + "）");
 
         afterInsert(o);
@@ -353,10 +354,10 @@ public class OpinionService {
 
         logService.log("CASE", "OPINION_UPDATE_META", "CASE", o.getCaseId(),
                 "修改意见设置[" + importanceName(o.getImportance())
-                        + (o.getDeadline() != null ? "，截止 " + o.getDeadline() : "，清除截止时间") + "]：" + abbrev(o.getContent()));
+                        + (o.getDeadline() != null ? "，截止 " + DayDate.text(o.getDeadline()) : "，清除截止时间") + "]：" + abbrev(o.getContent()));
         notifyAssignees(o.getCaseId(), "领导调整了意见「" + abbrev(o.getContent()) + "」的设置（"
                 + importanceName(o.getImportance())
-                + (o.getDeadline() != null ? "，截止 " + o.getDeadline() : "，无截止时间") + "）");
+                + (o.getDeadline() != null ? "，截止 " + DayDate.text(o.getDeadline()) : "，无截止时间") + "）");
         return o;
     }
 
@@ -365,15 +366,12 @@ public class OpinionService {
         if (!StringUtils.hasText(s)) {
             return null;
         }
-        String t = s.trim().replace('T', ' ').replace('/', '-');
-        if (t.length() > 19) {
-            t = t.substring(0, 19);
+        // 精度到天：2026-10-18 / 2026-10-18 18:00 / ISO 都收，统一补成当天 23:59:59
+        LocalDateTime t = DayDate.parseLenient(s);
+        if (t == null) {
+            throw new BizException("截止时间格式不正确，应为「2026-10-18」这样的日期");
         }
-        try {
-            return LocalDateTime.parse(t.replace(' ', 'T'));
-        } catch (Exception e) {
-            throw new BizException("截止时间格式不正确，应为「2026-10-05 18:00」这样的格式");
-        }
+        return DayDate.endOfDay(t);
     }
 
     /** 重要性归一：空 → C（一般），非法值也回落 C，绝不写脏值进库。 */

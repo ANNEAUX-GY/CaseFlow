@@ -90,9 +90,10 @@ const userName = computed(() =>
   userStore.userInfo?.displayName || userStore.userInfo?.username || '')
 
 const pad = (n) => String(n).padStart(2, '0')
+// 精度到天：只显示日期，不再显示时分
 const nowStr = () => {
   const d = new Date()
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}`
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
 const isAllZero = computed(() =>

@@ -1,6 +1,5 @@
 package com.caseflow.dto;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -28,8 +27,7 @@ public class TimeNodeSaveRequest {
     /** 节点名称：选了预设类型时可留空（会自动用预设名），自定义时必填 */
     private String nodeName;
 
-    /** 节点日期。前端按天选后补 23:59:59；后端也兜一层（见 TimeNodeService#normalizeTime） */
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
+    /** 节点日期。前端按天选，后端统一归一到当天 23:59:59（见 TimeNodeService#normalizeTime） */
     private LocalDateTime nodeTime;
 
     /** 该节点提前多少天提醒（NULL / 0 / 负数 = 不提醒） */

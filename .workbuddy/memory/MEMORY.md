@@ -73,7 +73,15 @@
   「全部」卡且不显示案件数。「未分类」=`category=NONE`（IS NULL OR 空串）。
   已知坑：NONE 卡片进来会被级联反投影清空（CaseList/WatchView 均已修）。
 - **办案组别**：`org_employee.police_group` 为权威，NULL/非法归一「不限」，前后端口径必须一致。
-- **案件时间**（2026-10-18）：列表展示与默认排序统一读 `case_info.case_time`
+- **时间精度一律到天**（2026-10-18 定，勿回退）：业务时间只有 `yyyy-MM-dd`。
+  后端出入参由 `config/JacksonConfig` 统一收口（出参截日、入参宽松归零），
+  期限类用 `support/DayDate.endOfDayIfMidnight` 落在当天 **23:59:59**
+  （压成 00:00 会让「今天到期」被判逾期）；前端一律 `utils/format.js#dateKeyOf`
+  / `dayDiffOf`（**别用 `new Date('yyyy-MM-dd')`**，它按 UTC 午夜算，+8 区偏 8 小时），
+  选择器只写 `type="date"` + `value-format="YYYY-MM-DD"`。
+  **新增时间字段/控件不要再写 `@JsonFormat`**——注解优先于全局配置，写死时分秒就收不了纯日期。
+  唯一例外：操作日志（`OperationLogService`）保留精确到秒，属审计。
+- **案件时间**：列表展示与默认排序统一读 `case_info.case_time`
   （导入件=受案时间、手工建案=报案时间，存量回填 `COALESCE(accept_time, created_at)`）。
   前端文案走 `utils/format.js#caseTimeText`；`case_no` 自动生成格式为 `yyyyMMdd-NNN`（已去 CA- 前缀）。
 - **流程流转**：办案阶段改由**待办驱动**（FlowPanel 已删，前端 `CaseStageBar.vue`）；

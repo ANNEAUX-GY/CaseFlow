@@ -146,9 +146,9 @@
                      虚线框也去掉，不再像一块独立区域。 -->
                 <div v-if="isAdmin && t.opinionId && t.status !== 'DONE'" class="cf-todo__meta-edit" @click.stop>
                   <span class="cf-todo__meta-edit-label">意见设置</span>
-                  <el-date-picker :model-value="t.opinionDeadline || ''" type="datetime" size="small"
-                    format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DDTHH:mm:ss" placeholder="设截止时间"
-                    :clearable="true" :disabled="!!savingOpinionMetaIds[t.opinionId]" style="width: 158px"
+                  <el-date-picker :model-value="dateKeyOf(t.opinionDeadline)" type="date" size="small"
+                    value-format="YYYY-MM-DD" placeholder="设截止日期"
+                    :clearable="true" :disabled="!!savingOpinionMetaIds[t.opinionId]" style="width: 146px"
                     @change="(v) => saveOpinionMeta(t, { deadline: v || '' })" />
                   <div class="cf-todo__grade" role="group" aria-label="待办重要程度">
                     <button v-for="grade in ['A', 'B', 'C']" :key="grade" type="button"
@@ -159,9 +159,9 @@
                 </div>
                 <div v-else-if="isAdmin && !t.opinionId && t.status !== 'DONE'" class="cf-todo__meta-edit" @click.stop>
                   <span class="cf-todo__meta-edit-label">完成时限</span>
-                  <el-date-picker :model-value="t.deadline || ''" type="datetime" size="small"
-                    format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DDTHH:mm:ss" placeholder="单独设完成时限"
-                    clearable style="width: 158px" @change="(v) => saveCustomDeadline(t, v || '')" />
+                  <el-date-picker :model-value="dateKeyOf(t.deadline)" type="date" size="small"
+                    value-format="YYYY-MM-DD" placeholder="单独设完成日期"
+                    clearable style="width: 146px" @change="(v) => saveCustomDeadline(t, v || '')" />
                 </div>
               </div>
 
@@ -368,7 +368,8 @@ import {
   URGENCY_META,
   importanceOf,
   urgencyOf as urgencyOfFn,
-  deadlineTextOf as deadlineTextOfFn
+  deadlineTextOf as deadlineTextOfFn,
+  dateKeyOf
 } from '../utils/format'
 import TodoDetailDialog from './TodoDetailDialog.vue'
 import FeedbackDialog from './FeedbackDialog.vue'
@@ -431,7 +432,7 @@ const dismissGuide = () => {
   try { sessionStorage.setItem(GUIDE_KEY, '1') } catch (e) { /* 忽略 */ }
 }
 
-const fmtTime = (s) => (s ? String(s).replace('T', ' ').slice(0, 16) : '-')
+const fmtTime = (s) => (dateKeyOf(s) || '-')
 
 /**
  * 勾选前置条件（与后端一致）：

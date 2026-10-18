@@ -1,6 +1,5 @@
 package com.caseflow.dto;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 
 import javax.validation.constraints.NotBlank;
@@ -38,7 +37,6 @@ public class CaseSaveRequest {
      * <p>未受案的警情在列表「案件时间」列展示的就是它；已受案的案件以受案时间为准，
      * 两个时间最终都汇总到 {@code case_info.case_time}，列表只读那一列。
      */
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private LocalDateTime reportTime;
 
     /**
@@ -59,7 +57,6 @@ public class CaseSaveRequest {
      * 截止期限。前端按天选择后补上 23:59:59 再传；
      * 后端也兜一层（时间正好是 00:00:00 时按当天 23:59:59 存），见 CaseService#normalizeDeadline。
      */
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private LocalDateTime deadline;
 
     /** 期限节点名称（自己填，如：受案时间 / 变更羁押期限时间）；留空=默认叫「截止期限」 */

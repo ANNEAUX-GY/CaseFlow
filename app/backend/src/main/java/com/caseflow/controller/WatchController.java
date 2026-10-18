@@ -12,6 +12,7 @@ import com.caseflow.security.FullAccessOnly;
 import com.caseflow.service.ApprovalService;
 import com.caseflow.service.CaseDeadlineService;
 import com.caseflow.service.FlowService;
+import com.caseflow.support.DayDate;
 import com.caseflow.service.OpinionService;
 import com.caseflow.service.PlanService;
 import com.caseflow.service.ProgressCommentService;
@@ -373,19 +374,8 @@ public class WatchController {
         return o == null ? null : String.valueOf(o);
     }
 
-    /** 前端传 "yyyy-MM-dd HH:mm:ss" 或 "yyyy-MM-dd" 均可 */
+    /** 前端传 "yyyy-MM-dd" / "yyyy-MM-dd HH:mm:ss" / ISO 均可（精度到天，见 DayDate） */
     private LocalDateTime date(Object o) {
-        if (o == null || String.valueOf(o).trim().isEmpty()) {
-            return null;
-        }
-        String s = String.valueOf(o).trim();
-        try {
-            if (s.length() == 10) {
-                return LocalDateTime.parse(s + "T00:00:00");
-            }
-            return LocalDateTime.parse(s.replace(" ", "T"));
-        } catch (Exception e) {
-            return null;
-        }
+        return DayDate.parseLenient(o == null ? null : String.valueOf(o));
     }
 }

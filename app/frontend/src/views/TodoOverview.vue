@@ -123,6 +123,7 @@ import { fileApi, todoApi } from '../api'
 import { withCaseType } from '../store/caseType'
 import { useUserStore } from '../store/user'
 import { useRouter } from 'vue-router'
+import { dateKeyOf } from '../utils/format'
 import FocusStar from '../components/FocusStar.vue'
 import FocusOnlyToggle from '../components/FocusOnlyToggle.vue'
 
@@ -148,7 +149,7 @@ const filtered = computed(() => {
   )
 })
 
-const fmtTime = (s) => (s ? String(s).replace('T', ' ').slice(0, 16) : '-')
+const fmtTime = (s) => (dateKeyOf(s) || '-')
 
 /** 打开案件详情，并把对应待办作为闪烁定位锚点 */
 const openTodo = (row) => {

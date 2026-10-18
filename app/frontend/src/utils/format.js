@@ -1,3 +1,48 @@
+/**
+ * 全局时间精度：只到「天」（2026-10-18 用户要求）。
+ *
+ * <p>后端已统一：出参 `yyyy-MM-dd`，入参任意写法都归到当天。
+ * 前端这里只做两件事：
+ * <ol>
+ *   <li>{@link dateKeyOf} —— 把任何写法（T 分隔、带时分秒、ISO）压成 `yyyy-MM-dd`；</li>
+ *   <li>{@link dayDiffOf} —— 按<b>本地日历日</b>算天数差，绕开 `new Date('2026-10-18')`
+ *       被当成 UTC 午夜、在 +8 时区偏 8 小时的老坑。</li>
+ * </ol>
+ */
+export function dateKeyOf(v) {
+  if (v === null || v === undefined || v === '') return ''
+  // 已经是字符串就只取前 10 位（日期永远在最前面）
+  if (typeof v === 'string') {
+    const s = v.trim()
+    if (s.length >= 10) return s.slice(0, 10).replace(/\//g, '-')
+    const d = new Date(s)
+    if (Number.isNaN(d.getTime())) return ''
+    return ymd(d)
+  }
+  const d = v instanceof Date ? v : new Date(v)
+  return Number.isNaN(d.getTime()) ? '' : ymd(d)
+}
+
+function ymd(d) {
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
+
+/** 今天的 yyyy-MM-dd */
+export const todayKey = () => ymd(new Date())
+
+/** 两个日期相差几天（to - from）。按 UTC 天数算，不受时区与时分秒影响 */
+export function dayDiffOf(from, to) {
+  const a = dateKeyOf(from)
+  const b = dateKeyOf(to)
+  if (!a || !b) return null
+  const ms = (k) => {
+    const [y, m, d] = k.split('-').map(Number)
+    return Date.UTC(y, m - 1, d)
+  }
+  return Math.round((ms(b) - ms(a)) / 86400000)
+}
+
 /** 到期等级 -> 展示文本 / 颜色 / 行样式 */
 export const DUE_META = {
   OVERDUE: { text: '已逾期', color: 'danger', rowClass: 'cf-row--overdue' },
@@ -89,10 +134,13 @@ export function importanceOf(row) {
 }
 
 /**
- * 紧急性由「截止时间 + 当前时刻」实时算出，**不落库**。
+ * 紧急性由「截止日期 + 今天」实时算出，**不落库**。
  * 无截止时间 → 正常。
- * 阈值 URGENT_HOURS：距截止不足该小时数视为临期。
+ * 阈值 URGENT_DAYS：距今不超过该自然日数视为临期（原 48 小时按天折算 = 2 天）。
  */
+export const URGENT_DAYS = 2
+
+/** @deprecated 精度已到天，改用 {@link URGENT_DAYS}；保留导出仅为兼容旧引用 */
 export const URGENT_HOURS = 48
 
 export const URGENCY_META = {
@@ -102,25 +150,22 @@ export const URGENCY_META = {
 }
 
 /**
- * 判定单条意见的紧急性。
- * @param {string} deadline 后端返回的 'YYYY-MM-DDTHH:mm:ss' 或 'YYYY-MM-DD HH:mm:ss'
+ * 判定单条意见的紧急性（按天）。
+ * @param {string} deadline 后端返回的 'yyyy-MM-dd'
  * @returns 'OVERDUE' | 'URGENT' | 'NORMAL'
  */
 export function urgencyOf(deadline) {
-  if (!deadline) return 'NORMAL'
-  // 兼容 T 分隔与空格分隔；Safari 不认 'YYYY-MM-DD HH:mm:ss'，统一换成 T
-  const d = new Date(String(deadline).replace(' ', 'T'))
-  if (Number.isNaN(d.getTime())) return 'NORMAL'
-  const diffH = (d.getTime() - Date.now()) / 3600000
-  if (diffH < 0) return 'OVERDUE'
-  if (diffH <= URGENT_HOURS) return 'URGENT'
+  const d = dayDiffOf(todayKey(), deadline)
+  if (d === null) return 'NORMAL'
+  if (d < 0) return 'OVERDUE'
+  // 原来是 48 小时；精度到天后等价于「今天 + 明后天」，即 2 个自然日
+  if (d <= URGENT_DAYS) return 'URGENT'
   return 'NORMAL'
 }
 
 /** 截止时间展示文案；无值返回空串（调用方自行决定是否显示） */
 export function deadlineTextOf(deadline) {
-  if (!deadline) return ''
-  return String(deadline).replace('T', ' ').slice(0, 16)
+  return dateKeyOf(deadline)
 }
 
 /**
@@ -228,12 +273,10 @@ export function dueDaysText(row) {
  * 案件时间（2026-10-18）：列表「报案/受案时间」列的唯一文案来源。
  * 已受案的取受案时间，未受案的手工警情取报案时间——两者后端都已汇总到 caseTime，
  * 这里优先 acceptTime 是为了让"受案"标签与时间永远对得上。
- * 后端 LocalDateTime 可能序列化成 2026-10-18T15:30:00，统一成 "2026-10-18 15:30"。
+ * 精度到天：统一成 "2026-10-18"。
  */
 export function caseTimeText(row) {
-  const t = row?.acceptTime || row?.caseTime
-  if (!t) return ''
-  return String(t).replace('T', ' ').slice(0, 16)
+  return dateKeyOf(row?.acceptTime || row?.caseTime)
 }
 
 export function rowClassOf(row) {
@@ -308,11 +351,12 @@ export function todoImportanceOf(row) {
   return TODO_IMPORTANCE_META[v] ? v : 'NORMAL'
 }
 
-/** 距截止天数 → 展示文案。负数=已超期，0=今天到期 */
+/** 距截止天数 → 展示文案。负数=已超期，0=今天到期（日期只到日，显示 MM-DD） */
 export function todoDueTextOf(row) {
   if (!row || !row.deadline) return { text: '', cls: '', overdue: false }
   const d = row.daysLeft
-  const dt = String(row.deadline).replace('T', ' ').slice(5, 16)
+  const key = dateKeyOf(row.deadline)
+  const dt = key ? key.slice(5) : ''
   if (d == null) return { text: dt, cls: '', overdue: false }
   if (d < 0) return { text: dt + '（已超期 ' + (-d) + ' 天）', cls: 'is-overdue', overdue: true }
   if (d === 0) return { text: dt + '（今天到期）', cls: 'is-today', overdue: false }

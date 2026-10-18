@@ -166,8 +166,8 @@
                     {{ row.measureName || (MEASURE_META[row.measure] || {}).label || row.measure }}
                   </el-tag>
                   <div class="cf-muted" style="font-size: 12px; line-height: 1.5">
-                    {{ (row.measureStartAt || '').replace('T', ' ').slice(0, 16) }}
-                    <template v-if="row.measureEndAt"> → {{ row.measureEndAt.replace('T', ' ').slice(0, 16) }}</template>
+                    {{ dateKeyOf(row.measureStartAt) }}
+                    <template v-if="row.measureEndAt"> → {{ dateKeyOf(row.measureEndAt) }}</template>
                   </div>
                 </template>
                 <span v-else class="cf-muted">—</span>
@@ -260,7 +260,7 @@
               <div v-for="cmt in (commentsByLog[p.id] || [])" :key="cmt.id" class="cf-pcomment">
                 <div class="cf-pcomment__head">
                   <span class="cf-pcomment__author">{{ cmt.creatorName }}</span>
-                  <span class="cf-muted">{{ (cmt.createdAt || '').slice(0, 16) }} 批注</span>
+                  <span class="cf-muted">{{ dateKeyOf(cmt.createdAt) }} 批注</span>
                   <span class="cf-spacer"></span>
                   <template v-if="canManage">
                     <el-button link type="primary" size="small" @click="editComment(cmt)">编辑</el-button>
@@ -269,7 +269,7 @@
                 </div>
                 <div class="cf-pcomment__body">{{ cmt.content }}</div>
                 <div v-if="cmt.updaterName" class="cf-muted" style="font-size: 12px; margin-top: 2px">
-                  最后编辑：{{ cmt.updaterName }} · {{ (cmt.updatedAt || '').slice(0, 16) }}
+                  最后编辑：{{ cmt.updaterName }} · {{ dateKeyOf(cmt.updatedAt) }}
                 </div>
               </div>
 
@@ -407,15 +407,15 @@
       <el-row v-if="suspectForm.measure" :gutter="12">
         <el-col :span="12" :xs="24">
           <el-form-item label="措施开始" required>
-            <el-date-picker v-model="suspectForm.measureStartAt" type="datetime"
-              format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DD HH:mm:ss"
+            <el-date-picker v-model="suspectForm.measureStartAt" type="date"
+              value-format="YYYY-MM-DD"
               placeholder="必填" style="width: 100%" />
           </el-form-item>
         </el-col>
         <el-col :span="12" :xs="24">
           <el-form-item label="措施结束" required>
-            <el-date-picker v-model="suspectForm.measureEndAt" type="datetime"
-              format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DD HH:mm:ss"
+            <el-date-picker v-model="suspectForm.measureEndAt" type="date"
+              value-format="YYYY-MM-DD"
               placeholder="下一节点，必填" style="width: 100%" />
           </el-form-item>
         </el-col>
@@ -444,7 +444,7 @@ import CaseFormDialog from './CaseFormDialog.vue'
 import FeedbackDialog from './FeedbackDialog.vue'
 import FocusStar from './FocusStar.vue'
 import { STATUS_META, PRIORITY_META, SOURCE_META, DUE_META, CASE_TYPE_META, MEASURE_META, MEASURE_CHOICES,
-  dueText, deadlineTextOf, TIME_NODE_PRESETS, REMIND_DAY_PRESETS } from '../utils/format'
+  dueText, deadlineTextOf, dateKeyOf, TIME_NODE_PRESETS, REMIND_DAY_PRESETS } from '../utils/format'
 import { useUserStore } from '../store/user'
 import { useEventStore } from '../store/events'
 
@@ -746,7 +746,7 @@ const removeSuspect = async (row) => {
 // ---- 重要时间节点（2026-10-13）----
 const nodeVisible = ref(false)
 const nodeSaving = ref(false)
-/** 日期单独一个 ref（type=date），提交时补 23:59:59 */
+/** 日期单独一个 ref（type=date），只传日期，后端归到当天 23:59:59 */
 const nodeDay = ref('')
 const emptyNode = () => ({ id: null, nodeKey: '', nodeName: '', remindDays: null, remark: '' })
 const nodeForm = ref(emptyNode())
@@ -772,11 +772,11 @@ const submitNode = async () => {
   }
   nodeSaving.value = true
   try {
-    // 按天选要落在当天 23:59:59，否则当天 00:00 就被算成"已逾期"
+    // 只传日期：后端统一归到当天 23:59:59（见 DayDate#endOfDayIfMidnight）
     const payload = {
       nodeKey: nodeForm.value.nodeKey || null,
       nodeName: nodeForm.value.nodeKey ? null : (nodeForm.value.nodeName || '').trim(),
-      nodeTime: `${nodeDay.value} 23:59:59`,
+      nodeTime: nodeDay.value,
       remindDays: nodeForm.value.remindDays || null,
       remark: nodeForm.value.remark || null
     }

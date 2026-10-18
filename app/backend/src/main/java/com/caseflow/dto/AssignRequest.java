@@ -1,6 +1,5 @@
 package com.caseflow.dto;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -26,7 +25,6 @@ public class AssignRequest {
      * 指派时一并设定 / 调整截止期限（选填）。
      * 传 null 表示不改；传空字符串表示清空期限。
      */
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private LocalDateTime deadline;
 
     /** 前端用：是否显式提交过 deadline 字段（用于区分「不改」与「清空」） */

@@ -130,7 +130,7 @@ const visible = ref(false)
 const note = ref('')
 const ownerId = ref(null)
 const memberIds = ref([])
-/** 期限按天选择（提交时补 23:59:59）；原值单独存一份用来判断"有没有改过" */
+/** 期限按天选择（只传日期，后端归到当天 23:59:59）；原值单独存一份用来判断"有没有改过" */
 const deadlineDay = ref('')
 const originDeadline = ref(null)
 const loading = ref(false)
@@ -198,9 +198,9 @@ const submit = async () => {
       todos
     }
     // 只有改过期限才提交，避免误清空。
-    // 比较的是「日期部分」：库里带时分，而选择框只给到天，
-    // 不切片的话每次打开都会被当成"改过了"，白白把期限重写成 23:59:59。
-    const next = deadlineDay.value ? `${deadlineDay.value} 23:59:59` : null
+    // 精度到天（2026-10-18）：只传日期，后端统一归到当天 23:59:59（DayDate#endOfDayIfMidnight）。
+    // 比较的仍是「日期部分」，否则每次打开都会被当成"改过了"。
+    const next = deadlineDay.value || null
     const originDay = (originDeadline.value || '').slice(0, 10)
     if (deadlineDay.value !== originDay) {
       payload.deadline = next
