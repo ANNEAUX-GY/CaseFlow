@@ -26,6 +26,15 @@ public class CaseSuspect implements Serializable {
     private String idCard;
     private String phone;
     private String address;
+    /**
+     * 当前强制措施（2026-10-18）：NONE/DETENTION/ARREST/BAIL/RESIDENCE/SUMMONS。
+     * 选了具体措施时，下面两个时间必须同时填写。
+     */
+    private String measure;
+    /** 本次措施开始时间 */
+    private LocalDateTime measureStartAt;
+    /** 下一节点：措施期满 / 结束时间 */
+    private LocalDateTime measureEndAt;
     private String remark;
     private Long createdBy;
     private LocalDateTime createdAt;

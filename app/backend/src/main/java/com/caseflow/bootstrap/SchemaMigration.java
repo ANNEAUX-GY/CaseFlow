@@ -164,6 +164,10 @@ public class SchemaMigration implements ApplicationRunner {
             // 案件时间（2026-10-18）：列表「案件时间」列与排序的权威列。
             // 已受案取 accept_time、未受案取报案时间；存量行由 backfillCaseTime 回填。
             {"case_info", "case_time", "DATETIME NULL"},
+            // 嫌疑人强制措施（2026-10-18）：单人单措施，选了措施就必须有起止时间
+            {"case_suspect", "measure", "VARCHAR(16) NULL"},
+            {"case_suspect", "measure_start_at", "DATETIME NULL"},
+            {"case_suspect", "measure_end_at", "DATETIME NULL"},
             {"case_info", "punish_time", "DATETIME NULL"},
             {"case_info", "external_id", "VARCHAR(32) NULL"},
             // 老库的 case_deadline_state 可能建于行政/传讯节点加入之前；逐列补齐。

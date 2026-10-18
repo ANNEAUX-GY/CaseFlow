@@ -266,6 +266,10 @@ CREATE TABLE IF NOT EXISTS case_suspect (
     id_card       VARCHAR(32)  DEFAULT NULL COMMENT '身份证号',
     phone         VARCHAR(32)  DEFAULT NULL COMMENT '联系电话',
     address       VARCHAR(255) DEFAULT NULL COMMENT '住址',
+    -- 嫌疑人强制措施（2026-10-18）：单人单措施，与案件级 case_measure 分开记
+    measure       VARCHAR(16)  DEFAULT NULL COMMENT '当前强制措施：NONE/DETENTION拘留/ARREST逮捕/BAIL取保候审/RESIDENCE监视居住/SUMMONS拘传',
+    measure_start_at DATETIME  DEFAULT NULL COMMENT '本次措施开始时间（选了措施则必填）',
+    measure_end_at   DATETIME  DEFAULT NULL COMMENT '下一节点：措施期满/结束时间（选了措施则必填）',
     remark        VARCHAR(512) DEFAULT NULL COMMENT '备注',
     created_by    BIGINT       DEFAULT NULL COMMENT '录入人',
     created_at    DATETIME     DEFAULT CURRENT_TIMESTAMP COMMENT '录入时间',

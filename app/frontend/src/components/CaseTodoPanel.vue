@@ -140,6 +140,29 @@
                     <el-icon><InfoFilled /></el-icon>{{ blockReason(t) || '提交一条反馈说明后即可勾选完成' }}
                   </span>
                 </template>
+
+                <!-- 管理层调整意见截止时间与重要性（2026-10-18 紧凑化）：
+                     原来单独占一行，把每张卡抬高 34px；并到信息行右侧后卡片只由内容撑高，
+                     虚线框也去掉，不再像一块独立区域。 -->
+                <div v-if="isAdmin && t.opinionId && t.status !== 'DONE'" class="cf-todo__meta-edit" @click.stop>
+                  <span class="cf-todo__meta-edit-label">意见设置</span>
+                  <el-date-picker :model-value="t.opinionDeadline || ''" type="datetime" size="small"
+                    format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DDTHH:mm:ss" placeholder="设截止时间"
+                    :clearable="true" :disabled="!!savingOpinionMetaIds[t.opinionId]" style="width: 158px"
+                    @change="(v) => saveOpinionMeta(t, { deadline: v || '' })" />
+                  <div class="cf-todo__grade" role="group" aria-label="待办重要程度">
+                    <button v-for="grade in ['A', 'B', 'C']" :key="grade" type="button"
+                      class="cf-todo__grade-button" :class="['is-' + grade.toLowerCase(), { 'is-active': displayImpOf(t) === grade }]"
+                      :aria-pressed="displayImpOf(t) === grade"
+                      @click.stop="saveOpinionMeta(t, { importance: grade })">{{ grade }}</button>
+                  </div>
+                </div>
+                <div v-else-if="isAdmin && !t.opinionId && t.status !== 'DONE'" class="cf-todo__meta-edit" @click.stop>
+                  <span class="cf-todo__meta-edit-label">完成时限</span>
+                  <el-date-picker :model-value="t.deadline || ''" type="datetime" size="small"
+                    format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DDTHH:mm:ss" placeholder="单独设完成时限"
+                    clearable style="width: 158px" @change="(v) => saveCustomDeadline(t, v || '')" />
+                </div>
               </div>
 
               <!-- 子任务入口：有子任务才显示，点开就地展开，不用进弹窗 -->
@@ -189,30 +212,12 @@
                 </template>
               </div>
 
-              <!-- 管理层就地调整意见的截止时间与重要性（同步回意见） -->
-              <div v-if="isAdmin && t.opinionId && t.status !== 'DONE'" class="cf-todo__meta-edit" @click.stop>
-                <span class="cf-todo__meta-edit-label">意见设置</span>
-                <el-date-picker :model-value="t.opinionDeadline || ''" type="datetime" size="small"
-                  format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DDTHH:mm:ss" placeholder="设截止时间"
-                  :clearable="true" :disabled="!!savingOpinionMetaIds[t.opinionId]" style="width: 170px"
-                  @change="(v) => saveOpinionMeta(t, { deadline: v || '' })" />
-                <div class="cf-todo__grade" role="group" aria-label="待办重要程度">
-                  <button v-for="grade in ['A', 'B', 'C']" :key="grade" type="button"
-                    class="cf-todo__grade-button" :class="['is-' + grade.toLowerCase(), { 'is-active': displayImpOf(t) === grade }]"
-                    :aria-pressed="displayImpOf(t) === grade"
-                    @click.stop="saveOpinionMeta(t, { importance: grade })">{{ grade }}</button>
-                </div>
-              </div>
-              <div v-else-if="isAdmin && !t.opinionId && t.status !== 'DONE'" class="cf-todo__meta-edit" @click.stop>
-                <span class="cf-todo__meta-edit-label">自定项完成时限</span>
-                <el-date-picker :model-value="t.deadline || ''" type="datetime" size="small"
-                  format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DDTHH:mm:ss" placeholder="单独设完成时限"
-                  clearable style="width:190px" @change="(v) => saveCustomDeadline(t, v || '')" />
-              </div>
             </div>
+          </div>
 
-            <!-- 操作区：常用两步（看详情/反馈、加子任务）做成大按钮，管理动作收进菜单 -->
-            <div class="cf-todo__card-actions" @click.stop>
+          <!-- 操作区（2026-10-18 紧凑化）：原来竖排在卡片右侧，4 个按钮把整卡撑到 150px 高；
+               改成卡片底部横排一行，竖向只占 32px，一屏能多看两三条 -->
+          <div class="cf-todo__card-actions" @click.stop>
               <el-button size="small" type="primary" plain class="cf-todo__act" @click="openDetail(t)">
                 <el-icon><View /></el-icon>详情·子任务
               </el-button>
@@ -248,7 +253,6 @@
                   </el-dropdown-menu>
                 </template>
               </el-dropdown>
-            </div>
           </div>
         </li>
       </ul>
@@ -1027,7 +1031,7 @@ onBeforeUnmount(() => {
 .cf-todo__drag:hover { color: #1b4a8c }
 .cf-todo__drag:active { cursor: grabbing }
 .cf-todo__card.is-dragging { opacity: .5 }
-.cf-todo__card-main { display: flex; gap: 10px; padding: 12px 12px 10px 12px }
+.cf-todo__card-main { display: flex; gap: 10px; padding: 10px 12px 4px 12px }
 /* 勾选框尺寸/配色统一在 index.css 的 .cf-check；这里只管与序号圆点的对齐。
    Element 的 .el-checkbox 盒子高 32px（行高撑的），方框落在盒子中下部，
    于是比并排的 22px 序号圆点低 4~5px。这里把盒子也压到 22px 并顶对齐，
@@ -1081,10 +1085,10 @@ onBeforeUnmount(() => {
 .cf-todo__sub-add { display: flex; gap: 8px; margin-top: 6px }
 .cf-todo__sub-add .el-input { flex: 1 }
 
-/* 管理层意见设置行 */
+/* 管理层意见设置（2026-10-18 紧凑化）：并进信息行、靠右对齐。
+   原来是独立一行（虚线框 + 34px 高），把每张卡白白抬高一段。 */
 .cf-todo__meta-edit {
-  display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px;
-  padding: 6px 8px; background: rgba(255, 255, 255, .28); border: 1px dashed #dfe4ea; border-radius: 6px;
+  display: inline-flex; align-items: center; gap: 6px; margin-left: auto;
 }
 /* 「为什么勾不动」的内联说明：放在标题行内，常驻可见不悬浮。
    位置在 .cf-todo__card-title（flex 行）里，需允许收缩换行，
@@ -1099,7 +1103,7 @@ onBeforeUnmount(() => {
 
 .cf-todo__grade { display: inline-flex; align-items: stretch }
 .cf-todo__grade-button {
-  min-width: 34px; height: 24px; border: 1px solid #dcdfe6; border-right: 0;
+  min-width: 30px; height: 22px; border: 1px solid #dcdfe6; border-right: 0;
   background: #fff; color: #606266; cursor: pointer; font-size: 12px;
 }
 .cf-todo__grade-button:first-child { border-radius: 4px 0 0 4px }
@@ -1109,11 +1113,18 @@ onBeforeUnmount(() => {
 .cf-todo__grade-button.is-c.is-active { background: #fff; border-color: #9da6b3; color: #303133 }
 .cf-todo__grade-button:focus-visible { outline: 2px solid #409eff; outline-offset: 2px; z-index: 1 }
 
-/* 操作区 */
+/* 操作区（2026-10-18 紧凑化）：卡片底部一行横排。
+   竖排在右侧时 4 个按钮把每张卡撑到约 150px，一屏只能看三条；
+   横排后竖向只占 26px，卡片高度由内容决定。 */
 .cf-todo__card-actions {
-  flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 6px;
+  flex: none; display: flex; flex-direction: row; align-items: center;
+  justify-content: flex-end; gap: 6px; flex-wrap: wrap;
+  padding: 0 12px 8px;
 }
-.cf-todo__act { width: 96px; margin: 0 !important; padding-left: 8px !important; padding-right: 8px !important }
+.cf-todo__act {
+  width: auto; height: 26px; margin: 0 !important;
+  padding: 0 8px !important; font-size: 12px;
+}
 .cf-todo__act .el-icon { margin-right: 3px }
 .cf-todo__act-more { margin-left: 2px !important; margin-right: 0 !important }
 .cf-todo__menu-danger { color: #c62a2a }

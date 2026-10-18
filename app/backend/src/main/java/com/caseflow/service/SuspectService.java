@@ -1,6 +1,7 @@
 package com.caseflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.caseflow.dto.SuspectSaveRequest;
 import com.caseflow.entity.CaseAssignee;
 import com.caseflow.entity.CaseInfo;
@@ -78,6 +79,11 @@ public class SuspectService {
         s.setIdCard(req.getIdCard());
         s.setPhone(req.getPhone());
         s.setAddress(req.getAddress());
+        // 强制措施（2026-10-18）：选了措施就必须有起止时间，校验不过直接拒绝落库
+        validateMeasure(req);
+        s.setMeasure(normMeasure(req.getMeasure()));
+        s.setMeasureStartAt(req.getMeasureStartAt());
+        s.setMeasureEndAt(req.getMeasureEndAt());
         s.setRemark(req.getRemark());
         s.setCreatedBy(AuthContext.userId());
         s.setCreatedAt(LocalDateTime.now());
@@ -120,6 +126,11 @@ public class SuspectService {
             s.setIdCard(r.getIdCard());
             s.setPhone(r.getPhone());
             s.setAddress(r.getAddress());
+            // 建案时一并录入的嫌疑人不强制校验：这里的表单通常还没有措施字段，
+            // 措施在案件详情的嫌疑人面板里补充（那里有完整校验）
+            s.setMeasure(normMeasure(r.getMeasure()));
+            s.setMeasureStartAt(r.getMeasureStartAt());
+            s.setMeasureEndAt(r.getMeasureEndAt());
             s.setRemark(r.getRemark());
             s.setCreatedBy(AuthContext.userId());
             s.setCreatedAt(now);
@@ -145,8 +156,19 @@ public class SuspectService {
             old.setGender(normGender(req.getGender()));
         }
         copyIfPresent(old, req);
+        // 强制措施三列单独处理：允许改回「未采取」并把时间清干净。
+        // updateById 会跳过 null 字段，清空必须再用 UpdateWrapper 显式 set 一次
+        // （与案件级措施 CaseService#transfer 里的 clearMeasure 同款做法）。
+        boolean clearMeasureTimes = applyMeasure(old, req);
         old.setUpdatedAt(LocalDateTime.now());
         suspectMapper.updateById(old);
+        if (clearMeasureTimes) {
+            suspectMapper.update(null, new LambdaUpdateWrapper<CaseSuspect>()
+                    .eq(CaseSuspect::getId, old.getId())
+                    .set(CaseSuspect::getMeasure, "NONE")
+                    .set(CaseSuspect::getMeasureStartAt, null)
+                    .set(CaseSuspect::getMeasureEndAt, null));
+        }
 
         CaseInfo c = caseMapper.selectById(old.getCaseId());
         if (c != null) {
@@ -222,6 +244,69 @@ public class SuspectService {
         return "MALE".equals(g) || "FEMALE".equals(g) ? g : null;
     }
 
+    // ------------------------------------------------------------------
+    // 强制措施（2026-10-18）：单人单措施 + 起止时间
+    // ------------------------------------------------------------------
+
+    /**
+     * 校验：选了具体措施就必须有起止时间。
+     *
+     * <p>为什么不许留空：这两个时间就是办案期限本身。只记「拘留」不记
+     * 「从什么时候到什么时候」，到期提醒与期限统计都无从算起，等于把最有用的信息丢了。
+     */
+    private void validateMeasure(SuspectSaveRequest req) {
+        if (req == null) {
+            return;
+        }
+        String m = normMeasure(req.getMeasure());
+        if (m == null || "NONE".equals(m)) {
+            return;
+        }
+        String label = DictHolder.name("CASE_MEASURE", m);
+        if (!StringUtils.hasText(label)) {
+            label = m;
+        }
+        if (req.getMeasureStartAt() == null) {
+            throw new BizException("已选择强制措施「" + label + "」，请填写措施开始时间");
+        }
+        if (req.getMeasureEndAt() == null) {
+            throw new BizException("已选择强制措施「" + label + "」，请填写措施结束时间（下一节点）");
+        }
+        if (req.getMeasureEndAt().isBefore(req.getMeasureStartAt())) {
+            throw new BizException("措施结束时间不能早于开始时间");
+        }
+    }
+
+    /** 措施归一：空串视为未填（返回 null），其余转大写。 */
+    private String normMeasure(String raw) {
+        return StringUtils.hasText(raw) ? raw.trim().toUpperCase() : null;
+    }
+
+    /**
+     * 把请求里的措施三列写进实体。
+     *
+     * @return true 表示这次是「改回未采取」，调用方需再用 UpdateWrapper 清一次时间列
+     *         （updateById 跳过 null，不清就会留下与措施矛盾的旧时间）
+     */
+    private boolean applyMeasure(CaseSuspect s, SuspectSaveRequest req) {
+        if (req.getMeasure() == null) {
+            // 前端没传 = 这次不改措施；编辑其它字段时不能把已有措施抹掉
+            return false;
+        }
+        validateMeasure(req);
+        String m = normMeasure(req.getMeasure());
+        if (m == null || "NONE".equals(m)) {
+            s.setMeasure("NONE");
+            s.setMeasureStartAt(null);
+            s.setMeasureEndAt(null);
+            return true;
+        }
+        s.setMeasure(m);
+        s.setMeasureStartAt(req.getMeasureStartAt());
+        s.setMeasureEndAt(req.getMeasureEndAt());
+        return false;
+    }
+
     private void copyIfPresent(CaseSuspect s, SuspectSaveRequest req) {
         if (req.getIdCard() != null) {
             s.setIdCard(req.getIdCard());
@@ -247,6 +332,10 @@ public class SuspectService {
         vo.setIdCard(s.getIdCard());
         vo.setPhone(s.getPhone());
         vo.setAddress(s.getAddress());
+        vo.setMeasure(s.getMeasure());
+        vo.setMeasureName(DictHolder.name("CASE_MEASURE", s.getMeasure()));
+        vo.setMeasureStartAt(s.getMeasureStartAt());
+        vo.setMeasureEndAt(s.getMeasureEndAt());
         vo.setRemark(s.getRemark());
         if (userNameMap != null && s.getCreatedBy() != null) {
             vo.setCreatedByName(userNameMap.get(s.getCreatedBy()));

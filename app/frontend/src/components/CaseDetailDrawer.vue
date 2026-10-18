@@ -13,6 +13,9 @@
         <template v-if="canManage && detail.id">
           <FocusStar :row="detail" />
           <span class="cf-muted" style="font-size: 12px">{{ detail.focus === 1 ? '重点关注中' : '未关注' }}</span>
+          <!-- 编辑入口（2026-10-18 用户要求）：BOSS 要能改已录入的信息、补写案情。
+               复用建案表单的编辑模式，改完立刻刷新详情并通知外层列表。 -->
+          <el-button link type="primary" size="small" @click="editVisible = true">编辑案件</el-button>
         </template>
       </div>
     </template>
@@ -155,6 +158,21 @@
               <template #default="{ row }">{{ row.genderName || '-' }}</template>
             </el-table-column>
             <el-table-column prop="idCard" label="身份证号" min-width="170" show-overflow-tooltip />
+            <!-- 强制措施（2026-10-18）：放在前几列，抽屉 46% 宽也能一屏看到，不用横向滚动 -->
+            <el-table-column label="强制措施" width="186">
+              <template #default="{ row }">
+                <template v-if="row.measure && row.measure !== 'NONE'">
+                  <el-tag size="small" :type="(MEASURE_META[row.measure] || {}).type || 'info'" effect="plain">
+                    {{ row.measureName || (MEASURE_META[row.measure] || {}).label || row.measure }}
+                  </el-tag>
+                  <div class="cf-muted" style="font-size: 12px; line-height: 1.5">
+                    {{ (row.measureStartAt || '').replace('T', ' ').slice(0, 16) }}
+                    <template v-if="row.measureEndAt"> → {{ row.measureEndAt.replace('T', ' ').slice(0, 16) }}</template>
+                  </div>
+                </template>
+                <span v-else class="cf-muted">—</span>
+              </template>
+            </el-table-column>
             <el-table-column prop="phone" label="联系电话" width="120" />
             <el-table-column prop="address" label="住址" min-width="160" show-overflow-tooltip />
             <el-table-column label="操作" width="60" align="right">
@@ -379,6 +397,29 @@
       <el-form-item label="住址">
         <el-input v-model="suspectForm.address" maxlength="255" />
       </el-form-item>
+      <!-- 强制措施（2026-10-18 用户要求）：当前措施 + 措施开始时间 + 下一节点结束时间。
+           选了措施就把两个时间一并要求填，缺一个都不给保存。 -->
+      <el-form-item label="当前强制措施">
+        <el-select v-model="suspectForm.measure" clearable placeholder="未采取" style="width: 100%">
+          <el-option v-for="m in MEASURE_CHOICES" :key="m.value" :label="m.label" :value="m.value" />
+        </el-select>
+      </el-form-item>
+      <el-row v-if="suspectForm.measure" :gutter="12">
+        <el-col :span="12" :xs="24">
+          <el-form-item label="措施开始" required>
+            <el-date-picker v-model="suspectForm.measureStartAt" type="datetime"
+              format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DD HH:mm:ss"
+              placeholder="必填" style="width: 100%" />
+          </el-form-item>
+        </el-col>
+        <el-col :span="12" :xs="24">
+          <el-form-item label="措施结束" required>
+            <el-date-picker v-model="suspectForm.measureEndAt" type="datetime"
+              format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DD HH:mm:ss"
+              placeholder="下一节点，必填" style="width: 100%" />
+          </el-form-item>
+        </el-col>
+      </el-row>
       <el-form-item label="备注">
         <el-input v-model="suspectForm.remark" type="textarea" :rows="2" maxlength="512" />
       </el-form-item>
@@ -388,6 +429,9 @@
       <el-button type="primary" :loading="suspectSaving" @click="submitSuspect">保存</el-button>
     </template>
   </el-dialog>
+
+  <!-- 编辑案件（2026-10-18）：与案件列表共用同一个表单，编辑模式下时间节点走详情面板 -->
+  <CaseFormDialog v-model="editVisible" :case-id="detail.id" @done="onEditDone" />
 </template>
 
 <script setup>
@@ -396,10 +440,11 @@ import { ElCollapseTransition } from 'element-plus'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { caseApi, fileApi, suspectApi, timeNodeApi, logApi, watchApi } from '../api'
 import CaseTodoPanel from './CaseTodoPanel.vue'
+import CaseFormDialog from './CaseFormDialog.vue'
 import FeedbackDialog from './FeedbackDialog.vue'
 import FocusStar from './FocusStar.vue'
-import { STATUS_META, PRIORITY_META, SOURCE_META, DUE_META, CASE_TYPE_META, MEASURE_META, dueText,
-  deadlineTextOf, TIME_NODE_PRESETS, REMIND_DAY_PRESETS } from '../utils/format'
+import { STATUS_META, PRIORITY_META, SOURCE_META, DUE_META, CASE_TYPE_META, MEASURE_META, MEASURE_CHOICES,
+  dueText, deadlineTextOf, TIME_NODE_PRESETS, REMIND_DAY_PRESETS } from '../utils/format'
 import { useUserStore } from '../store/user'
 import { useEventStore } from '../store/events'
 
@@ -421,6 +466,8 @@ const canManage = computed(() => userStore.isFullAccess)
 
 const visible = ref(false)
 const detail = ref({})
+/** 编辑案件弹窗（2026-10-18）：复用建案表单的编辑模式 */
+const editVisible = ref(false)
 const closeRequest = ref(null)
 const closeDialogVisible = ref(false)
 const closeSaving = ref(false)
@@ -632,10 +679,22 @@ const removeComment = async (cmt) => {
   await reload()
 }
 
+// ---- 案件编辑（2026-10-18）----
+/** 保存后详情立刻反映新值，同时通知外层列表重取（名称、时间、措施都可能变） */
+const onEditDone = async () => {
+  editVisible.value = false
+  await reload()
+  emit('done')
+}
+
 // ---- 嫌疑人 ----
 const suspectVisible = ref(false)
 const suspectSaving = ref(false)
-const emptySuspect = () => ({ name: '', gender: '', idCard: '', phone: '', address: '', remark: '' })
+const emptySuspect = () => ({
+  name: '', gender: '', idCard: '', phone: '', address: '', remark: '',
+  // 强制措施（2026-10-18）：选了措施就必须填起止时间，两处都会校验
+  measure: '', measureStartAt: '', measureEndAt: ''
+})
 const suspectForm = ref(emptySuspect())
 
 const openSuspect = () => {
@@ -644,13 +703,29 @@ const openSuspect = () => {
 }
 
 const submitSuspect = async () => {
-  if (!suspectForm.value.name || !suspectForm.value.name.trim()) {
+  const f = suspectForm.value
+  if (!f.name || !f.name.trim()) {
     ElMessage.warning('请填写嫌疑人姓名')
+    return
+  }
+  // 强制措施（2026-10-18）：选了就必须填起止时间——这两个时间就是办案期限本身，
+  // 只记措施不记时间，到期提醒和期限统计都无从算起
+  const taken = !!f.measure && f.measure !== 'NONE'
+  if (taken && !f.measureStartAt) {
+    ElMessage.warning('已选择强制措施，请填写措施开始时间')
+    return
+  }
+  if (taken && !f.measureEndAt) {
+    ElMessage.warning('已选择强制措施，请填写措施结束时间（下一节点）')
+    return
+  }
+  if (taken && f.measureEndAt < f.measureStartAt) {
+    ElMessage.warning('措施结束时间不能早于开始时间')
     return
   }
   suspectSaving.value = true
   try {
-    await suspectApi.add(detail.value.id, { ...suspectForm.value })
+    await suspectApi.add(detail.value.id, { ...f })
     ElMessage.success('嫌疑人已录入')
     suspectVisible.value = false
     await reload()

@@ -21,6 +21,13 @@ public class SuspectVO implements Serializable {
     private String idCard;
     private String phone;
     private String address;
+    /** 当前强制措施（2026-10-18） */
+    private String measure;
+    private String measureName;
+    /** 本次措施开始时间 */
+    private LocalDateTime measureStartAt;
+    /** 下一节点：措施期满 / 结束时间 */
+    private LocalDateTime measureEndAt;
     private String remark;
     private String createdByName;
     private LocalDateTime createdAt;
