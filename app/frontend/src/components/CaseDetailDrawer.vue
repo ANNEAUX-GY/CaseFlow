@@ -743,12 +743,21 @@ const submitSuspect = async () => {
   }
   suspectSaving.value = true
   try {
+    // 措施三列显式兜底（2026-10-22）：下拉清空后 v-model 可能是 undefined，
+    // 直接展开会让 JSON 里整个字段消失——后端把「字段不存在」当成「这次不改措施」，
+    // 于是用户明明清了措施、保存后却还在。传空串后端会归一成「未采取」并清掉起止时间。
+    const payload = {
+      ...f,
+      measure: f.measure || '',
+      measureStartAt: f.measureStartAt || null,
+      measureEndAt: f.measureEndAt || null
+    }
     if (f.id) {
       // 编辑：走后端已有的 PUT /cases/suspects/{id}（带快照日志，可撤回）
-      await suspectApi.update(f.id, { ...f })
+      await suspectApi.update(f.id, payload)
       ElMessage.success('嫌疑人信息已更新')
     } else {
-      await suspectApi.add(detail.value.id, { ...f })
+      await suspectApi.add(detail.value.id, payload)
       ElMessage.success('嫌疑人已录入')
     }
     suspectVisible.value = false
