@@ -35,6 +35,14 @@
   `com.caseflow.security.AuthContext`、JDK8 无 `List.of()` 用 `new ArrayList<>()`。
 - 加字段统一走 `bootstrap/SchemaMigration.NEW_COLUMNS`，**并同步 `app/sql/schema.sql`**
   （两处要一致；比对脚本见 2026-10-16 日志思路：解析 NEW_COLUMNS 三元组 vs 建表列）。
+- **数据结构只增不改**（2026-10-22 使用单位硬要求）：只允许 `CREATE TABLE IF NOT EXISTS`
+  与 `ALTER TABLE ADD COLUMN`（可空或带默认）；**禁止 DROP / RENAME / MODIFY COLUMN /
+  TRUNCATE**，新增列不得为「NOT NULL 且无默认」（老数据行过不去）。
+- **部署不得改动已录入数据**：会覆盖非空值的历史整理（如作废模板任务、类别重映射）
+  必须包在 `SchemaMigration.onceOnly(conn, "名字")` 里，一个库只执行一次；
+  只想报告不想动手的（如 CIVIL 残留）只写 WARN。
+- **每次提交都要出部署包**（用户长期要求）：`package_portable.py --skip-build`
+  （完整便携包 + 资料包）与 `--patch-only --skip-build`（升级补丁包），产物在 `release/`。
   **建表脚本唯一数据源是 `app/sql/`**：pom 把 `../sql` 映射进 `classpath:/sql/`，
   并已 exclude 掉 `src/main/resources/sql/` 下的同名文件。
   **切勿再往 `src/main/resources/sql/` 放副本** —— maven-resources-plugin 默认

@@ -217,21 +217,81 @@ public class SchemaMigration implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         try (Connection conn = dataSource.getConnection()) {
             Set<String> existing = existingColumns(conn);
+            // ① 结构：只加列、只建缺失的表，从不删列/改列类型/改表名
             ensureColumns(conn, existing, null);
+            // ② 数据：只补空值 / 只读检查，天然幂等，可以每次跑
             backfillCaseTime(conn);
-            migrateLegacyDeadlineReceipts(conn, existing);
-            migrateCategory(conn, existing);
-            removeCivilType(conn);
             seedCategories(conn, existing);
             backfillFeedbackDeclare(conn, existing);
-            retireStdPlanTasks(conn, existing);
             migrateSingleDeadlineToTimeNodes(conn, existing);
+            removeCivilType(conn);   // 只计数告警，不改数据
+            // ③ 数据：会覆盖既有值的整理，一律只执行一次（见 onceOnly），
+            //    跑过之后每次启动都直接跳过——保证升级永远不动用户已经录入的数据
+            if (onceOnly(conn, "migrate_legacy_deadline_receipts")) {
+                migrateLegacyDeadlineReceipts(conn, existing);
+            }
+            if (onceOnly(conn, "migrate_category")) {
+                migrateCategory(conn, existing);
+            }
+            if (onceOnly(conn, "retire_std_plan_tasks")) {
+                retireStdPlanTasks(conn, existing);
+            }
         } catch (Exception e) {
             // 不阻断启动：库里可能只有只读权限。缺列的表现是「撤回」功能不可用，
             // 报错信息会明确指出，不会静默损坏数据。
             log.error("[SchemaMigration] 增量建列失败，撤回功能可能不可用：{}。"
                     + "可手动执行：{}", e.getMessage(), describeAll());
         }
+    }
+
+    /** 一次性数据整理的台账表名（内部表，与业务表无关） */
+    private static final String MARK_TABLE = "schema_migration_mark";
+
+    /**
+     * 数据整理的一次性闸门（2026-10-22）。
+     *
+     * <p><b>为什么需要它</b>：结构变更（加列/建表）是幂等的，重复执行无害；
+     * 但有些历史整理会<b>覆盖用户已录入的值</b>——比如把旧「民事」案件清回未分类、
+     * 把模板生成的标准任务置为已取消。这些动作在产品上线时做一次是对的，
+     * 之后每次重启再做就等于「部署顺手改了业务数据」，使用单位无法接受。
+     *
+     * <p>做法：一张只有两列的内部台账，动作执行前查一次、执行后记一条；
+     * 记录在册就不再执行。新库照样会执行一次（空库，等于无操作）。
+     *
+     * <p>建表失败（只读库/无 DDL 权限）时<b>返回 false</b>——宁可不整理，
+     * 也不要反复改数据：整理属于历史遗留问题的一次性修补，不是运行必需。
+     */
+    private boolean onceOnly(Connection conn, String name) {
+        try (Statement st = conn.createStatement()) {
+            st.execute("CREATE TABLE IF NOT EXISTS " + MARK_TABLE + " ("
+                    + "mark_name VARCHAR(64) PRIMARY KEY, applied_at DATETIME NULL)");
+        } catch (Exception e) {
+            log.warn("[SchemaMigration] 数据整理台账不可用，跳过「{}」：{}", name, e.getMessage());
+            return false;
+        }
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT COUNT(*) FROM " + MARK_TABLE + " WHERE mark_name=?")) {
+            ps.setString(1, name);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next() && rs.getLong(1) > 0) {
+                    return false;
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[SchemaMigration] 数据整理台账读取失败，跳过「{}」：{}", name, e.getMessage());
+            return false;
+        }
+        try (PreparedStatement ps = conn.prepareStatement(
+                "INSERT INTO " + MARK_TABLE + " (mark_name, applied_at) VALUES (?, CURRENT_TIMESTAMP)")) {
+            ps.setString(1, name);
+            ps.executeUpdate();
+        } catch (Exception e) {
+            // 记不上台账就别执行：否则下次启动又会跑一遍
+            log.warn("[SchemaMigration] 数据整理台账写入失败，跳过「{}」：{}", name, e.getMessage());
+            return false;
+        }
+        log.info("[SchemaMigration] 执行一次性数据整理「{}」（仅此一次，之后升级不再改动数据）", name);
+        return true;
     }
 
     /** 仅添加当前表缺少的列；tableFilter 供旧库回归测试使用。
@@ -463,19 +523,30 @@ public class SchemaMigration implements ApplicationRunner {
         }
     }
 
-    /** 去除民事大类：存量 CIVIL 案件（含小类）清回未分类，交由用户重新归类 */
+    /**
+     * 民事大类下线后的存量检查（2026-10-22 改为<b>只报告、不改数据</b>）。
+     *
+     * <p>原实现直接把 {@code case_type='CIVIL'} 的案件清成未分类。那是产品调整期的
+     * 一次性动作，但「部署顺手把使用单位已录入的分类抹掉」不可接受——
+     * 分类是办案人自己选的，程序不该替他决定。现在只查数量写日志：
+     * 有残留就提示管理员手工改，没有就当无事发生。
+     */
     private void removeCivilType(Connection conn) {
         if (!hasColumn(conn, "case_info", "case_type")) {
             return;
         }
-        String sql = "UPDATE case_info SET case_type=NULL, category=NULL WHERE case_type='CIVIL'";
-        try (Statement st = conn.createStatement()) {
-            int n = st.executeUpdate(sql);
-            if (n > 0) {
-                log.info("[SchemaMigration] 民事大类已去除，{} 行案件清回未分类", n);
+        try (Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM case_info WHERE case_type='CIVIL'")) {
+            if (rs.next()) {
+                long n = rs.getLong(1);
+                if (n > 0) {
+                    log.warn("[SchemaMigration] 检测到 {} 条案件的案卷类型为已下线的 CIVIL（民事）。"
+                            + "出于「不改动已录入数据」的约定，程序不会自动清理，"
+                            + "如需归类请由管理员在界面上调整。", n);
+                }
             }
         } catch (Exception e) {
-            log.warn("[SchemaMigration] 民事去除跳过：{}", e.getMessage());
+            log.warn("[SchemaMigration] 民事案件检查跳过：{}", e.getMessage());
         }
     }
 

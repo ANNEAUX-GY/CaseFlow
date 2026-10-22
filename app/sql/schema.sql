@@ -475,3 +475,11 @@ CREATE TABLE IF NOT EXISTS case_opinion_read (
 -- 说明：已有库升级到本版本需要补上面 5 个新列。
 -- MySQL 的 ALTER TABLE ADD COLUMN 不支持 IF NOT EXISTS，无法写进本文件，
 -- 因此改由应用启动时的 com.caseflow.bootstrap.SchemaMigration 幂等补齐（H2 / MySQL 通用）。
+
+-- 数据整理台账（2026-10-22）：内部表，与业务无关。
+-- 记录「会覆盖用户已录入数据」的历史整理是否已经执行过；执行过就不再执行，
+-- 保证以后每次升级只换程序，绝不会顺手改掉使用单位已经录进去的数据。
+CREATE TABLE IF NOT EXISTS schema_migration_mark (
+    mark_name  VARCHAR(64) NOT NULL PRIMARY KEY COMMENT '整理项名称',
+    applied_at DATETIME    DEFAULT NULL COMMENT '首次执行时间'
+);
