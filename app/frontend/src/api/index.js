@@ -204,8 +204,14 @@ export const watchApi = {
   board: (params) => http.get('/watch/board', { params }),
   /** 侦查进度流转：action = START/SUBMIT/APPROVE/REJECT（盯办抽屉顶部按钮） */
   transition: (caseId, data) => http.post(`/watch/cases/${caseId}/transition`, data),
-  /** 强制措施登记 / 变更（管理层） */
+  /** 强制措施登记 / 变更（2026-10-24）：领导调用直接生效，承办人调用只提交待审批申请 */
   measure: (caseId, data) => http.post(`/watch/cases/${caseId}/measure`, data),
+  /** 待审批的措施变更（工作台/案件内提示；传 caseId 只看该案） */
+  pendingMeasureApprovals: (caseId) => http.get('/watch/measure-approvals/pending', { params: caseId ? { caseId } : {} }),
+  /** 本案是否已有待审批的措施变更（所有登录人可查，承办人要看"审批中"） */
+  measurePending: (caseId) => http.get(`/watch/cases/${caseId}/measure-pending`, { silent: true }),
+  /** 审批措施变更：approve=true 同意（措施生效）/ false 退回（须填意见） */
+  reviewMeasure: (approvalId, data) => http.post(`/watch/measure-approvals/${approvalId}/review`, data),
   deadlines: (caseId) => http.get(`/watch/cases/${caseId}/deadlines`),
   deadlineAlerts: (params) => http.get('/watch/deadline-alerts', { params }),
   changeTerm: (caseId, action) => http.post(`/watch/cases/${caseId}/deadlines/term`, { action }),

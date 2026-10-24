@@ -51,4 +51,14 @@ public class DashboardVO implements Serializable {
     private List<CaseVO> focusList;
     /** 最近操作 */
     private List<LogVO> recentLogs;
+
+    // ---- 强制措施到期（2026-10-24 用户要求：到期前在工作台总览提示）----
+    /** 已到期的强制措施数（到期即视为该措施结束，需登记下一个措施） */
+    private long measureExpired;
+    /** 7 天内到期的强制措施数（不含已过期） */
+    private long measureExpiring;
+    /** 措施到期清单：已过期在前，其次按届满日由近到远 */
+    private List<MeasureAlertVO> measureAlerts;
+    /** 待审批的措施变更申请数（领导可见；普通民警恒 0） */
+    private long measurePending;
 }

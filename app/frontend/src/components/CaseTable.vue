@@ -89,9 +89,13 @@
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column v-if="showActions" label="操作" :width="canManage && !detailsOnly ? 150 : 90" align="right">
+      <!-- 操作列：编辑是 2026-10-24 加的（管理员新增/导入案件后常要改案件名，
+           原来只能「详情 → 右上角编辑案件」，隔了两层）。只给显式传 editable 的页面，
+           否则工作台/到期提醒这些没接 @edit 的页面会出现点了没反应的死按钮。 -->
+      <el-table-column v-if="showActions" label="操作" :width="actionWidth" align="right">
         <template #default="{ row }">
           <el-button v-if="canManage && !detailsOnly" link type="primary" @click="emit('assign', row)">指派</el-button>
+          <el-button v-if="editable && canManage && !detailsOnly" link type="primary" @click="emit('edit', row)">编辑</el-button>
           <el-button link @click="emit('open', row)">详情</el-button>
           <el-button v-if="canManage && !detailsOnly" link type="danger" @click="emit('remove', row)">删除</el-button>
         </template>
@@ -127,9 +131,18 @@ const props = defineProps({
   compact: { type: Boolean, default: false },
   /* 表格区最小高度：数据少时也不塌陷，翻页/筛选不会把下方内容往上拽 */
   minBody: { type: Number, default: 300 },
-  loading: { type: Boolean, default: false }
+  loading: { type: Boolean, default: false },
+  /* 操作列是否出「编辑」（改案件名等）：父组件必须同时接 @edit，否则是死按钮 */
+  editable: { type: Boolean, default: false }
 })
-const emit = defineEmits(['open', 'assign', 'remove', 'focus'])
+const emit = defineEmits(['open', 'assign', 'remove', 'focus', 'edit'])
+
+// 操作列宽按实际按钮数算：4 个链接按钮 + 单元格左右 padding
+const actionWidth = computed(() => {
+  if (!(props.showActions)) return 0
+  if (!(props.canManage && !props.detailsOnly)) return 90
+  return props.editable ? 200 : 150
+})
 
 // 传了固定 height 时表格自身已锁定高度，不再额外撑最小高度
 const wrapMin = computed(() => (props.height ? 0 : props.minBody))

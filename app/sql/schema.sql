@@ -346,11 +346,20 @@ CREATE TABLE IF NOT EXISTS case_approval (
     id            BIGINT       AUTO_INCREMENT PRIMARY KEY COMMENT '主键',
     case_id       BIGINT       NOT NULL COMMENT '案件 ID',
     approve_type  VARCHAR(20)  NOT NULL COMMENT 'INVESTIGATION_DONE侦查终结审批/MEASURE强制措施变更',
-    result        VARCHAR(16)  NOT NULL COMMENT 'APPROVED同意/RETURNED退回补侦',
+    result        VARCHAR(16)  NOT NULL COMMENT 'PENDING待审批/APPROVED同意/RETURNED退回',
     comment       VARCHAR(512) DEFAULT NULL COMMENT '审批意见',
     approver_id   BIGINT       DEFAULT NULL COMMENT '审批人',
     approver_name VARCHAR(64)  DEFAULT NULL COMMENT '审批人姓名（冗余）',
-    created_at    DATETIME     DEFAULT CURRENT_TIMESTAMP COMMENT '审批时间'
+    created_at    DATETIME     DEFAULT CURRENT_TIMESTAMP COMMENT '审批时间',
+    -- 强制措施变更申请（2026-10-24）：承办人提交、领导批准后才生效，
+    -- 申请内容必须落库，否则审批人不知道要改成哪种措施、从哪天起、期限到哪天。
+    apply_measure   VARCHAR(20)  DEFAULT NULL COMMENT '申请的目标措施（NONE=结束当前措施）',
+    apply_date      DATETIME     DEFAULT NULL COMMENT '申请的措施起算日',
+    apply_deadline  DATETIME     DEFAULT NULL COMMENT '申请的期限届满日',
+    from_measure    VARCHAR(20)  DEFAULT NULL COMMENT '申请前的措施（审批时对比用）',
+    applicant_id    BIGINT       DEFAULT NULL COMMENT '申请人',
+    applicant_name  VARCHAR(64)  DEFAULT NULL COMMENT '申请人姓名（冗余）',
+    applied_at      DATETIME     DEFAULT NULL COMMENT '申请时间'
 );
 
 -- 行政案件结案申请：经办人提交处理结果，管理层审核后办结；退回可重新申请。

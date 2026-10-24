@@ -146,7 +146,9 @@
         :min-body="360"
         show-case-time
         :details-only="isClosedPage"
+        :editable="!isClosedPage"
         @open="openDetail"
+        @edit="onEdit"
         @assign="openAssign"
         @remove="onRemove"
       />
@@ -468,6 +470,14 @@ const reset = () => {
 
 const onCreate = () => {
   editId.value = null
+  formVisible.value = true
+}
+
+// 列表行「编辑」（2026-10-24 用户要求）：管理员建完/导入完案件常要改案件名，
+// 原来只能进详情再点右上角「编辑案件」，隔了两层。复用同一个建案弹窗的编辑模式。
+const onEdit = (row) => {
+  if (!row || row.id == null) return
+  editId.value = row.id
   formVisible.value = true
 }
 

@@ -144,12 +144,49 @@ public class WatchController {
         return Result.ok(approvalService.transition(caseId, str(body.get("action")), str(body.get("comment"))));
     }
 
-    /** 强制措施登记（管理层）；measure = NONE/DETENTION/BAIL/RESIDENCE，缺省期限自动推算 */
+    /**
+     * 强制措施登记/变更（2026-10-24 改为审批制）。
+     * 领导调用 → 直接生效；承办人调用 → 只生成待审批申请，措施不变。
+     * 权限判断挪到 Service（承办人或管理层），不再在这层拦成全权限专属。
+     */
     @PostMapping("/cases/{caseId}/measure")
-    @FullAccessOnly("登记强制措施")
-    public Result<CaseInfo> measure(@PathVariable Long caseId, @RequestBody Map<String, Object> body) {
+    public Result<com.caseflow.vo.MeasureResultVO> measure(@PathVariable Long caseId,
+                                                          @RequestBody Map<String, Object> body) {
         return Result.ok(approvalService.measure(caseId, str(body.get("measure")),
                 date(body.get("measureDate")), date(body.get("detainDeadline")), str(body.get("comment"))));
+    }
+
+    /** 待审批的措施变更（工作台用；传 caseId 则只看该案） */
+    @GetMapping("/measure-approvals/pending")
+    @FullAccessOnly("查看待审批措施变更")
+    public Result<List<com.caseflow.vo.MeasureApprovalVO>> pendingMeasureApprovals(
+            @RequestParam(required = false) Long caseId) {
+        return Result.ok(approvalService.pendingMeasureApprovalVOs(caseId));
+    }
+
+    /** 本案是否已有待审批的措施变更（承办人也要能看到"审批中"，所以不设全权限限制） */
+    @GetMapping("/cases/{caseId}/measure-pending")
+    public Result<Map<String, Object>> measurePending(@PathVariable Long caseId) {
+        CaseApproval a = approvalService.pendingOf(caseId);
+        Map<String, Object> m = new java.util.HashMap<>();
+        m.put("pending", a != null);
+        if (a != null) {
+            m.put("approvalId", a.getId());
+            m.put("applyMeasure", a.getApplyMeasure());
+            m.put("applyMeasureName", com.caseflow.support.DictHolder.name("CASE_MEASURE", a.getApplyMeasure()));
+            m.put("applicantName", a.getApplicantName());
+            m.put("appliedAt", a.getAppliedAt());
+        }
+        return Result.ok(m);
+    }
+
+    /** 审批措施变更：approve=true 同意（措施生效）；false 退回（须填意见） */
+    @PostMapping("/measure-approvals/{approvalId}/review")
+    @FullAccessOnly("审批强制措施变更")
+    public Result<CaseInfo> reviewMeasure(@PathVariable Long approvalId, @RequestBody Map<String, Object> body) {
+        Object ap = body.get("approve");
+        boolean approve = ap == null || Boolean.parseBoolean(String.valueOf(ap));
+        return Result.ok(approvalService.reviewMeasure(approvalId, approve, str(body.get("comment"))));
     }
 
     /** 具体时限节点及当前提醒，按请求时刻实时计算。 */

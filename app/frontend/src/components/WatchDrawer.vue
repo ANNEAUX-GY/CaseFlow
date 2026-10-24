@@ -100,7 +100,10 @@
       <div class="cf-panel">
         <div class="cf-panel__head">
           <span>强制措施与期限</span>
-          <el-button v-if="isFullAccess" size="small" @click="openMeasure">登记 / 变更</el-button>
+          <!-- 2026-10-24：入口对「领导 + 本案承办人」开放。领导点了直接生效，
+               承办人点了生成待审批申请（措施不变），审批中不再给重复入口。 -->
+          <el-button v-if="canApplyMeasure && !pendingMeasure" size="small" @click="openMeasure">登记 / 变更</el-button>
+          <el-tag v-else-if="pendingMeasure" size="small" type="warning" effect="plain">审批中</el-tag>
         </div>
         <div style="padding: 12px 16px; font-size: 13px">
           <template v-if="detail.caseMeasure && detail.caseMeasure !== 'NONE'">
@@ -109,6 +112,9 @@
             <div style="margin-top:4px">期限届满：<b :class="deadlineClass">{{ deadlineText }}</b></div>
           </template>
           <span v-else class="cf-muted">无强制措施（属初查案件）</span>
+          <div v-if="pendingMeasure" class="cf-warn" style="margin-top:8px;font-size:12px">
+            {{ pendingMeasureText }}
+          </div>
         </div>
       </div>
 
@@ -159,34 +165,13 @@
         <el-button type="primary" :loading="recordDlg.loading" @click="submitRecord">保存</el-button>
       </template>
     </el-dialog>
-    <el-dialog v-model="measureDlg.visible" title="登记 / 变更强制措施" width="460px" append-to-body>
-      <el-form label-width="90px">
-        <el-form-item label="措施类型" required>
-          <!-- 取值与建案表单一致（法定五种 + 无），别在这边另起一套：
-               两边不一样会出现"建案选了逮捕，盯办下拉里却没有逮捕可改"。 -->
-          <el-select v-model="measureDlg.measure" style="width: 100%" @change="onMeasureChange">
-            <el-option label="无（回到初查）" value="NONE" />
-            <el-option v-for="m in MEASURE_CHOICES" :key="m.value" :label="m.label" :value="m.value" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="措施日期" :required="detail.caseType === 'CRIMINAL' && ['DETENTION', 'ARREST'].includes(measureDlg.measure)">
-          <el-date-picker v-model="measureDlg.measureDate" type="date" value-format="YYYY-MM-DD"
-            :disabled="measureDlg.measure === 'NONE'" style="width: 100%" />
-        </el-form-item>
-        <el-form-item label="期限届满">
-          <el-date-picker v-model="measureDlg.detainDeadline" type="date" value-format="YYYY-MM-DD"
-            :disabled="measureDlg.measure === 'NONE'" placeholder="留空按默认推算（拘留先3天/逮捕2月/取保1年/监居6月）"
-            style="width: 100%" />
-        </el-form-item>
-        <el-form-item label="备注">
-          <el-input v-model="measureDlg.comment" placeholder="选填" maxlength="200" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="measureDlg.visible = false">取消</el-button>
-        <el-button type="primary" :loading="measureDlg.loading" @click="submitMeasure">确定</el-button>
-      </template>
-    </el-dialog>
+    <MeasureDialog
+      v-model="measureDlg.visible"
+      :case-id="caseId"
+      :case-type="detail.caseType"
+      :current-measure="detail.caseMeasure || ''"
+      @done="after"
+    />
   </el-drawer>
 </template>
 
@@ -197,8 +182,9 @@ import { caseApi, watchApi } from '../api'
 import CaseStageBar from './CaseStageBar.vue'
 import CaseTodoPanel from './CaseTodoPanel.vue'
 import StaffWorkloadDialog from './StaffWorkloadDialog.vue'
+import MeasureDialog from './MeasureDialog.vue'
 import { useUserStore } from '../store/user'
-import { INVEST_STATUS_META, MEASURE_META, MEASURE_CHOICES, POLICE_GROUP_META, policeGroupLabel, dateKeyOf } from '../utils/format'
+import { INVEST_STATUS_META, MEASURE_META, POLICE_GROUP_META, policeGroupLabel } from '../utils/format'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -235,6 +221,9 @@ const reload = async () => {
   try {
     detail.value = await caseApi.detail(props.caseId)
     deadlineView.value = await watchApi.deadlines(props.caseId)
+    // 待审批状态：接口对所有登录人开放（只返回申请摘要），承办人要能看到"审批中"
+    const p = await watchApi.measurePending(props.caseId).catch(() => null)
+    pendingMeasure.value = p && p.pending ? p : null
   } finally { loading.value = false }
 }
 
@@ -249,6 +238,22 @@ const isAssignee = computed(() => {
   if (!myEmp) return false
   return (detail.value.assignHistory || []).some(
     (a) => a.status === 'ACTIVE' && String(a.employeeId) === String(myEmp))
+})
+
+/**
+ * 能否发起强制措施登记/变更（2026-10-24）。
+ * 领导（全权限）操作直接生效；承办人操作只提交待审批申请——两种人都要给入口，
+ * 否则承办人永远只能等领导下命令，与"由领导或主办人/经办人编辑下一个措施"不符。
+ */
+const canApplyMeasure = computed(() => isFullAccess.value || isAssignee.value)
+
+/** 本案待审批的措施变更（没有则为 null）；有值时按钮变成「审批中」并禁止重复提交 */
+const pendingMeasure = ref(null)
+const pendingMeasureText = computed(() => {
+  const p = pendingMeasure.value
+  if (!p) return ''
+  const name = (MEASURE_META[p.applyMeasure] || {}).label || p.applyMeasure || '无措施'
+  return `已申请变更为「${name}」，等待领导审批（申请人：${p.applicantName || '-'}）`
 })
 
 const deadlineText = computed(() => {
@@ -291,18 +296,10 @@ const submitApprove = async () => {
   } finally { approveDlg.loading = false }
 }
 
-const measureDlg = reactive({ visible: false, measure: 'DETENTION', measureDate: '', detainDeadline: '', comment: '', loading: false })
-const openMeasure = () => {
-  measureDlg.measure = detail.value.caseMeasure || 'DETENTION'
-  measureDlg.measureDate = dateKeyOf(detail.value.measureDate)
-  measureDlg.detainDeadline = dateKeyOf(detail.value.detainDeadline)
-  measureDlg.comment = ''
-  measureDlg.visible = true
-}
-const onMeasureChange = () => {
-  measureDlg.measureDate = ''
-  measureDlg.detainDeadline = ''
-}
+// 措施弹窗已抽成独立组件 MeasureDialog（2026-10-24）：
+// 承办人没有本页权限，要在「我的案件」里用同一个表单，所以两处共用一份实现。
+const measureDlg = reactive({ visible: false })
+const openMeasure = () => { measureDlg.visible = true }
 const changeTerm = async (action) => {
   await watchApi.changeTerm(props.caseId, action)
   ElMessage.success(action === 'PAUSE' ? '已停止计算' : action === 'RESUME' ? '已恢复计算' : `已录入刑拘${action}天案`)
@@ -324,26 +321,6 @@ const submitRecord = async () => {
     await after()
   } finally { recordDlg.loading = false }
 }
-const submitMeasure = async () => {
-  if (detail.value.caseType === 'CRIMINAL' && ['DETENTION', 'ARREST'].includes(measureDlg.measure)
-      && !measureDlg.measureDate && detail.value.caseMeasure !== measureDlg.measure) {
-    ElMessage.warning('请填写拘捕实际执行日期')
-    return
-  }
-  measureDlg.loading = true
-  try {
-    await watchApi.measure(props.caseId, {
-      measure: measureDlg.measure,
-      measureDate: measureDlg.measureDate || undefined,
-      detainDeadline: measureDlg.detainDeadline || undefined,
-      comment: measureDlg.comment
-    })
-    ElMessage.success('已登记')
-    measureDlg.visible = false
-    await after()
-  } finally { measureDlg.loading = false }
-}
-
 const after = async () => { await reload(); emit('done') }
 </script>
 

@@ -144,6 +144,9 @@ public class CaseService {
     /** 「我的案件」口径的实现（依赖链末端）；对外仍走 {@link #myVisibleCaseIds()} */
     @Resource
     private CaseScopeService caseScopeService;
+    /** 工作台「待审批的措施变更」计数（2026-10-24）；直接读 mapper，不依赖 ApprovalService，避免循环依赖 */
+    @Resource
+    private com.caseflow.mapper.CaseApprovalMapper approvalMapper;
     /**
      * 「提意见即派待办」的唯一落点。指派 / 建案要一并录入待办时也走它，
      * 保证待办只有一种产生方式（带 opinion_id、截止时间、重要程度、常用待办记忆）。
@@ -1162,6 +1165,12 @@ public class CaseService {
         todoService.removeAllOfCase(id);
         // 信箱里指向本案的信件一并清掉：案件没了，那些「查看案件」就成了点不开的死链
         notificationService.removeAllOfCase(id);
+        // 待审批的措施变更一并清掉（2026-10-24）：案件都没了，这条申请永远批不了，
+        // 留着会让工作台的「待审批 N 条」永远挂着一条点不动的记录。
+        // 只删 PENDING——已批/已退回是审批留痕，属于历史，不能删。
+        approvalMapper.delete(new LambdaQueryWrapper<com.caseflow.entity.CaseApproval>()
+                .eq(com.caseflow.entity.CaseApproval::getCaseId, id)
+                .eq(com.caseflow.entity.CaseApproval::getResult, "PENDING"));
         caseMapper.deleteById(id);
         logService.log("CASE", "DELETE", "CASE", id, "删除案件：" + c.getName(),
                 before, snapshotService.absentJson());
@@ -1527,7 +1536,82 @@ public class CaseService {
         vo.setPendingList(pendingList(8));
         vo.setRecentLogs(operationLogService.recent(20));
         fillFocus(vo);
+        fillMeasureAlerts(vo, null);
         return vo;
+    }
+
+    /**
+     * 强制措施到期提醒（2026-10-24 用户要求：到期前在工作台总览提示）。
+     *
+     * <p>口径：案件未办结未撤销 + 已登记措施 + 有届满日。
+     * <b>到期不等于清空措施</b>——措施是办案事实，到期只表示"该措施不再有效"，
+     * 需由领导或承办人登记下一个措施才算真正结束，所以这里只算状态、不改库。
+     *
+     * @param scopeIds 数据范围（null = 全量，管理层）；非 null 时只统计这些案件
+     */
+    private void fillMeasureAlerts(DashboardVO vo, java.util.Collection<Long> scopeIds) {
+        LocalDateTime now = LocalDateTime.now();
+        LocalDate today = now.toLocalDate();
+        if (scopeIds != null && scopeIds.isEmpty()) {
+            vo.setMeasureAlerts(Collections.emptyList());
+            vo.setMeasureExpired(0);
+            vo.setMeasureExpiring(0);
+            vo.setMeasurePending(0);
+            return;
+        }
+        LambdaQueryWrapper<CaseInfo> q = new LambdaQueryWrapper<CaseInfo>()
+                .isNotNull(CaseInfo::getCaseMeasure)
+                .isNotNull(CaseInfo::getDetainDeadline)
+                .notIn(CaseInfo::getStatus, new ArrayList<>(java.util.Arrays.asList("DONE", "CANCELLED")))
+                .orderByAsc(CaseInfo::getDetainDeadline);
+        if (scopeIds != null) {
+            q.in(CaseInfo::getId, scopeIds);
+        }
+        List<CaseInfo> rows = caseMapper.selectList(q);
+        List<com.caseflow.vo.MeasureAlertVO> alerts = new ArrayList<>();
+        long expired = 0;
+        long expiring = 0;
+        for (CaseInfo c : rows) {
+            com.caseflow.vo.MeasureAlertVO a = new com.caseflow.vo.MeasureAlertVO();
+            a.setCaseId(c.getId());
+            a.setCaseNo(c.getCaseNo());
+            a.setCaseName(c.getName());
+            a.setCaseType(c.getCaseType());
+            a.setMeasure(c.getCaseMeasure());
+            a.setMeasureName(com.caseflow.support.DictHolder.name("CASE_MEASURE", c.getCaseMeasure()));
+            a.setMeasureDate(c.getMeasureDate());
+            a.setDeadline(c.getDetainDeadline());
+            // 按自然日算差：今天到期 = 0，昨天到期 = -1
+            long days = java.time.temporal.ChronoUnit.DAYS.between(today, c.getDetainDeadline().toLocalDate());
+            a.setDaysLeft(days);
+            a.setExpired(days < 0);
+            if (a.isExpired()) {
+                expired++;
+            } else if (days <= 7) {
+                expiring++;
+            }
+            // 只保留"已到期"与"7 天内到期"，其余还早的不占版面
+            if (a.isExpired() || days <= 7) {
+                alerts.add(a);
+            }
+        }
+        // 已到期的排最前（按过期最久的在前），其余按届满日由近到远
+        alerts.sort((x, y) -> {
+            if (x.isExpired() != y.isExpired()) return x.isExpired() ? -1 : 1;
+            return x.getDeadline().compareTo(y.getDeadline());
+        });
+        vo.setMeasureAlerts(alerts);
+        vo.setMeasureExpired(expired);
+        vo.setMeasureExpiring(expiring);
+        // 待审批数：只有领导看得到审批入口，普通民警视角一律 0。
+        // 必须排除"案件已删"的孤儿申请（inSql 与 pendingMeasureApprovalVOs 的过滤保持同口径），
+        // 否则会出现"卡片写 2 条、点开只有 1 条"。
+        vo.setMeasurePending(AuthContext.isFullAccess() && scopeIds == null
+                ? approvalMapper.selectCount(new LambdaQueryWrapper<com.caseflow.entity.CaseApproval>()
+                        .eq(com.caseflow.entity.CaseApproval::getApproveType, "MEASURE")
+                        .eq(com.caseflow.entity.CaseApproval::getResult, "PENDING")
+                        .inSql(com.caseflow.entity.CaseApproval::getCaseId, "SELECT id FROM case_info"))
+                : 0);
     }
 
     /**
@@ -1603,6 +1687,7 @@ public class CaseService {
         vo.setRecentLogs(Collections.emptyList());
         // 重点案件同样走 page()，scopeToSelf 会把范围收敛到本人名下，口径与上面三个清单一致
         fillFocus(vo);
+        fillMeasureAlerts(vo, mine);
         return vo;
     }
 

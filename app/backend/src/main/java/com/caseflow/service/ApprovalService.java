@@ -141,18 +141,69 @@ public class ApprovalService {
     }
 
     /**
-     * 强制措施登记/变更（管理层专属）：自动按措施类型推算期限届满日（可显式覆盖）。
-     * NONE 表示无措施（回到初查视图）。
+     * 强制措施登记/变更（2026-10-24 改为审批制）。
+     *
+     * <p>规则（用户口径）：从当前措施转入下一个措施必须经领导批准。
+     * <ul>
+     *   <li>领导（所长/副所长/法制员/管理员）操作 → 直接生效，写 APPROVED 留痕；</li>
+     *   <li>本案承办人（主办/经办）操作 → 只生成 PENDING 申请，<b>案件措施不变</b>，
+     *       等领导在「待审批」里同意后才落地；退回则维持原措施。</li>
+     * </ul>
+     *
+     * <p>首次登记（当前无措施）同样适用：承办人建完案要登记拘留，也走审批。
      */
     @Transactional(rollbackFor = Exception.class)
-    public CaseInfo measure(Long caseId, String measure, LocalDateTime measureDate,
-                            LocalDateTime detainDeadline, String comment) {
+    public com.caseflow.vo.MeasureResultVO measure(Long caseId, String measure, LocalDateTime measureDate,
+                                                  LocalDateTime detainDeadline, String comment) {
         if (!MEASURES.contains(measure)) {
             throw new BizException("强制措施类型不合法");
         }
         CaseInfo c = requireCase(caseId);
-        requireManager("登记强制措施");
+        // 承办人本人 + 管理层都能发起，其余角色 403
+        checkHandlerOrManager(c);
+        String measureName = "NONE".equals(measure) ? "无（结束当前措施）"
+                : DictHolder.name("CASE_MEASURE", measure);
 
+        if (AuthContext.isFullAccess()) {
+            CaseInfo done = applyMeasure(c, measure, measureDate, detainDeadline, null, comment);
+            return com.caseflow.vo.MeasureResultVO.applied(done, measure, measureName);
+        }
+        // 承办人：同一案件已有待审批申请时不允许再提交（避免审批人面对两条冲突申请）
+        Long pending = approvalMapper.selectCount(new LambdaQueryWrapper<CaseApproval>()
+                .eq(CaseApproval::getCaseId, caseId)
+                .eq(CaseApproval::getApproveType, "MEASURE")
+                .eq(CaseApproval::getResult, "PENDING"));
+        if (pending != null && pending > 0) {
+            throw new BizException("该案件已有一条待审批的措施变更申请，请等待领导审批后再提交");
+        }
+        CaseApproval a = new CaseApproval();
+        a.setCaseId(caseId);
+        a.setApproveType("MEASURE");
+        a.setResult("PENDING");
+        a.setComment(StringUtils.hasText(comment) ? comment.trim() : null);
+        a.setFromMeasure(c.getCaseMeasure());
+        a.setApplyMeasure(measure);
+        a.setApplyDate(measureDate);
+        a.setApplyDeadline(detainDeadline);
+        a.setApplicantId(AuthContext.userId());
+        a.setApplicantName(AuthContext.userName());
+        a.setAppliedAt(LocalDateTime.now());
+        a.setCreatedAt(LocalDateTime.now());
+        approvalMapper.insert(a);
+        logService.log("CASE", "MEASURE_APPLY", "CASE", caseId,
+                "申请变更强制措施：" + measureName + "（待领导审批）");
+        return com.caseflow.vo.MeasureResultVO.pending(a.getId(), c, measure, measureName);
+    }
+
+    /**
+     * 真正的措施落地（原 measure 的主体，抽出来给「领导直接登记」和「审批通过」共用）。
+     *
+     * @param approvalComment 审批意见，直接登记时为 null
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public CaseInfo applyMeasure(CaseInfo c, String measure, LocalDateTime measureDate,
+                                 LocalDateTime detainDeadline, String approvalComment, String applyComment) {
+        Long caseId = c.getId();
         String before = snapshotService.capture(caseId);
         boolean sameMeasure = measure.equals(c.getCaseMeasure());
         LocalDateTime base = sameMeasure && measureDate != null && c.getMeasureDate() != null
@@ -215,7 +266,8 @@ public class ApprovalService {
 
         insertApproval(caseId, "MEASURE", "APPROVED",
                 "登记强制措施：" + DictHolder.name("CASE_MEASURE", measure)
-                        + (StringUtils.hasText(comment) ? "；" + comment : ""));
+                        + (StringUtils.hasText(applyComment) ? "；" + applyComment : "")
+                        + (StringUtils.hasText(approvalComment) ? "；审批意见：" + approvalComment : ""));
 
         logService.log("CASE", "MEASURE", "CASE", caseId,
                 "强制措施：" + (DictHolder.name("CASE_MEASURE", c.getCaseMeasure()) == null ? "无"
@@ -223,6 +275,154 @@ public class ApprovalService {
                         + (c.getDetainDeadline() != null ? "，期限至 " + c.getDetainDeadline() : ""),
                 before, snapshotService.capture(caseId));
         return c;
+    }
+
+    /**
+     * 审批措施变更申请（领导专属）：同意则落地措施，退回则维持原措施并留意见。
+     *
+     * @return 审批后的案件（退回时是未变更的案件）
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public CaseInfo reviewMeasure(Long approvalId, boolean approve, String comment) {
+        if (!AuthContext.isFullAccess()) {
+            throw new BizException(403, "审批强制措施变更需所长/副所长/法制员/管理员");
+        }
+        CaseApproval a = approvalMapper.selectById(approvalId);
+        if (a == null) {
+            throw new BizException("审批记录不存在");
+        }
+        if (!"MEASURE".equals(a.getApproveType()) || !"PENDING".equals(a.getResult())) {
+            throw new BizException("该申请不是待审批的强制措施变更");
+        }
+        CaseInfo c = requireCase(a.getCaseId());
+        if (!approve && !StringUtils.hasText(comment)) {
+            throw new BizException("退回必须填写意见");
+        }
+        // 期间案件措施可能已被改过：申请基于旧状态，直接落地会覆盖别人的操作
+        String cur = c.getCaseMeasure();
+        String from = a.getFromMeasure();
+        boolean sameFrom = cur == null ? from == null : cur.equals(from);
+        if (!sameFrom) {
+            a.setResult("STALE");
+            a.setComment("案件措施已变为「" + DictHolder.name("CASE_MEASURE", cur) + "」，本申请自动失效");
+            a.setApproverId(AuthContext.userId());
+            a.setApproverName(AuthContext.userName());
+            approvalMapper.updateById(a);
+            throw new BizException("案件的强制措施已变更（当前：" + DictHolder.name("CASE_MEASURE", cur)
+                    + "），该申请已失效，请重新提交");
+        }
+        a.setResult(approve ? "APPROVED" : "RETURNED");
+        a.setApproverId(AuthContext.userId());
+        a.setApproverName(AuthContext.userName());
+        a.setComment(StringUtils.hasText(comment) ? comment.trim() : "同意");
+        a.setCreatedAt(LocalDateTime.now());
+        approvalMapper.updateById(a);
+        if (!approve) {
+            logService.log("CASE", "MEASURE_RETURN", "CASE", a.getCaseId(),
+                    "退回强制措施变更申请：" + DictHolder.name("CASE_MEASURE", a.getApplyMeasure())
+                            + "（意见：" + abbrev(comment) + "）");
+            return c;
+        }
+        return applyMeasure(c, a.getApplyMeasure(), a.getApplyDate(), a.getApplyDeadline(),
+                a.getComment(), null);
+    }
+
+    /** 全局限的待审批措施变更（工作台用）；caseId 不为空时只看该案件 */
+    public List<CaseApproval> pendingMeasureApprovals(Long caseId) {
+        LambdaQueryWrapper<CaseApproval> q = new LambdaQueryWrapper<CaseApproval>()
+                .eq(CaseApproval::getApproveType, "MEASURE")
+                .eq(CaseApproval::getResult, "PENDING")
+                .orderByAsc(CaseApproval::getAppliedAt);
+        if (caseId != null) {
+            q.eq(CaseApproval::getCaseId, caseId);
+        }
+        return approvalMapper.selectList(q);
+    }
+
+    /** 待审批列表（带案件名与措施中文名，工作台审批面板直接用这个） */
+    public List<com.caseflow.vo.MeasureApprovalVO> pendingMeasureApprovalVOs(Long caseId) {
+        List<CaseApproval> rows = pendingMeasureApprovals(caseId);
+        if (rows.isEmpty()) {
+            return java.util.Collections.emptyList();
+        }
+        java.util.Set<Long> ids = new java.util.HashSet<>();
+        for (CaseApproval a : rows) {
+            ids.add(a.getCaseId());
+        }
+        java.util.Map<Long, CaseInfo> cases = new java.util.HashMap<>();
+        for (CaseInfo c : caseMapper.selectBatchIds(ids)) {
+            cases.put(c.getId(), c);
+        }
+        List<com.caseflow.vo.MeasureApprovalVO> list = new java.util.ArrayList<>();
+        for (CaseApproval a : rows) {
+            CaseInfo c = cases.get(a.getCaseId());
+            // 案件已被删掉的孤儿申请不列出来：审批人对着一行"（案件已删除）"既点不动也批不了。
+            // 正常路径由 CaseService.delete 顺手清掉 PENDING，这里只是兜底。
+            if (c == null) {
+                continue;
+            }
+            com.caseflow.vo.MeasureApprovalVO v = new com.caseflow.vo.MeasureApprovalVO();
+            v.setId(a.getId());
+            v.setCaseId(a.getCaseId());
+            v.setCaseNo(c.getCaseNo());
+            v.setCaseName(c.getName());
+            v.setFromMeasure(a.getFromMeasure());
+            v.setFromMeasureName(measureNameOf(a.getFromMeasure()));
+            v.setApplyMeasure(a.getApplyMeasure());
+            v.setApplyMeasureName(measureNameOf(a.getApplyMeasure()));
+            v.setApplyDate(a.getApplyDate());
+            v.setApplyDeadline(a.getApplyDeadline());
+            v.setComment(a.getComment());
+            v.setApplicantName(a.getApplicantName());
+            v.setAppliedAt(a.getAppliedAt());
+            list.add(v);
+        }
+        return list;
+    }
+
+    /** 措施中文名：空/NONE 一律算「无措施」 */
+    private String measureNameOf(String code) {
+        if (!StringUtils.hasText(code) || "NONE".equalsIgnoreCase(code)) {
+            return "无措施";
+        }
+        String n = DictHolder.name("CASE_MEASURE", code);
+        return n == null ? code : n;
+    }
+
+    /**
+     * 清掉指向已删案件的待审批申请（启动时跑，幂等）。
+     *
+     * <p>在「删案件顺手清 PENDING」上线之前删掉的案件，申请还留在库里，
+     * 工作台会显示一条"待审批"却点不动。已批/已退回的是留痕，不动。
+     */
+    public int purgeOrphanPending() {
+        List<CaseApproval> rows = approvalMapper.selectList(new LambdaQueryWrapper<CaseApproval>()
+                .eq(CaseApproval::getResult, "PENDING"));
+        if (rows.isEmpty()) {
+            return 0;
+        }
+        java.util.Set<Long> caseIds = new java.util.HashSet<>();
+        for (CaseApproval a : rows) {
+            caseIds.add(a.getCaseId());
+        }
+        java.util.Set<Long> alive = new java.util.HashSet<>();
+        for (CaseInfo c : caseMapper.selectBatchIds(caseIds)) {
+            alive.add(c.getId());
+        }
+        int n = 0;
+        for (CaseApproval a : rows) {
+            if (!alive.contains(a.getCaseId())) {
+                approvalMapper.deleteById(a.getId());
+                n++;
+            }
+        }
+        return n;
+    }
+
+    /** 某案件是否已有待审批的措施变更（前端展示"审批中"角标） */
+    public CaseApproval pendingOf(Long caseId) {
+        List<CaseApproval> list = pendingMeasureApprovals(caseId);
+        return list.isEmpty() ? null : list.get(0);
     }
 
     /**

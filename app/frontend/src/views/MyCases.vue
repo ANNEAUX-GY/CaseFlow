@@ -27,6 +27,34 @@
         <div class="cf-kpi__value">{{ data.dueIn3Days || 0 }}</div>
         <div class="cf-kpi__label">3天内到期</div>
       </div>
+      <!-- 措施到期（2026-10-24）：民警看不到工作台，但"我名下哪些案子措施要到期了"
+           恰恰是承办人最该知道的，所以在自己的案件页也给一格。 -->
+      <div class="cf-kpi cf-kpi--danger" @click="scrollToMeasure">
+        <div class="cf-kpi__value">{{ (data.measureExpired || 0) + (data.measureExpiring || 0) }}</div>
+        <div class="cf-kpi__label">措施到期</div>
+      </div>
+    </div>
+
+    <!-- 措施到期明细：只在真有到期/临期时出现，没数据不占版面 -->
+    <div v-if="(data.measureAlerts || []).length" id="cf-mine-measure" class="cf-panel">
+      <div class="cf-panel__head">
+        <span :class="(data.measureExpired || 0) > 0 ? 'cf-danger' : ''">我名下到期的强制措施</span>
+        <span class="cf-panel__head-tip">到期即该措施结束，需登记下一个措施（变更要经领导批准）</span>
+      </div>
+      <div class="cf-measure-list">
+        <div v-for="a in data.measureAlerts" :key="a.caseId" class="cf-measure-list__row" @click="openDetail({ id: a.caseId })">
+          <span class="cf-measure-list__name">{{ a.caseName }}</span>
+          <span class="cf-muted">{{ a.measureName }}</span>
+          <span class="cf-muted">届满 {{ (a.deadline || '').slice(0, 10) }}</span>
+          <el-tag size="small" :type="a.expired ? 'danger' : 'warning'">
+            {{ a.expired ? `已到期 ${-a.daysLeft} 天` : (a.daysLeft === 0 ? '今天到期' : `${a.daysLeft} 天后到期`) }}
+          </el-tag>
+          <span class="cf-spacer" />
+          <!-- 到期后要"由领导或主办/经办人登记下一个措施"：按钮直接开登记弹窗（提交后按角色走审批） -->
+          <el-button v-if="a.expired" link type="primary" size="small" @click.stop="openMeasure(a)">登记下一措施</el-button>
+          <el-button v-else link type="primary" size="small" @click.stop="openDetail({ id: a.caseId })">查看</el-button>
+        </div>
+      </div>
     </div>
 
     <div class="cf-toolbar">
@@ -78,6 +106,13 @@
     </div>
 
     <CaseDetailDrawer v-model="detailVisible" :case-id="currentId" :anchor="locateAnchor" @done="refreshAll" />
+    <MeasureDialog
+      v-model="measureVisible"
+      :case-id="measureTarget.id"
+      :case-type="measureTarget.caseType"
+      :current-measure="measureTarget.measure"
+      @done="refreshAll"
+    />
 
     <PageFooter />
   </div>
@@ -88,6 +123,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { caseApi } from '../api'
 import CaseTable from '../components/CaseTable.vue'
 import CaseDetailDrawer from '../components/CaseDetailDrawer.vue'
+import MeasureDialog from '../components/MeasureDialog.vue'
 import PageFooter from '../components/PageFooter.vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '../store/user'
@@ -140,6 +176,21 @@ const loadOverview = async () => {
 const refreshAll = () => {
   load()
   loadOverview()
+}
+
+/** KPI 点「措施到期」滚到明细条（明细就在本页，跳页反而多一步） */
+const scrollToMeasure = () => {
+  const el = document.getElementById('cf-mine-measure')
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+// 措施登记（2026-10-24）：承办人没有「案件盯办」页权限，所以在自己的案件页给入口。
+// 领导点保存直接生效；承办人点保存只生成待审批申请（表单内部按角色提示）。
+const measureVisible = ref(false)
+const measureTarget = ref({ id: null, caseType: '', measure: '' })
+const openMeasure = (a) => {
+  measureTarget.value = { id: a.caseId, caseType: a.caseType || '', measure: a.measure || '' }
+  measureVisible.value = true
 }
 
 const pick = (patch) => {

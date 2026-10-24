@@ -128,7 +128,6 @@ onMounted(() => {
 defineExpose({ loadCounts })
 </script>
 
-<style>
-/* 卡片样式已上移到 styles/index.css（cf-picker 系列，与「按类别浏览」板块页共用）。
-   放组件内会按需注入——板块页直链进入时本组件未加载，样式缺失会裸奔（2026-10-08）。 */
-</style>
+<!-- 卡片样式在 styles/index.css（cf-picker 系列，与「按类别浏览」板块页共用，2026-10-08 上移）。
+     此处不放 <style>：空 style 块会让 vite 产出 0 字节的 CSS chunk，
+     而 Spring Boot 对 0 字节静态资源返回 404，浏览器预加载直接报错。 -->

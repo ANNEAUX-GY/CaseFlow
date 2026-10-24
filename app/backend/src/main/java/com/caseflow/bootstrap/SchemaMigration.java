@@ -80,6 +80,15 @@ public class SchemaMigration implements ApplicationRunner {
             {"case_leader_opinion", "sort_order", "INT NULL"},
             {"case_leader_opinion", "deadline", "DATETIME NULL"},
             {"case_leader_opinion", "importance", "VARCHAR(4) NULL"},
+            // 强制措施变更审批（2026-10-24）：承办人提交申请 → 领导批准后才改措施。
+            // 现有 result 列扩用 PENDING，历史行只有 APPROVED/RETURNED，不冲突。
+            {"case_approval", "apply_measure", "VARCHAR(20) NULL"},
+            {"case_approval", "apply_date", "DATETIME NULL"},
+            {"case_approval", "apply_deadline", "DATETIME NULL"},
+            {"case_approval", "from_measure", "VARCHAR(20) NULL"},
+            {"case_approval", "applicant_id", "BIGINT NULL"},
+            {"case_approval", "applicant_name", "VARCHAR(64) NULL"},
+            {"case_approval", "applied_at", "DATETIME NULL"},
             // 阶段→环节→任务三层流程（2026-10）：
             // flow_stage 记案件走到哪个阶段（进度随之重置）；
             // case_plan 加 stage/step_key/task_key/is_std 把原来的「侦查计划」升格为「阶段任务」，

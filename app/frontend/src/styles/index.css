@@ -135,14 +135,16 @@ body {
 /* KPI 数字块：数字最大、标签最小
    列数写死（而不是 auto-fit），窗口宽度变化时不会突然换行导致整页往下窜 */
 .cf-kpi-grid {
-  /* 9 格：加了「重点案件」之后不再是整数个 8。
-     用 auto-fit + minmax 让它按宽度自动排（9 / 5 / 3…），
-     比硬写 repeat(9, 1fr) 更耐不同屏宽——硬写会让最右一格在窄屏被压扁。 */
+  /* 10 格（2026-10-24 加了「措施到期」）：用 auto-fit + minmax 按宽度自动排，
+     比硬写 repeat(10, 1fr) 更耐不同屏宽。
+     min 从 118 降到 102：10 格要 10*102+9*8=1092px 才不折行，
+     1440 屏内容区约 1188、1366 屏约 1114，都能一行放下；
+     再大就折成两行，比把最右一格压扁好看。 */
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(102px, 1fr));
   gap: 8px;
 }
-@media (max-width: 860px) { .cf-kpi-grid { grid-template-columns: repeat(auto-fit, minmax(104px, 1fr)); } }
+@media (max-width: 860px) { .cf-kpi-grid { grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); } }
 
 .cf-kpi {
   background: var(--cf-panel);
@@ -179,7 +181,8 @@ body {
 .cf-kpi--warn .cf-kpi__value { color: var(--cf-warn); }
 
 /* 「我的案件」概览只有 4 个口径，单独指定列数，避免沿用 8 列在右侧留半屏空档 */
-.cf-kpi-grid--mine { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+/* 5 格（2026-10-24 加了「措施到期」）：写死 4 会把它甩到第二行单独占一格 */
+.cf-kpi-grid--mine { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 @media (max-width: 860px) { .cf-kpi-grid--mine { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 /* 「我的案件」顶部的实名范围说明条：先讲清数据从哪来，再谈数字 */
@@ -608,6 +611,22 @@ body {
 }
 
 .cf-spacer { flex: 1; }
+
+/* 措施到期明细条（2026-10-24）：我的案件页用；一行一案，点整行进案件 */
+.cf-measure-list { padding: 4px 10px 10px; }
+.cf-measure-list__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  border-bottom: 1px solid var(--cf-border);
+}
+.cf-measure-list__row:last-child { border-bottom: none; }
+.cf-measure-list__row:hover { background: var(--cf-head-bg); }
+.cf-measure-list__name { font-weight: 600; min-width: 180px; max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* 登录页：藏蓝底 + 徽标 */
 .cf-login {

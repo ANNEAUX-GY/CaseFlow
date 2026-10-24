@@ -39,6 +39,12 @@
         <div class="cf-kpi__value">{{ data.dueIn7Days || 0 }}</div>
         <div class="cf-kpi__label">7天内到期</div>
       </div>
+      <!-- 强制措施到期（2026-10-24 用户要求）：与"案件期限"是两回事——
+           案件期限管办案节奏，措施期限一过就是超期羁押，法律风险最高，单独一格。 -->
+      <div class="cf-kpi cf-kpi--danger" @click="scrollToMeasure">
+        <div class="cf-kpi__value">{{ (data.measureExpired || 0) + (data.measureExpiring || 0) }}</div>
+        <div class="cf-kpi__label">措施到期</div>
+      </div>
     </div>
 
     <!-- 案件类型分析栏：图例即筛选（点色块切换类型），期限 / 紧急程度多选组合，全部图表实时联动 -->
@@ -198,6 +204,60 @@
       />
     </div>
 
+    <!-- 强制措施到期（2026-10-24）：排在重点案件之后、逾期之前。
+         措施到期 = 该措施不再有效，必须由领导或承办人登记下一个措施，
+         比普通案件期限逾期更该先看到（超期羁押是硬风险）。 -->
+    <div id="cf-measure-panel" class="cf-panel">
+      <div class="cf-panel__head">
+        <span :class="(data.measureExpired || 0) > 0 ? 'cf-danger' : ''">
+          强制措施到期（{{ (data.measureExpired || 0) + (data.measureExpiring || 0) }}）
+        </span>
+        <span class="cf-panel__head-tip">到期前 7 天提示；到期即该措施结束，需登记下一个措施</span>
+        <span class="cf-spacer"></span>
+        <el-button
+          v-if="canFocus && (data.measurePending || 0) > 0"
+          type="primary" size="small"
+          :loading="approvalDlg.loading"
+          @click="openApprovals"
+        >
+          待审批 {{ data.measurePending }} 条
+        </el-button>
+      </div>
+      <div v-if="!(data.measureAlerts || []).length" class="cf-panel__body">
+        <div class="cf-muted">暂无 7 天内到期或已到期的强制措施。</div>
+      </div>
+      <el-table v-else :data="data.measureAlerts" size="small" max-height="272" class="cf-measure-table">
+        <el-table-column label="案件名称" min-width="210" show-overflow-tooltip>
+          <template #default="{ row }">
+            <el-link type="primary" @click="openDetail({ id: row.caseId })">{{ row.caseName }}</el-link>
+          </template>
+        </el-table-column>
+        <el-table-column prop="measureName" label="当前措施" width="110" />
+        <el-table-column label="起算日" width="112">
+          <template #default="{ row }">{{ (row.measureDate || '').slice(0, 10) || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="届满日" width="112">
+          <template #default="{ row }">{{ (row.deadline || '').slice(0, 10) }}</template>
+        </el-table-column>
+        <el-table-column label="状态" width="130">
+          <template #default="{ row }">
+            <el-tag v-if="row.expired" type="danger" size="small" effect="dark">
+              已到期 {{ -row.daysLeft }} 天
+            </el-tag>
+            <el-tag v-else-if="row.daysLeft === 0" type="danger" size="small">今天到期</el-tag>
+            <el-tag v-else type="warning" size="small">{{ row.daysLeft }} 天后到期</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="110" align="right">
+          <template #default="{ row }">
+            <el-button link type="primary" @click="openDetail({ id: row.caseId })">
+              {{ row.expired ? '登记下一措施' : '查看' }}
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </div>
+
     <el-row :gutter="12">
       <el-col :span="12" :xs="24">
         <div class="cf-panel">
@@ -330,16 +390,54 @@
       @open-case="openCaseFromLog"
     />
 
+    <!-- 待审批的强制措施变更（2026-10-24）：承办人提交、领导在这里批。
+         审批前不显示任何"已变更"的字样——措施本来就没动。 -->
+    <!-- 宽 880：6 列（案件 170 + 变更 170 + 两个日期 106*2 + 申请人 90 + 操作 150）合计 792，
+         760 的弹窗放不下，「退回」会被挤出可视区。 -->
+    <el-dialog v-model="approvalDlg.visible" title="待审批的强制措施变更" width="880px" class="cf-dialog">
+      <div v-if="!approvalDlg.rows.length" class="cf-muted">没有待审批的申请。</div>
+      <el-table v-else :data="approvalDlg.rows" size="small" max-height="400">
+        <el-table-column label="案件" min-width="170" show-overflow-tooltip>
+          <template #default="{ row }">
+            <el-link type="primary" @click="openDetail({ id: row.caseId })">{{ row.caseName }}</el-link>
+          </template>
+        </el-table-column>
+        <el-table-column label="措施变更" width="170">
+          <template #default="{ row }">
+            <span class="cf-muted">{{ row.fromMeasureName }}</span>
+            <span style="margin: 0 4px">→</span>
+            <b>{{ row.applyMeasureName }}</b>
+          </template>
+        </el-table-column>
+        <el-table-column label="起算日" width="106">
+          <template #default="{ row }">{{ (row.applyDate || '').slice(0, 10) || '按批准日' }}</template>
+        </el-table-column>
+        <el-table-column label="届满日" width="106">
+          <template #default="{ row }">{{ (row.applyDeadline || '').slice(0, 10) || '自动推算' }}</template>
+        </el-table-column>
+        <el-table-column prop="applicantName" label="申请人" width="90" />
+        <el-table-column label="操作" width="150" align="right">
+          <template #default="{ row }">
+            <el-button link type="success" @click="reviewOne(row, true)">同意</el-button>
+            <el-button link type="danger" @click="reviewOne(row, false)">退回</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <template #footer>
+        <el-button @click="approvalDlg.visible = false">关闭</el-button>
+      </template>
+    </el-dialog>
+
     <PageFooter />
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { StarFilled } from '@element-plus/icons-vue'
-import { caseApi, logApi } from '../api'
+import { caseApi, logApi, watchApi } from '../api'
 import { gotoGated } from '../store/caseType'
 import { useUserStore } from '../store/user'
 import { useEventStore } from '../store/events'
@@ -664,6 +762,49 @@ const openAssign = (row) => {
   currentDeadline.value = row.deadline || null
   currentMeasure.value = row.caseMeasure || null
   assignVisible.value = true
+}
+
+// ---- 强制措施到期 / 待审批（2026-10-24）----
+/** KPI 点「措施到期」滚到面板，不跳页：到期处理就在本页看清单，跳走反而多一步 */
+const scrollToMeasure = () => {
+  const el = document.getElementById('cf-measure-panel')
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+const approvalDlg = reactive({ visible: false, rows: [], loading: false })
+const openApprovals = async () => {
+  approvalDlg.loading = true
+  try {
+    approvalDlg.rows = (await watchApi.pendingMeasureApprovals()) || []
+    approvalDlg.visible = true
+  } finally {
+    approvalDlg.loading = false
+  }
+}
+/**
+ * 审批一条：同意 = 措施立即生效（后端 applyMeasure）；退回必填意见、措施保持原样。
+ * 同意/退回都先收意见再请求，避免"点了就变、意见没地方写"。
+ */
+const reviewOne = async (row, approve) => {
+  let comment = ''
+  const tip = `案件：${row.caseName}\n变更：${row.fromMeasureName} → ${row.applyMeasureName}`
+  const r = await ElMessageBox.prompt(
+    approve ? `${tip}\n\n审批意见（可留空）` : `${tip}\n\n请填写退回原因（必填）`,
+    approve ? '同意强制措施变更' : '退回强制措施变更',
+    {
+      inputType: 'textarea',
+      inputPlaceholder: approve ? '同意' : '例如：证据尚不充分，暂不变更为逮捕',
+      inputValidator: (v) => (approve ? true : (!!v && !!v.trim()) || '退回必须填写意见'),
+      dangerouslyUseHTMLString: false,
+      customStyle: { whiteSpace: 'pre-line' }
+    }
+  ).catch(() => null)
+  if (!r) return
+  comment = (r.value || '').trim()
+  await watchApi.reviewMeasure(row.id, { approve, comment })
+  ElMessage.success(approve ? '已同意，强制措施已生效' : '已退回，强制措施保持不变')
+  approvalDlg.rows = (await watchApi.pendingMeasureApprovals()) || []
+  if (!approvalDlg.rows.length) approvalDlg.visible = false
+  await load()
 }
 
 // ---- 操作日志：查看详情 / 撤回上一步（Ctrl+Z） ----

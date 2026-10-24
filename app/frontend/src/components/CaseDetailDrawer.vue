@@ -175,8 +175,9 @@
             </el-table-column>
             <el-table-column prop="phone" label="联系电话" width="120" />
             <el-table-column prop="address" label="住址" min-width="160" show-overflow-tooltip />
-            <el-table-column label="操作" width="60" align="right">
+            <el-table-column label="操作" width="96" align="right">
               <template #default="{ row }">
+                <el-button link type="primary" @click="openSuspect(row)">编辑</el-button>
                 <el-button link type="danger" @click="removeSuspect(row)">删除</el-button>
               </template>
             </el-table-column>
@@ -364,11 +365,12 @@
     </template>
   </el-dialog>
 
-  <!-- 嫌疑人录入：手机端全屏，避免窄屏下表单折行错位 -->
+  <!-- 嫌疑人录入 / 编辑：同一个弹窗两用，title 按有无 id 切换。
+       编辑要把「是否采取强制措施 / 何种措施 / 起止时间」如实回显，改完即存。 -->
   <el-dialog
     v-model="suspectVisible"
-    title="新增嫌疑人"
-    width="520px"
+    :title="suspectForm.id ? '编辑嫌疑人' : '新增嫌疑人'"
+    width="640px"
     destroy-on-close
     class="cf-dialog"
   >
@@ -399,27 +401,26 @@
       </el-form-item>
       <!-- 强制措施（2026-10-18 用户要求）：当前措施 + 措施开始时间 + 下一节点结束时间。
            选了措施就把两个时间一并要求填，缺一个都不给保存。 -->
-      <el-form-item label="当前强制措施">
+      <!-- label 必须用「强制措施」(4 字)，不能用「当前强制措施」：
+           label 栏内容区只有 80px，6 字需 84px，会把「施」挤到第二行并顶歪下面「措施开始」 -->
+      <el-form-item label="强制措施">
         <el-select v-model="suspectForm.measure" clearable placeholder="未采取" style="width: 100%">
           <el-option v-for="m in MEASURE_CHOICES" :key="m.value" :label="m.label" :value="m.value" />
         </el-select>
       </el-form-item>
-      <el-row v-if="suspectForm.measure" :gutter="12">
-        <el-col :span="12" :xs="24">
-          <el-form-item label="措施开始" required>
-            <el-date-picker v-model="suspectForm.measureStartAt" type="date"
-              value-format="YYYY-MM-DD"
-              placeholder="必填" style="width: 100%" />
-          </el-form-item>
-        </el-col>
-        <el-col :span="12" :xs="24">
-          <el-form-item label="措施结束" required>
-            <el-date-picker v-model="suspectForm.measureEndAt" type="date"
-              value-format="YYYY-MM-DD"
-              placeholder="下一节点，必填" style="width: 100%" />
-          </el-form-item>
-        </el-col>
-      </el-row>
+      <!-- 起止时间各自整行：两列并排时日期控件只剩 ~148px，日期和 placeholder 必被裁 -->
+      <template v-if="suspectForm.measure">
+        <el-form-item label="措施开始" required>
+          <el-date-picker v-model="suspectForm.measureStartAt" type="date"
+            value-format="YYYY-MM-DD"
+            placeholder="选择措施开始日期" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="措施结束" required>
+          <el-date-picker v-model="suspectForm.measureEndAt" type="date"
+            value-format="YYYY-MM-DD"
+            placeholder="选择下一节点日期" style="width: 100%" />
+        </el-form-item>
+      </template>
       <el-form-item label="备注">
         <el-input v-model="suspectForm.remark" type="textarea" :rows="2" maxlength="512" />
       </el-form-item>
@@ -691,14 +692,31 @@ const onEditDone = async () => {
 const suspectVisible = ref(false)
 const suspectSaving = ref(false)
 const emptySuspect = () => ({
+  id: null,
   name: '', gender: '', idCard: '', phone: '', address: '', remark: '',
   // 强制措施（2026-10-18）：选了措施就必须填起止时间，两处都会校验
   measure: '', measureStartAt: '', measureEndAt: ''
 })
 const suspectForm = ref(emptySuspect())
 
-const openSuspect = () => {
-  suspectForm.value = emptySuspect()
+/** 不传 row = 新增；传 row = 编辑（把「是否采取 / 何种措施 / 起止时间」如实回显） */
+const openSuspect = (row) => {
+  suspectForm.value = row
+    ? {
+        id: row.id,
+        name: row.name || '',
+        gender: row.gender || '',
+        idCard: row.idCard || '',
+        phone: row.phone || '',
+        address: row.address || '',
+        remark: row.remark || '',
+        // measure='NONE' 与未填等价，都回显成「未采取」（清空 select）
+        measure: row.measure && row.measure !== 'NONE' ? row.measure : '',
+        // VO 时间统一是 yyyy-MM-dd；防御性 slice 一下，存量带时分秒的数据也不会让 date-picker 报错
+        measureStartAt: (row.measureStartAt || '').toString().slice(0, 10),
+        measureEndAt: (row.measureEndAt || '').toString().slice(0, 10)
+      }
+    : emptySuspect()
   suspectVisible.value = true
 }
 
@@ -725,8 +743,14 @@ const submitSuspect = async () => {
   }
   suspectSaving.value = true
   try {
-    await suspectApi.add(detail.value.id, { ...f })
-    ElMessage.success('嫌疑人已录入')
+    if (f.id) {
+      // 编辑：走后端已有的 PUT /cases/suspects/{id}（带快照日志，可撤回）
+      await suspectApi.update(f.id, { ...f })
+      ElMessage.success('嫌疑人信息已更新')
+    } else {
+      await suspectApi.add(detail.value.id, { ...f })
+      ElMessage.success('嫌疑人已录入')
+    }
     suspectVisible.value = false
     await reload()
     emit('done')
