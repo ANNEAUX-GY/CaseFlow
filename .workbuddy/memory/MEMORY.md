@@ -102,6 +102,15 @@
   `@FullAccessOnly` 由 PermissionInterceptor 拦；**前端 getter 名是 `isFullAccess`**。
 - 账号：`audit_status` 非 1 不能登录；手机号唯一；停用/删除/重置密码必须 `removeAll`。
 - 打包：前端 `base='/api/'`，pom 拷 dist 进 static，必须 clean package，先杀 8080。
+- **出包两个形态**：`package_deploy.py`（完整包，新装用）/ `--patch-only`（升级补丁，
+  **只有 jar + 升级说明，不含 config/ 与 data/**，内网更新发这个，防"解压全部覆盖"）。
+- **升级纪律**：只许 `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE ADD COLUMN`；
+  覆盖型数据整理必须进 `onceOnly()` 闸门。**每次出包前跑
+  `python app/scripts/verify_upgrade_safe.py`**（零依赖，11 项，退出码非 0 不许出包）。
+- **统计 schema.sql 表数必须先剥注释**：文件里有句注释也含
+  `CREATE TABLE IF NOT EXISTS`，直接 grep 会多算一张（曾误报 22→23）。
+- 升级演练基线用 `git show <旧提交>:app/sql/schema.sql` 建库 + 按旧列清单导 CSV 比指纹；
+  **`sha256sum $dir/*.csv` 会连路径一起哈希**，必须 `cd $dir && sha256sum *.csv | sort | sha256sum`。
 
 ## 用户交互偏好
 - **所有操作直接执行，不先问**（最高优先级）：改代码、自检、重启、造数、commit

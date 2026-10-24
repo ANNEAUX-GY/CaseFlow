@@ -1,6 +1,11 @@
 -- =====================================================================
 --  MySQL 专用索引（H2 dev 模式不需要；正式库请务必执行）
 --  执行方式：mysql -uroot -p case_flow < sql/index-mysql.sql
+--
+--  ⚠ 只在「首次建库」后执行一次；升级时不要再执行。
+--     MySQL 的 CREATE INDEX 没有 IF NOT EXISTS，重复执行会报
+--     "Duplicate key name"。报错本身不影响任何数据，但会让人误以为升级失败。
+--     升级要做的补列由程序启动时（SchemaMigration）自动完成，不需要手工 SQL。
 -- =====================================================================
 CREATE INDEX idx_emp_parent    ON org_employee (parent_id);
 CREATE INDEX idx_emp_no        ON org_employee (employee_no);
