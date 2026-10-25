@@ -808,6 +808,15 @@ html { scrollbar-gutter: stable; }
 /* 表头在卡片内滚动时保持吸顶 */
 .el-table__header-wrapper th { position: sticky; top: 0; z-index: 2; }
 
+/* 右固定列（2026-10-25）：窗口窄时列总宽超过容器，「操作」列默认会被推出视口，
+   固定后始终贴在右侧可点。加一道左侧阴影表明它是浮层，否则看着像把
+   「状态 / 截止期限」吃掉。z-index 必须高于吸顶表头的 2，否则横向滚动时表头压住按钮。 */
+.el-table .el-table__cell.el-table-fixed-column--right {
+  box-shadow: -10px 0 10px -10px rgba(18, 41, 74, 0.35);
+  z-index: 3;
+}
+.el-table__header-wrapper th.el-table__cell.el-table-fixed-column--right { z-index: 4; }
+
 /* 顶栏日期 */
 .cf-header__date {
   font-size: 14px;

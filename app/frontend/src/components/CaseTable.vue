@@ -12,26 +12,27 @@
       <!-- 一键重点关注（2026-10-09）：列表里直接点星标注，不用打开案件详情。
            星标打在案件上是全局的（领导一眼要看到），所以只给管理层，
            普通民警这里不显示（后端 /cases/{id}/focus 也是 @FullAccessOnly）。 -->
-      <el-table-column v-if="canManage" label="重点" width="60" align="center">
+      <el-table-column v-if="canManage" label="重点" width="54" align="center">
         <template #default="{ row }">
           <FocusStar :row="row" @changed="(p) => emit('focus', p)" />
         </template>
       </el-table-column>
       <!-- 报案 / 受案时间（2026-10-18 用户要求）：原来的「编号」（CA-xxx）业务意义不大，
            换成业务上真正要看的那个时间点。已受案的取受案时间，未受案的手工警情取报案时间，
-           两者在后端都已汇总到 caseTime，这里只负责按有无 acceptTime 决定标签。 -->
-      <el-table-column v-if="showCaseTime && !compact" label="报案/受案时间" width="152">
+           两者在后端都已汇总到 caseTime，这里只负责按有无 acceptTime 决定标签。
+           2026-10-25：标签与日期改同一行（原来上下两行既占宽又抬高行高，一屏少看两条）。 -->
+      <el-table-column v-if="showCaseTime && !compact" label="报案/受案时间" width="132">
         <template #default="{ row }">
           <template v-if="caseTimeText(row)">
             <el-tag size="small" :type="row.acceptTime ? 'primary' : 'info'" effect="plain">
               {{ row.acceptTime ? '受案' : '报案' }}
             </el-tag>
-            <div class="cf-muted" style="font-size: 12px">{{ caseTimeText(row) }}</div>
+            <span class="cf-muted" style="font-size: 12px; margin-left: 4px">{{ caseTimeText(row) }}</span>
           </template>
           <span v-else class="cf-muted">—</span>
         </template>
       </el-table-column>
-      <el-table-column label="案件名称" :min-width="compact ? 170 : 220" show-overflow-tooltip>
+      <el-table-column label="案件名称" :min-width="compact ? 140 : 150" show-overflow-tooltip>
         <template #default="{ row }">
           <span :style="{ color: priorityColor(row), fontWeight: row.priority === 'URGENT' ? 600 : 400 }">
             {{ row.name }}
@@ -42,7 +43,7 @@
           <span class="cf-muted" style="margin-left: 6px">{{ SOURCE_META[row.sourceType] }}</span>
         </template>
       </el-table-column>
-      <el-table-column v-if="!compact" label="案件类型" width="140">
+      <el-table-column v-if="!compact" label="案件类型" width="88">
         <template #default="{ row }">
           <el-tag v-if="row.caseType" size="small" :type="(CASE_TYPE_META[row.caseType] || {}).type || 'info'" effect="plain">
             {{ (CASE_TYPE_META[row.caseType] || {}).label }}
@@ -51,7 +52,7 @@
           <div v-if="row.category" class="cf-muted" style="font-size: 12px">{{ row.category }}</div>
         </template>
       </el-table-column>
-      <el-table-column v-if="!compact" label="嫌疑人" width="140">
+      <el-table-column v-if="!compact" label="嫌疑人" width="84" class-name="cf-col-suspect">
         <template #default="{ row }">
           <el-tooltip v-if="suspectLabel(row)" :content="suspectNamesText(row)"
             placement="top" :disabled="!suspectNamesText(row)">
@@ -60,14 +61,14 @@
           <span v-else class="cf-muted">—</span>
         </template>
       </el-table-column>
-      <el-table-column v-if="!compact" label="办案阶段" width="120">
+      <el-table-column v-if="!compact" label="办案阶段" width="88">
         <template #default="{ row }">
           <el-tag size="small" :type="(STAGE_META[row.flowStage] || {}).type" effect="plain">
             {{ row.flowStageName || stageLabel(row.flowStage) }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="主办 / 协办" :min-width="compact ? 110 : 150" show-overflow-tooltip>
+      <el-table-column label="主办 / 协办" :min-width="compact ? 90 : 96" show-overflow-tooltip>
         <template #default="{ row }">
           <span>{{ row.owner ? row.owner.employeeName : '未指派' }}</span>
           <span v-if="row.members && row.members.length" class="cf-muted">
@@ -75,14 +76,14 @@
           </span>
         </template>
       </el-table-column>
-      <el-table-column label="截止期限" width="150">
+      <el-table-column label="截止期限" width="124" show-overflow-tooltip>
         <template #default="{ row }">
           <!-- 2026-10-14：列表只显示剩余/已逾期天数，具体哪天截止点详情看
                （详情抽屉 CaseDetailDrawer 用 dueText，那里带日期） -->
           <span :class="dueClass(row)">{{ dueDaysText(row) }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="状态" width="86">
+      <el-table-column label="状态" width="68">
         <template #default="{ row }">
           <el-tag size="small" :type="row.caseType === 'ADMINISTRATIVE' && row.status !== 'DONE' ? 'primary' : (STATUS_META[row.status] || {}).type || 'info'">
             {{ row.caseType === 'ADMINISTRATIVE' && row.status !== 'DONE' ? '已受案' : (STATUS_META[row.status] || {}).label || row.status }}
@@ -91,8 +92,10 @@
       </el-table-column>
       <!-- 操作列：编辑是 2026-10-24 加的（管理员新增/导入案件后常要改案件名，
            原来只能「详情 → 右上角编辑案件」，隔了两层）。只给显式传 editable 的页面，
-           否则工作台/到期提醒这些没接 @edit 的页面会出现点了没反应的死按钮。 -->
-      <el-table-column v-if="showActions" label="操作" :width="actionWidth" align="right">
+           否则工作台/到期提醒这些没接 @edit 的页面会出现点了没反应的死按钮。
+           2026-10-25：fixed="right"——列总宽超过容器时右侧按钮会被推出视口，
+           固定在右边后无论窗口多窄都能点到（用户反馈"操作栏未显示完全"）。 -->
+      <el-table-column v-if="showActions" label="操作" :width="actionWidth" align="right" fixed="right">
         <template #default="{ row }">
           <el-button v-if="canManage && !detailsOnly" link type="primary" @click="emit('assign', row)">指派</el-button>
           <el-button v-if="editable && canManage && !detailsOnly" link type="primary" @click="emit('edit', row)">编辑</el-button>
@@ -137,11 +140,13 @@ const props = defineProps({
 })
 const emit = defineEmits(['open', 'assign', 'remove', 'focus', 'edit'])
 
-// 操作列宽按实际按钮数算：4 个链接按钮 + 单元格左右 padding
+// 操作列宽按实际按钮数算：每个中文链接按钮约 28px + 之间 12px 间距 + 单元格左右 padding
+// 2026-10-25 修：这里原来写的是 props.canManage，但 canManage 是本组件的 computed（不在 props 里），
+// 取到 undefined → 永远走 84px 分支，四个按钮全挤在一起，用户看到的就是「操作」列显示不全。
 const actionWidth = computed(() => {
-  if (!(props.showActions)) return 0
-  if (!(props.canManage && !props.detailsOnly)) return 90
-  return props.editable ? 200 : 150
+  if (!props.showActions) return 0
+  if (!(canManage.value && !props.detailsOnly)) return 84
+  return props.editable ? 196 : 140
 })
 
 // 传了固定 height 时表格自身已锁定高度，不再额外撑最小高度
