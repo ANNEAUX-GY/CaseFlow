@@ -1,0 +1,202 @@
+﻿本次升级涉及的结构变更说明
+==============================================================
+
+生成时间：2026-10-25 23:13
+
+一句话结论
+--------------------------------------------------------------
+只加字段、只加一张内部台账表；没有删字段、没有改字段类型、没有改表名。
+内网已经录入的案件、嫌疑人、意见、待办、附件一个字节都不会动。
+
+一、本次新增了什么（人话版）
+--------------------------------------------------------------
+  2026-10-25
+
+  本版本（相对 10-16 版本）新增 11 个字段 + 1 张内部表，没有任何删除或修改。
+
+  案件表 case_info
+    + case_time          案件时间。列表"报案/受案时间"列与排序都用它；
+                         老案件首次启动时由程序按受案时间（没有则创建时间）自动回填。
+
+  嫌疑人表 case_suspect
+    + measure            当前强制措施：拘留 / 逮捕 / 取保候审 / 监视居住 / 拘传
+    + measure_start_at   本次措施的开始时间
+    + measure_end_at     本次措施的结束时间（下一节点），用于到期提醒
+
+  审批表 case_approval（强制措施变更审批）
+    + apply_measure      申请变更成的措施
+    + apply_date         申请的起算日
+    + apply_deadline     申请的期限届满日
+    + from_measure       申请前的措施（审批时对比用）
+    + applicant_id       申请人
+    + applicant_name     申请人姓名
+    + applied_at         申请时间
+
+  新表 schema_migration_mark
+    内部台账表，只记录"哪些一次性数据整理已经执行过"，与案件数据无关。
+    作用是保证数据整理每个库只跑一次，不会在后续升级中反复改动已录入的数据。
+
+  对老数据的影响：无。11 个字段全部允许为空，老数据行不需要任何转换；
+  老案件的 case_time 首次启动时按受案时间补齐，其他字段保持为空（界面显示"—"）。
+
+二、补列脚本覆盖的全部字段（90 项，含历史各版本）
+--------------------------------------------------------------
+  清单是「从最初版本到当前版本」所有后来补的字段：
+  对老库执行 = 缺的补上、已有的跳过；对新版本库执行 = 全部跳过。
+  它不会凭空加出当前版本里本来没有的东西。
+
+  case_approval
+      + apply_measure          VARCHAR(20) NULL
+      + apply_date             DATETIME NULL
+      + apply_deadline         DATETIME NULL
+      + from_measure           VARCHAR(20) NULL
+      + applicant_id           BIGINT NULL
+      + applicant_name         VARCHAR(64) NULL
+      + applied_at             DATETIME NULL
+
+  case_deadline_state
+      + detention_term         VARCHAR(8) NULL
+      + paused_at              DATETIME NULL
+      + paused_deadline        DATETIME NULL
+      + paused_seconds         BIGINT NOT NULL DEFAULT 0
+      + pretrial_received_at   DATETIME NULL
+      + legal_received_at      DATETIME NULL
+      + pretrial_sent_at       DATETIME NULL
+      + legal_sent_at          DATETIME NULL
+      + submitted_at           DATETIME NULL
+      + last_summons_at        DATETIME NULL
+      + admin_30_doc_at        DATETIME NULL
+      + admin_extended_at      DATETIME NULL
+      + admin_60_doc_at        DATETIME NULL
+      + admin_extended90_at    DATETIME NULL
+      + filing_at              DATETIME NULL
+      + arrest_target_at       DATETIME NULL
+      + admin_check_3_at       DATETIME NULL
+      + admin_check_10_at      DATETIME NULL
+      + admin_check_20_at      DATETIME NULL
+      + updated_at             DATETIME NULL
+
+  case_file
+      + todo_id                BIGINT NULL
+
+  case_info
+      + case_type              VARCHAR(16) NULL
+      + filing_no              VARCHAR(64) NULL
+      + mediation_no           VARCHAR(64) NULL
+      + case_measure           VARCHAR(16) NULL
+      + measure_date           DATETIME NULL
+      + detain_deadline        DATETIME NULL
+      + investigation_status   VARCHAR(20) NULL
+      + flow_stage             VARCHAR(24) NULL
+      + deadline_label         VARCHAR(64) NULL
+      + remind_days            INT NULL
+      + focus                  TINYINT NOT NULL DEFAULT 0
+      + occur_place            VARCHAR(255) NULL
+      + occur_time             DATETIME NULL
+      + undertake_unit         VARCHAR(128) NULL
+      + accept_time            DATETIME NULL
+      + case_time              DATETIME NULL
+      + punish_time            DATETIME NULL
+      + external_id            VARCHAR(32) NULL
+
+  case_leader_opinion
+      + sort_order             INT NULL
+      + deadline               DATETIME NULL
+      + importance             VARCHAR(4) NULL
+
+  case_notification
+      + anchor_todo_id         BIGINT NULL
+      + anchor_question_id     BIGINT NULL
+      + anchor_subtask_id      BIGINT NULL
+
+  case_plan
+      + stage                  VARCHAR(24) NULL
+      + step_key               VARCHAR(32) NULL
+      + task_key               VARCHAR(32) NULL
+      + is_std                 TINYINT NOT NULL DEFAULT 0
+
+  case_question
+      + answer_edited_by       BIGINT NULL
+      + answer_edited_by_name  VARCHAR(64) NULL
+      + answer_edited_at       DATETIME NULL
+
+  case_suspect
+      + measure                VARCHAR(16) NULL
+      + measure_start_at       DATETIME NULL
+      + measure_end_at         DATETIME NULL
+
+  case_todo
+      + opinion_id             BIGINT NULL
+      + urgency                VARCHAR(8) NULL
+      + importance             VARCHAR(8) NULL
+      + dept_source            VARCHAR(128) NULL
+      + deadline               DATETIME NULL
+      + parent_id              BIGINT NULL
+      + flow_stage             VARCHAR(24) NULL
+
+  case_todo_feedback
+      + upload_time            VARCHAR(32) NULL
+      + upload_platform        VARCHAR(128) NULL
+      + upload_file            VARCHAR(255) NULL
+      + edited_by              BIGINT NULL
+      + edited_by_name         VARCHAR(64) NULL
+      + edited_at              DATETIME NULL
+
+  operation_log
+      + snapshot_before        TEXT NULL
+      + snapshot_after         TEXT NULL
+      + undone                 TINYINT NOT NULL DEFAULT 0
+      + undo_log_id            BIGINT NULL
+      + undo_of                BIGINT NULL
+
+  org_employee
+      + origin                 VARCHAR(16) NULL
+      + police_group           VARCHAR(16) NULL
+
+  sys_user
+      + phone                  VARCHAR(32) NULL
+      + dept                   VARCHAR(128) NULL
+      + apply_role             VARCHAR(32) NULL
+      + audit_status           TINYINT NOT NULL DEFAULT 1
+      + audit_remark           VARCHAR(255) NULL
+      + audited_by             BIGINT NULL
+      + audited_at             DATETIME NULL
+      + police_group           VARCHAR(16) NULL
+
+三、新增字段会不会让老数据出问题
+--------------------------------------------------------------
+  不会。所有新增字段都允许为空（或带默认值），老数据行不需要任何转换。
+  程序读不到值时按"未填写"处理，界面显示空或"—"，不会报错。
+
+四、我要怎么升级（两种方式，任选其一）
+--------------------------------------------------------------
+  方式一（推荐，最省事）：
+      1) 停掉正在运行的服务；
+      2) 用本包的 case-flow-backend.jar 覆盖原来的同名文件；
+      3) 重新启动。程序启动时会自动补齐上面这些字段，日志里会逐条打印
+         "[SchemaMigration] 已补列：表名.列名"。
+
+  方式二（DBA 想先审 SQL）：
+      1) 先备份数据库（mysqldump 或整库快照）；
+      2) 执行同目录下的《4-升级补列（已有库执行）.sql》；
+      3) 再换 jar 启动。程序启动时发现字段都在，不会重复添加。
+
+五、怎么确认"内网数据没被动"
+--------------------------------------------------------------
+  1) 升级前后各查一次：SELECT COUNT(*) FROM case_info;
+     两个数字必须一样。
+  2) 随便打开几件老案件，看名称、嫌疑人、意见、待办是否原样。
+  3) 启动日志里不应出现任何 ERROR；出现少量 WARN 属于数据整理提示，
+     不影响原有数据。
+
+六、这次升级绝不会发生的事
+--------------------------------------------------------------
+  · 不会删表、不会删字段、不会清空任何一张表；
+  · 不会改字段类型、不会改表名、不会重建表；
+  · 不会把已填的内容改成别的值（回填只补空值，已填的一律不覆盖）；
+  · 不会动 case_flow 以外的库，不碰系统表。
+
+  需要提醒的一点：本次升级的"一次性数据整理"共有 3 项，
+  每个数据库只会执行一次，执行完写入内部台账表 schema_migration_mark，
+  以后每次启动都会跳过，不会反复改动数据。
+

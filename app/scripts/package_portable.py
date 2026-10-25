@@ -34,6 +34,7 @@ JAR = BACKEND_DIR / "target" / "case-flow-backend.jar"
 JRE = TOOLS_DIR / "jdk8" / "jre"
 SCHEMA = ROOT / "sql" / "schema.sql"
 SCHEMA_INDEX = ROOT / "sql" / "index-mysql.sql"
+UPGRADE_DIR = ROOT / "sql" / "upgrade"   # 结构变更说明 + 升级补列 SQL（gen_upgrade_sql.py 生成）
 TUTORIAL_DOCX = PROJECT_DIR / "docs" / "manual-v3" / "部署教程.docx"
 TUTORIAL_MD = PROJECT_DIR / "docs" / "manual-v3" / "部署教程.md"
 
@@ -145,7 +146,7 @@ DB_HELP = """\
 下面三个文件，按顺序执行，一个都别跳：
 
     1-建库和账号.sql    建数据库 + 建应用账号
-    2-建表.sql          建表（19 张）
+    2-建表.sql          建表（22 张）
     3-建索引.sql        建索引  ← 正式库必做，不做数据一多就慢
 
 --------------------------------------------------------
@@ -170,6 +171,15 @@ MySQL 命令行、Navicat、DBeaver 都行。
 
 2. 表不用手工建也基本能用（程序启动时会自动建），
    但 3-建索引.sql 一定要单独执行一遍。
+
+--------------------------------------------------------
+ 目录里另外两个 4- 开头的文件，新装不用管
+--------------------------------------------------------
+    4-说明（结构变更）.txt          已有库升级时"这次改了什么"的说明
+    4-升级补列（已有库执行）.sql    已有库升级时才用
+
+全新安装（空库）只要上面 1、2、3 三步，两个 4- 文件原样留着即可，
+不要执行——库是空的，没有旧字段要补。
 
 --------------------------------------------------------
  建完应该是什么样
@@ -467,6 +477,31 @@ UPGRADE_TXT = """\
   所以换完 jar 重启，数据库就跟着升级好了，
   您不需要手工执行任何建表语句。
 
+
+本次到底改了哪些字段？附了说明和 SQL
+--------------------------------------------------------
+  本次更新如果动过数据库结构（加字段、加表），包里同时提供了两个文件，
+  都在  建库语句\  目录下：
+
+    4-说明（结构变更）.txt
+        人话说明：本次新增了哪些字段、为什么加、对老数据有什么影响。
+
+    4-升级补列（已有库执行）.sql
+        对应的改库语句。两种用法：
+
+        用法一（推荐）：不用管它。换 jar 重启，程序自动补列，
+                        效果与执行这个脚本完全一样。
+
+        用法二（DBA 要先审 SQL、不让程序改表）：
+            1) 先备份数据库；
+            2) 执行  4-升级补列（已有库执行）.sql
+               （mysql -u caseflow -p case_flow < 该文件，
+                 或整个粘到 Navicat / DBeaver 里跑）
+            3) 再换 jar 启动。
+
+        这个脚本是"缺哪列补哪列"：已存在的列自动跳过，重复执行不会报错，
+        也不会修改任何一行数据。只加字段，绝不删改。
+
   唯一例外：如果这次更新带来了新的查询索引，本说明末尾会单独列出，
   那时才需要手工跑一次 建库语句\\3-建索引.sql。
   如果执行时报 Duplicate key name，说明索引早就有了，直接忽略，不是错误。
@@ -572,6 +607,7 @@ def fill_docs_dir(target: Path, tutorial: Path) -> None:
                SCHEMA_HEADER + SCHEMA.read_text(encoding="utf-8"))
     write_text(sql_dir / "3-建索引.sql",
                INDEX_HEADER + SCHEMA_INDEX.read_text(encoding="utf-8"))
+    copy_upgrade_files(sql_dir)
 
 
 def fill_patch_dir(target: Path) -> None:
@@ -591,6 +627,23 @@ def fill_patch_dir(target: Path) -> None:
                SCHEMA_HEADER + SCHEMA.read_text(encoding="utf-8"))
     write_text(sql_dir / "3-建索引.sql",
                INDEX_HEADER + SCHEMA_INDEX.read_text(encoding="utf-8"))
+    copy_upgrade_files(sql_dir)
+
+
+def copy_upgrade_files(sql_dir: Path) -> None:
+    """把「结构变更说明 + 升级补列 SQL」放进包里。
+
+    用户要求（2026-10-25）：只要动了数据库结构，包内必须同时给出变更说明和
+    可执行的建库/改库语句。这两个文件由 gen_upgrade_sql.py 从
+    SchemaMigration.NEW_COLUMNS 现生成，保证 SQL 永远和代码一致，不会人手抄错。
+    """
+    for name in ("4-说明（结构变更）.txt", "4-升级补列（已有库执行）.sql"):
+        src = UPGRADE_DIR / name
+        if not src.exists():
+            raise SystemExit(
+                f"缺少 {src}\n"
+                f"请先执行：python scripts/gen_upgrade_sql.py（它会从代码生成升级 SQL）")
+        shutil.copy2(src, sql_dir / name)
 
 
 def make_zip(zip_path: Path, top: str, root: Path) -> None:
@@ -618,6 +671,14 @@ def main() -> int:
     print("=" * 60)
     print(" CaseFlow 便携部署包构建")
     print("=" * 60)
+
+    # 结构变更说明 + 升级补列 SQL：每次出包都从代码现生成，杜绝 SQL 与代码不一致
+    gen = PROJECT_DIR / "scripts" / "gen_upgrade_sql.py"
+    if gen.exists():
+        rc = subprocess.run([sys.executable, str(gen)], cwd=str(PROJECT_DIR)).returncode
+        if rc != 0:
+            print("  升级 SQL 生成失败（自检未通过），已中止出包。", file=sys.stderr)
+            return 1
 
     if not args.skip_build and not args.docs_only:
         print("\n[1/6] 构建前端与后端 ...")
@@ -653,6 +714,9 @@ def main() -> int:
                 f"{PATCH_TOP}/case-flow-backend.jar",
                 f"{PATCH_TOP}/升级说明.txt",
                 f"{PATCH_TOP}/建库语句/3-建索引.sql",
+                # 用户要求：改了库结构就必须随包给说明和改库语句，缺了不许出包
+                f"{PATCH_TOP}/建库语句/4-说明（结构变更）.txt",
+                f"{PATCH_TOP}/建库语句/4-升级补列（已有库执行）.sql",
             ]
             missing = [m for m in must if m not in names]
             if missing:
@@ -737,6 +801,8 @@ def main() -> int:
             f"{TOP}/{SQL_DIR}/1-建库和账号.sql",
             f"{TOP}/{SQL_DIR}/2-建表.sql",
             f"{TOP}/{SQL_DIR}/3-建索引.sql",
+            f"{TOP}/{SQL_DIR}/4-说明（结构变更）.txt",
+            f"{TOP}/{SQL_DIR}/4-升级补列（已有库执行）.sql",
         ]
         missing = [m for m in must if m not in names]
         if missing:

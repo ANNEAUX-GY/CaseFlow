@@ -112,6 +112,19 @@
 - **升级纪律**：只许 `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE ADD COLUMN`；
   覆盖型数据整理必须进 `onceOnly()` 闸门。**每次出包前跑
   `python app/scripts/verify_upgrade_safe.py`**（零依赖，11 项，退出码非 0 不许出包）。
+- **出包硬约定（2026-10-25 用户明确要求，不可省略）**：
+  1. **每次更新都按「全新部署」标准准备** —— 完整包必须能在一台空机器上直接装起来
+     （jar + runtime + 部署说明 + 建库语句 + 4 个 bat 全齐），不能指望"反正有台旧的"。
+  2. **只要动了库结构，包内必带两份文件**（都在 `建库语句/` 下，三个包都放）：
+     `4-说明（结构变更）.txt` + `4-升级补列（已有库执行）.sql`。
+     SQL 由 `python scripts/gen_upgrade_sql.py` 从 `NEW_COLUMNS` **现生成**
+     （幂等：information_schema 判断 + PREPARE，已存在的列跳过），
+     人话说明从 `app/sql/upgrade/结构变更记录.md` 的最新一节取。
+     `package_portable.py` 出包前会自动重跑生成器，**校验不到这两个文件直接打包失败**。
+  3. **绝对不能影响内网已有数据**：只加可空列/新表，不 UPDATE 非空值，
+     覆盖型整理进 `onceOnly()`。改完必须用旧库演练并比 sha256 指纹。
+- **改库结构后要做的三件事**：写 `结构变更记录.md` 新一节 → 跑 `gen_upgrade_sql.py`
+  （自检：段落数/引号配对/四件套/无删改语句）→ 跑 `verify_upgrade_safe.py`。
 - **统计 schema.sql 表数必须先剥注释**：文件里有句注释也含
   `CREATE TABLE IF NOT EXISTS`，直接 grep 会多算一张（曾误报 22→23）。
 - 升级演练基线用 `git show <旧提交>:app/sql/schema.sql` 建库 + 按旧列清单导 CSV 比指纹；
