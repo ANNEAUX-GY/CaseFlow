@@ -1,8 +1,8 @@
-// 端到端：案件详情抽屉里的「修改嫌疑人」（2026-10-22 用户要求）
+// 端到端：案件详情抽屉里的「编辑嫌疑人」（2026-10-22 用户要求）
 //
 // 覆盖点：
-//   A. 嫌疑人行上有「修改」入口（原来只有「删除」）
-//   B. 点开是「修改嫌疑人」且原值全部回显——姓名/身份证/电话/住址/强制措施/措施起止日
+//   A. 嫌疑人行上有「编辑」入口（原来只有「删除」）
+//   B. 点开是「编辑嫌疑人」且原值全部回显——姓名/身份证/电话/住址/强制措施/措施起止日
 //   C. 保存走 PUT，只改的字段变，没动的（姓名、措施）不能丢
 //   D. 保存后抽屉里的表格立即刷新成新值
 //
@@ -104,7 +104,7 @@ const run = async () => {
     const rows = [...panel.querySelectorAll('.el-table__row')]
     const row = rows.find((r) => r.innerText.includes(nm))
     if (!row) return 'no-row:' + rows.map((r) => r.innerText.split('\n')[0]).join(',')
-    const btn = [...row.querySelectorAll('button')].find((x) => x.innerText.trim() === '修改')
+    const btn = [...row.querySelectorAll('button')].find((x) => x.innerText.trim() === '编辑')
     if (!btn) return 'no-btn:' + [...row.querySelectorAll('button')].map((x) => x.innerText.trim()).join(',')
     btn.click()
     return 'ok'
@@ -133,7 +133,7 @@ const run = async () => {
       idCard: val('身份证号'),
       phone: val('联系电话'),
       address: val('住址'),
-      measureText: text('当前强制措施'),
+      measureText: text('强制措施'),
       startAt: val('措施开始'),
       endAt: val('措施结束')
     }
@@ -179,7 +179,7 @@ const run = async () => {
   let deleted = false
   try {
     // ============ A. 列表 → 详情 → 嫌疑人行有「修改」 ============
-    console.log('\n[A] 从案件管理打开详情，嫌疑人行应有「修改」入口')
+    console.log('\n[A] 从案件管理打开详情，嫌疑人行应有「编辑」入口')
     await p.goto(`${BASE}/#/cases`, { waitUntil: 'networkidle2' })
     await sleep(1500)
     // 库里案件多时分页会把目标行甩到后面，用关键词搜索锁定
@@ -197,15 +197,15 @@ const run = async () => {
     await sleep(900)
 
     const editClick = await clickEdit(TEMP_NAME)
-    check('嫌疑人行有「修改」按钮并可点', editClick, 'ok')
+    check('嫌疑人行有「编辑」按钮并可点', editClick, 'ok')
 
     // ============ B. 弹窗标题 + 原值回显 ============
-    console.log('\n[B] 修改弹窗应回显原值')
+    console.log('\n[B] 编辑弹窗应回显原值')
     check('弹窗已打开', await waitFor(async () => !!(await readDialog())), true)
     await sleep(400)
     const dlg = await readDialog()
     console.log('  弹窗 =', JSON.stringify(dlg))
-    check('标题是「修改嫌疑人」', dlg?.title, '修改嫌疑人')
+    check('标题是「编辑嫌疑人」', dlg?.title, '编辑嫌疑人')
     check('姓名回显', dlg?.name, TEMP_NAME)
     check('身份证回显', dlg?.idCard, '440106200001011234')
     check('电话回显', dlg?.phone, OLD_PHONE)
@@ -245,7 +245,7 @@ const run = async () => {
 
     // ============ E. 再改一次：措施改回「未采取」应清空起止时间 ============
     console.log('\n[E] 措施改回「未采取」')
-    check('再次点「修改」', await clickEdit(TEMP_NAME), 'ok')
+    check('再次点「编辑」', await clickEdit(TEMP_NAME), 'ok')
     await sleep(800)
     // 清空图标是 v-if 渲染、hover 才出现（Element Plus 的 showClearBtn），
     // 先真的把鼠标移进下拉框，再找 .el-select__clear
@@ -254,7 +254,7 @@ const run = async () => {
         .find((x) => (x.querySelector('.el-dialog__title')?.innerText || '').includes('嫌疑人'))
       if (!d) return null
       const fi = [...d.querySelectorAll('.el-form-item')]
-        .find((x) => (x.querySelector('.el-form-item__label')?.innerText || '').trim().startsWith('当前强制措施'))
+        .find((x) => (x.querySelector('.el-form-item__label')?.innerText || '').trim().startsWith('强制措施'))
       const sel = fi?.querySelector('.el-select')
       if (!sel) return null
       const r = sel.getBoundingClientRect()
@@ -272,7 +272,7 @@ const run = async () => {
         .find((x) => (x.querySelector('.el-dialog__title')?.innerText || '').includes('嫌疑人'))
       if (!d) return 'no-dialog'
       const fi = [...d.querySelectorAll('.el-form-item')]
-        .find((x) => (x.querySelector('.el-form-item__label')?.innerText || '').trim().startsWith('当前强制措施'))
+        .find((x) => (x.querySelector('.el-form-item__label')?.innerText || '').trim().startsWith('强制措施'))
       const clear = fi?.querySelector('.el-select__clear')
       if (!clear) return 'no-clear'
       clear.dispatchEvent(new MouseEvent('click', { bubbles: true }))
