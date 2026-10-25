@@ -197,7 +197,7 @@ const run = async () => {
     const listClip = await p.evaluate(() => {
       const tbl = document.querySelector('.el-table')
       const ths = [...document.querySelectorAll('.el-table__header th')]
-      const tp = ths.find((t) => t.innerText.trim() === '案件类型')
+      const tp = ths.find((t) => t.innerText.trim() === '办案阶段')
       if (!tbl || !tp) return null
       const r = tbl.getBoundingClientRect(), tr = tp.getBoundingClientRect()
       const headH = ths[0] ? ths[0].getBoundingClientRect().height : 40

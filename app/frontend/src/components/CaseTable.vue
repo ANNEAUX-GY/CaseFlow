@@ -32,7 +32,7 @@
           <span v-else class="cf-muted">—</span>
         </template>
       </el-table-column>
-      <el-table-column label="案件名称" :min-width="compact ? 140 : 150" show-overflow-tooltip>
+      <el-table-column label="案件名称" :width="compact ? 150 : 172" show-overflow-tooltip>
         <template #default="{ row }">
           <span :style="{ color: priorityColor(row), fontWeight: row.priority === 'URGENT' ? 600 : 400 }">
             {{ row.name }}
@@ -43,7 +43,7 @@
           <span class="cf-muted" style="margin-left: 6px">{{ SOURCE_META[row.sourceType] }}</span>
         </template>
       </el-table-column>
-      <el-table-column v-if="!compact" label="案件类型" width="88">
+      <el-table-column v-if="!compact" label="案件类型" width="80">
         <template #default="{ row }">
           <el-tag v-if="row.caseType" size="small" :type="(CASE_TYPE_META[row.caseType] || {}).type || 'info'" effect="plain">
             {{ (CASE_TYPE_META[row.caseType] || {}).label }}
@@ -52,7 +52,7 @@
           <div v-if="row.category" class="cf-muted" style="font-size: 12px">{{ row.category }}</div>
         </template>
       </el-table-column>
-      <el-table-column v-if="!compact" label="嫌疑人" width="84" class-name="cf-col-suspect">
+      <el-table-column v-if="!compact" label="嫌疑人" width="88" class-name="cf-col-suspect">
         <template #default="{ row }">
           <el-tooltip v-if="suspectLabel(row)" :content="suspectNamesText(row)"
             placement="top" :disabled="!suspectNamesText(row)">
@@ -61,7 +61,7 @@
           <span v-else class="cf-muted">—</span>
         </template>
       </el-table-column>
-      <el-table-column v-if="!compact" label="办案阶段" width="88">
+      <el-table-column v-if="!compact" label="办案阶段" width="80">
         <template #default="{ row }">
           <el-tag size="small" :type="(STAGE_META[row.flowStage] || {}).type" effect="plain">
             {{ row.flowStageName || stageLabel(row.flowStage) }}
@@ -76,7 +76,7 @@
           </span>
         </template>
       </el-table-column>
-      <el-table-column label="截止期限" width="124" show-overflow-tooltip>
+      <el-table-column label="截止期限" width="114" show-overflow-tooltip>
         <template #default="{ row }">
           <!-- 2026-10-14：列表只显示剩余/已逾期天数，具体哪天截止点详情看
                （详情抽屉 CaseDetailDrawer 用 dueText，那里带日期） -->
@@ -95,7 +95,7 @@
            否则工作台/到期提醒这些没接 @edit 的页面会出现点了没反应的死按钮。
            2026-10-25：fixed="right"——列总宽超过容器时右侧按钮会被推出视口，
            固定在右边后无论窗口多窄都能点到（用户反馈"操作栏未显示完全"）。 -->
-      <el-table-column v-if="showActions" label="操作" :width="actionWidth" align="right" fixed="right">
+      <el-table-column v-if="showActions" label="操作" :width="actionWidth" align="right" header-align="center" fixed="right">
         <template #default="{ row }">
           <el-button v-if="canManage && !detailsOnly" link type="primary" @click="emit('assign', row)">指派</el-button>
           <el-button v-if="editable && canManage && !detailsOnly" link type="primary" @click="emit('edit', row)">编辑</el-button>
