@@ -29,7 +29,7 @@ const run = async () => {
   await p.reload({ waitUntil: 'networkidle2' })
   await sleep(600)
 
-  for (const [w, path] of [[1366, '/#/cases'], [1100, '/#/cases'], [1366, '/#/my-cases'], [1366, '/#/closed-cases']]) {
+  for (const [w, path] of [[1366, '/#/cases'], [1600, '/#/cases'], [1920, '/#/cases'], [1100, '/#/cases']]) {
     await p.setViewport({ width: w, height: 900, deviceScaleFactor: 1.4 })
     await p.goto(`${BASE}${path}`, { waitUntil: 'networkidle2' })
     await sleep(2300)

@@ -43,7 +43,7 @@
           <span class="cf-muted" style="margin-left: 6px">{{ SOURCE_META[row.sourceType] }}</span>
         </template>
       </el-table-column>
-      <el-table-column v-if="!compact" label="案件类型" width="80">
+      <el-table-column v-if="!compact" label="案件类型" :min-width="80">
         <template #default="{ row }">
           <el-tag v-if="row.caseType" size="small" :type="(CASE_TYPE_META[row.caseType] || {}).type || 'info'" effect="plain">
             {{ (CASE_TYPE_META[row.caseType] || {}).label }}
@@ -52,7 +52,7 @@
           <div v-if="row.category" class="cf-muted" style="font-size: 12px">{{ row.category }}</div>
         </template>
       </el-table-column>
-      <el-table-column v-if="!compact" label="嫌疑人" width="88" class-name="cf-col-suspect">
+      <el-table-column v-if="!compact" label="嫌疑人" :min-width="88" class-name="cf-col-suspect">
         <template #default="{ row }">
           <el-tooltip v-if="suspectLabel(row)" :content="suspectNamesText(row)"
             placement="top" :disabled="!suspectNamesText(row)">
@@ -61,7 +61,7 @@
           <span v-else class="cf-muted">—</span>
         </template>
       </el-table-column>
-      <el-table-column v-if="!compact" label="办案阶段" width="80">
+      <el-table-column v-if="!compact" label="办案阶段" :min-width="80">
         <template #default="{ row }">
           <el-tag size="small" :type="(STAGE_META[row.flowStage] || {}).type" effect="plain">
             {{ row.flowStageName || stageLabel(row.flowStage) }}
@@ -76,14 +76,14 @@
           </span>
         </template>
       </el-table-column>
-      <el-table-column label="截止期限" width="114" show-overflow-tooltip>
+      <el-table-column label="截止期限" :min-width="114" show-overflow-tooltip>
         <template #default="{ row }">
           <!-- 2026-10-14：列表只显示剩余/已逾期天数，具体哪天截止点详情看
                （详情抽屉 CaseDetailDrawer 用 dueText，那里带日期） -->
           <span :class="dueClass(row)">{{ dueDaysText(row) }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="状态" width="68">
+      <el-table-column label="状态" :min-width="68">
         <template #default="{ row }">
           <el-tag size="small" :type="row.caseType === 'ADMINISTRATIVE' && row.status !== 'DONE' ? 'primary' : (STATUS_META[row.status] || {}).type || 'info'">
             {{ row.caseType === 'ADMINISTRATIVE' && row.status !== 'DONE' ? '已受案' : (STATUS_META[row.status] || {}).label || row.status }}
