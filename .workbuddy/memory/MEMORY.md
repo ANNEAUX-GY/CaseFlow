@@ -107,8 +107,18 @@
   `@FullAccessOnly` 由 PermissionInterceptor 拦；**前端 getter 名是 `isFullAccess`**。
 - 账号：`audit_status` 非 1 不能登录；手机号唯一；停用/删除/重置密码必须 `removeAll`。
 - 打包：前端 `base='/api/'`，pom 拷 dist 进 static，必须 clean package，先杀 8080。
-- **出包两个形态**：`package_deploy.py`（完整包，新装用）/ `--patch-only`（升级补丁，
-  **只有 jar + 升级说明，不含 config/ 与 data/**，内网更新发这个，防"解压全部覆盖"）。
+- **出包两个形态**：`package_portable.py`（完整便携包）/ `--patch-only`（升级补丁，
+  只有 jar + 升级说明）。
+- **内网更新方式已定（2026-10-25 运维原话）：「最好全文件替换」「就按第一次那个样子过来」**
+  —— 他们**整包解压覆盖**，不按步骤挑文件，也不跑我们的 py 脚本。
+  所以：**完整包是主交付**，补丁包只作备用。
+  为此包内结构必须是「覆盖安全」的：
+  · 不含任何业务数据文件（`data/` 只有说明.txt）→ 覆盖不丢数据 ✅ 已实测
+  · **不含真正的 `数据库配置.bat`**，只放 `数据库配置.示例.bat`，
+    由 `启动.bat` 首次以正式模式启动时复制生成 → 覆盖不会把口令打回占位 ✅ 已实测
+  · 结构变更则随包给 `建库语句/4-说明（结构变更）.txt` + `4-升级补列（已有库执行）.sql`，
+    DBA 单独执行也等价（程序启动也会自动补，两边效果一致）
+  · 加任何新文件进包前先想一句：**它被覆盖会不会伤到内网**？
 - **升级纪律**：只许 `CREATE TABLE IF NOT EXISTS` + `ALTER TABLE ADD COLUMN`；
   覆盖型数据整理必须进 `onceOnly()` 闸门。**每次出包前跑
   `python app/scripts/verify_upgrade_safe.py`**（零依赖，11 项，退出码非 0 不许出包）。
