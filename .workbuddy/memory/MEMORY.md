@@ -14,6 +14,11 @@
   **push 报 `CONNECT tunnel failed, response 502` 时先剥代理直连**（本机 http_proxy
   对 GitHub 的通道时好时坏，直连 443 反而通）：
   `env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u all_proxy GIT_TERMINAL_PROMPT=0 git push origin main`
+- **2026-10-25 起直连也不通了**（DNS 给 `20.205.243.166`，该 IP 443 超时，代理 502）。
+  解法：`python app/scripts/gh_tunnel.py` 起本地 CONNECT 隧道（把 github.com 固定转到
+  `140.82.113.3`，SNI/Host 仍是 github.com，TLS 正常），再
+  `env -u http_proxy ... git -c http.proxy=http://127.0.0.1:18999 push origin main`。
+  非管理员改不了 hosts，别再试 hosts；`140.82.112.3 / .113.3 / .114.4` 都验过是通的。
 - 本机专属排除写 `.git/info/exclude`（**不改被跟踪的 .gitignore**）。已排除
   `app/backend/src/main/resources/sql/`、`shots/`、`ppt/*/preview/`。
   **规则必须锚定**：写 `deploy/` 会匹配任意层级的 deploy 目录，
