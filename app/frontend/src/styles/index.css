@@ -1565,3 +1565,13 @@ html { scrollbar-gutter: stable; }
   border-top: 1px dashed #e4e8ee; font-weight: 600;
 }
 .cf-picker__foot { text-align: center; font-size: 13px; margin-top: 24px }
+/* 大类卡片「直接进入」：不筛选小类/阶段，直落案件管理（2026-10-29） */
+.cf-picker__direct {
+  display: flex; align-items: center; gap: 4px;
+  margin-top: 12px; padding-top: 10px;
+  border-top: 1px dashed #e4e8ee;
+  font-size: 13px; color: #1b4a8c; font-weight: 600;
+  cursor: pointer; transition: color .15s;
+}
+.cf-picker__direct:hover { color: #0f3b73 }
+.cf-picker__direct .el-icon { font-size: 14px }

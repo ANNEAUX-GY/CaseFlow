@@ -3,8 +3,8 @@
     <div class="cf-picker__head">
       <div class="cf-picker__title">请选择案件类型</div>
       <div class="cf-picker__sub">
-        选择“查看全部”可直接进入栏目；刑事案件先选办案阶段，其他案件按原流程选择小类。
-        列表、看板与统计会跟随当前选择
+        点卡片可进一步选择小类 / 办案阶段；点卡片下方「直接进入」则跳过筛选，直接查看该大类全部案件。
+        「查看全部」同样直接进入栏目。列表、看板与统计会跟随当前选择
       </div>
     </div>
 
@@ -24,6 +24,11 @@
         <div class="cf-picker__count" v-if="counts[o.key] !== undefined">
           共 {{ counts[o.key] }} 件
         </div>
+        <!-- 直接进入：跳过小类 / 办案阶段两级筛选，直接查看该大类全部案件（2026-10-29） -->
+        <div v-if="o.key !== 'ALL'" class="cf-picker__direct" @click.stop="enterDirect(o)">
+          直接进入 · 不筛选小类
+          <el-icon><ArrowRight /></el-icon>
+        </div>
       </div>
     </div>
 
@@ -37,6 +42,7 @@
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { ArrowRight, CircleCheckFilled } from '@element-plus/icons-vue'
 import { CASE_TYPE_OPTIONS, LEVEL3_PATHS, boardsUrl, useCaseTypeStore } from '../store/caseType'
 import { caseApi } from '../api'
 
@@ -90,6 +96,33 @@ const choose = async (o) => {
   const qs = target.query ? new URLSearchParams(target.query).toString() : ''
   const full = qs ? target.path + '?' + qs : target.path
   router.push(boardsUrl(full))
+}
+
+/**
+ * 直接进入大类（不筛选小类 / 办案阶段，2026-10-29）。
+ *
+ * <p>与整卡点击（走小类/阶段两级）不同，这里选中大类后**直接落「案件管理」**，
+ * 只按大类（caseType）过滤、不带 category / module 细分筛选——用户想看
+ * 「这一类全部案件」时不必再过中间两张卡片页。
+ *
+ * <p>为什么统一落 /cases 而不是跟随 from 的目标栏目：/watch 按 module 分页签、
+ * /todos 与 /reminders 无案件列表，都不适合承载「该大类全部案件」；
+ * 案件管理是唯一按大类完整展示案件的栏目，落点最直观、口径最稳。
+ */
+const enterDirect = (o) => {
+  if (!store.select(o.key)) {
+    ElMessage.error('类型参数不合法')
+    return
+  }
+  current.value = o.key
+  emit('chosen', o.key)
+  // 保留案件定位锚点，其余旧筛选一律清空（与「查看全部」同口径）
+  const query = {}
+  for (const key of ['caseId', 'todoId', 'subtaskId']) {
+    if (route.query[key]) query[key] = route.query[key]
+  }
+  store.rememberPath('/cases')
+  router.push({ path: '/cases', query })
 }
 
 /** 解析 from 参数：还原成 { path, query }，非法值回退到 store 记住的栏目 */
