@@ -91,7 +91,8 @@
         <el-option label="7天内" value="D7" />
         <el-option label="未设期限" value="NONE" />
       </el-select>
-      <!-- 排序（2026-10-18）：默认由新到旧。案件时间 = 已受案取受案时间、未受案取报案时间 -->
+      <!-- 排序（2026-10-18）：默认由新到旧。案件时间 = 初查/行政按受案(或报案)时间，
+           刑拘在办/取保在办按刑拘(或取保)时间（与列表时间列「所见即所排」同一口径）。 -->
       <el-select v-model="sortValue" style="width: 132px" @change="onSortChange">
         <el-option label="最新在前" value="case_time-desc" />
         <el-option label="最早在前" value="case_time-asc" />

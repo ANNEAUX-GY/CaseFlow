@@ -279,6 +279,34 @@ export function caseTimeText(row) {
   return dateKeyOf(row?.acceptTime || row?.caseTime)
 }
 
+/**
+ * 列表时间列的「所见即所排」标签（2026-10-29）。
+ * 后端 case_time 排序：初查/行政按 case_time，刑拘在办(DETAIN)/取保在办(BAIL)按 measure_date。
+ * 这里按同一口径给出标签，让排序依据与展示字段对得上——
+ *   刑拘在办 → 显示「刑拘时间」（此时 measure_date 即刑拘时间）；
+ *   取保及监居 → 显示「取保时间」（measure_date 已被取保覆盖）；
+ *   其余（初查/行政/已终结）→ 沿用「受案/报案」。
+ * 刑事在初查阶段尚未采取措施，measure_date 为空，天然回落到报案/受案时间，不会硬塞不存在的值。
+ */
+export function caseSortTimeLabel(row) {
+  const stage = row?.flowStage
+  if (stage === 'DETAIN') return '刑拘时间'
+  if (stage === 'BAIL') return '取保时间'
+  return row?.acceptTime ? '受案' : '报案'
+}
+
+/**
+ * 列表时间列的实际时间值：与 caseSortTimeLabel 配对，保证「标签」和「日期」永远一致。
+ * DETAIN/BAIL 阶段取 measure_date（刑拘/取保时间），其余取报案/受案时间。
+ */
+export function caseSortTimeText(row) {
+  const stage = row?.flowStage
+  if ((stage === 'DETAIN' || stage === 'BAIL') && row?.measureDate) {
+    return dateKeyOf(row.measureDate)
+  }
+  return caseTimeText(row)
+}
+
 export function rowClassOf(row) {
   const meta = DUE_META[row.dueLevel] || DUE_META.NONE
   if (['DONE', 'CANCELLED'].includes(row.status)) return ''

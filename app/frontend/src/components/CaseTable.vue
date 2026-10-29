@@ -23,11 +23,11 @@
            2026-10-25：标签与日期改同一行（原来上下两行既占宽又抬高行高，一屏少看两条）。 -->
       <el-table-column v-if="showCaseTime && !compact" label="报案/受案时间" width="132">
         <template #default="{ row }">
-          <template v-if="caseTimeText(row)">
-            <el-tag size="small" :type="row.acceptTime ? 'primary' : 'info'" effect="plain">
-              {{ row.acceptTime ? '受案' : '报案' }}
+          <template v-if="caseSortTimeText(row)">
+            <el-tag size="small" :type="row.acceptTime || row.flowStage === 'DETAIN' || row.flowStage === 'BAIL' ? 'primary' : 'info'" effect="plain">
+              {{ caseSortTimeLabel(row) }}
             </el-tag>
-            <span class="cf-muted" style="font-size: 12px; margin-left: 4px">{{ caseTimeText(row) }}</span>
+            <span class="cf-muted" style="font-size: 12px; margin-left: 4px">{{ caseSortTimeText(row) }}</span>
           </template>
           <span v-else class="cf-muted">—</span>
         </template>
@@ -110,7 +110,7 @@
 
 <script setup>
 import { computed } from 'vue'
-import { DUE_META, STATUS_META, PRIORITY_META, SOURCE_META, CASE_TYPE_META, STAGE_META, caseTimeText, dueDaysText, rowClassOf, stageLabel, suspectLabel, suspectNamesText } from '../utils/format'
+import { DUE_META, STATUS_META, PRIORITY_META, SOURCE_META, CASE_TYPE_META, STAGE_META, caseSortTimeLabel, caseSortTimeText, dueDaysText, rowClassOf, stageLabel, suspectLabel, suspectNamesText } from '../utils/format'
 import { useUserStore } from '../store/user'
 import FocusStar from './FocusStar.vue'
 

@@ -168,7 +168,7 @@ public class WorkLogService {
             w.and(q -> q.like(WorkLog::getContent, k).or().like(WorkLog::getCaseName, k)
                     .or().like(WorkLog::getEmployeeName, k));
         }
-        w.orderByDesc(WorkLog::getCreatedAt).orderByDesc(WorkLog::getId);
+        w.orderByAsc(WorkLog::getCreatedAt).orderByAsc(WorkLog::getId);
         return workLogMapper.selectList(w);
     }
 
