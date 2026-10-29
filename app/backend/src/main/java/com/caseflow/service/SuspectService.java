@@ -215,11 +215,12 @@ public class SuspectService {
     }
 
     /**
-     * 写操作权限：管理层 或 本案现职承办人。
+     * 写操作权限：管理层 或 研判员 或 本案现职承办人。
      * 原来完全无校验，任何登录账号都能改任意案件的嫌疑人——与待办/计划同一口径补齐。
+     * 2026-10-29 放行研判员：研判员的职责就是查看全量案件并录入嫌疑人身份信息。
      */
     private void checkOperate(CaseInfo c) {
-        if (AuthContext.isFullAccess()) {
+        if (AuthContext.isFullAccess() || AuthContext.isJudge()) {
             return;
         }
         Long empId = AuthContext.get() == null ? null : AuthContext.get().getEmployeeId();

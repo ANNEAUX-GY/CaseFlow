@@ -492,3 +492,19 @@ CREATE TABLE IF NOT EXISTS schema_migration_mark (
     mark_name  VARCHAR(64) NOT NULL PRIMARY KEY COMMENT '整理项名称',
     applied_at DATETIME    DEFAULT NULL COMMENT '首次执行时间'
 );
+
+-- 工作记录本（2026-10-29）：民警个人工作记事本。
+-- 归属挂在 org_employee.id（员工档案）上，账号可停用/重建，档案才是「这个人」的稳定标识。
+-- 权限：普通民警只看/只写自己；其余角色（所长/副所长/队长/法制员/研判员/系统管理员）
+-- 可检索查看任意民警的记录。case_id / case_name 可空：纯个人记事可不挂案件。
+CREATE TABLE IF NOT EXISTS work_log (
+    id            BIGINT        AUTO_INCREMENT PRIMARY KEY COMMENT '主键',
+    employee_id   BIGINT        DEFAULT NULL COMMENT '记录所属民警（org_employee.id）',
+    employee_name VARCHAR(64)   DEFAULT NULL COMMENT '记录所属民警姓名（冗余展示）',
+    creator_id    BIGINT        DEFAULT NULL COMMENT '记录人账号 ID（sys_user.id）',
+    content       VARCHAR(1000) NOT NULL COMMENT '工作内容',
+    case_id       BIGINT        DEFAULT NULL COMMENT '关联案件 ID（可空）',
+    case_name     VARCHAR(255)  DEFAULT NULL COMMENT '关联案件名称（冗余展示）',
+    created_at    DATETIME      DEFAULT CURRENT_TIMESTAMP COMMENT '记录时间',
+    updated_at    DATETIME      DEFAULT CURRENT_TIMESTAMP COMMENT '最后修改时间'
+);

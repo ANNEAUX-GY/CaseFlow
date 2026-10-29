@@ -1,5 +1,5 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
-import { isFullAccessRole, isSystemAdminRole } from '../store/user'
+import { isFullAccessRole, isSystemAdminRole, isJudgeRole } from '../store/user'
 import { GATED_PATHS, useCaseTypeStore } from '../store/caseType'
 import { authApi } from '../api'
 
@@ -7,14 +7,17 @@ import { authApi } from '../api'
  * 普通民警（非全权限角色）只能进这两个页面：内容都只与本人民下案件相关。
  * 用白名单而不是逐个页面加标记 —— 以后新增的页面默认就是管理层专属，不会漏配。
  */
-const STAFF_PAGES = ['/my-cases', '/reminders', '/my-todos', '/case-type']
+const STAFF_PAGES = ['/my-cases', '/reminders', '/my-todos', '/case-type', '/work-log']
 // /case-type 必须对所有登录用户开放：普通民警没选过案件类型时，
 // 点「我的案件/到期提醒」等门控页会被引导到类型选择页；
 // 若此页不在白名单，会被上面那条规则弹回 /my-cases，形成
 // 「点菜单 → 跳选择页 → 被弹回」的循环，表现为菜单点不动（实测踩过）。
 
-/** 登录后的落地页：管理层进工作台，普通民警进我的案件 */
-export const homePathOf = (role) => (isFullAccessRole(role) ? '/dashboard' : '/my-cases')
+/** 研判员（2026-10-29）：查看全量案件 + 录入嫌疑人。可进案件管理/已办结/到期提醒/类型门控页 */
+const JUDGE_PAGES = ['/cases', '/closed-cases', '/reminders', '/case-type', '/case-boards', '/case-stages', '/work-log']
+
+/** 登录后的落地页：管理层进工作台，普通民警进我的案件，研判员进案件管理 */
+export const homePathOf = (role) => (isFullAccessRole(role) ? '/dashboard' : (isJudgeRole(role) ? '/cases' : '/my-cases'))
 
 /** 路由守卫里拿不到 Pinia 实例，只能从 localStorage 读角色 */
 const storedRole = () => {
@@ -47,6 +50,8 @@ const routes = [
       { path: 'case-boards', name: 'CaseBoards', component: () => import('../views/CaseBoards.vue'), meta: { title: '选择小类', fullAccessOnly: true } },
       { path: 'case-stages', name: 'CaseStages', component: () => import('../views/CaseStages.vue'), meta: { title: '选择办案阶段', fullAccessOnly: true } },
       { path: 'reminders', name: 'Reminders', component: () => import('../views/Reminder.vue'), meta: { title: '到期提醒' } },
+      // 工作记录本（2026-10-29）：民警个人记事本，所有角色可用
+      { path: 'work-log', name: 'WorkLog', component: () => import('../views/WorkLog.vue'), meta: { title: '工作记录本' } },
       // 员工图谱：整页级限定「系统管理员」（systemManageOnly）。
       // 2026-10-09：业务领导侧栏不再出现该项，守卫同步兜底——否则「藏菜单」只是障眼法。
       { path: 'org', name: 'Org', component: () => import('../views/EmployeeTree.vue'), meta: { title: '员工图谱', fullAccessOnly: true, systemManageOnly: true } },
@@ -123,10 +128,14 @@ router.beforeEach(async (to) => {
   // 普通民警：不在白名单里的一律回落「我的案件」。
   // 后端接口另有数据范围强制收敛，这里只是体验层，不留白屏和看不懂的页面。
   if (!isFullAccessRole(role) && !STAFF_PAGES.includes(firstSeg(to.path))) {
-    return { path: '/my-cases' }
+    // 研判员例外：可进案件管理/已办结/到期提醒等查看类页面
+    if (!(isJudgeRole(role) && JUDGE_PAGES.includes(firstSeg(to.path)))) {
+      return { path: homePathOf(role) }
+    }
   }
   // 整页级权限：普通民警手敲 /users 也不让进（后端接口另有 403 兜底）
-  if (to.meta.fullAccessOnly && !isFullAccessRole(role)) {
+  // 研判员例外：研判员可查看全量案件，能进「已办结案件」等查看类 fullAccessOnly 页面。
+  if (to.meta.fullAccessOnly && !isFullAccessRole(role) && !isJudgeRole(role)) {
     return { path: homePathOf(role) }
   }
   // 系统管理类栏目（员工图谱 / 类别管理 / 账号管理）：只有系统管理员能进。

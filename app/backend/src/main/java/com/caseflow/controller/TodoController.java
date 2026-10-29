@@ -100,9 +100,9 @@ public class TodoController {
         return Result.ok(todoService.listOf(caseId));
     }
 
-    /** 新增待办（管理层） */
+    /** 新增待办（2026-10-29 起放开到「管理层 + 本案承办人」，民警可给自己经办案件加待办当记事本；
+     *  权限分层在 TodoService.add 的 checkAdd） */
     @PostMapping("/case/{caseId}")
-    @FullAccessOnly("维护案件待办")
     public Result<CaseTodoVO> add(@PathVariable Long caseId, @Validated @RequestBody TodoSaveRequest req) {
         return Result.ok(todoService.add(caseId, req.getContent()));
     }

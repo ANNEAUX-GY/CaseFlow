@@ -348,3 +348,11 @@ export const fileApi = {
   remove: (id) => http.delete(`/files/${id}`),
   listOfCase: (caseId) => http.get(`/files/case/${caseId}`)
 }
+
+export const workLogApi = {
+  list: (params) => http.get('/work-logs', { params }),
+  employees: () => http.get('/work-logs/employees'),
+  add: (data) => http.post('/work-logs', data),
+  update: (id, data) => http.put(`/work-logs/${id}`, data),
+  remove: (id) => http.delete(`/work-logs/${id}`)
+}

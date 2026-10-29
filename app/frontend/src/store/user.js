@@ -2,11 +2,17 @@ import { defineStore } from 'pinia'
 import { authApi } from '../api'
 
 /**
- * 拥有全部权限的角色：所长 / 副所长 / 法制员 / 系统管理员。
+ * 拥有全部权限的角色：所长 / 副所长 / 队长 / 法制员 / 系统管理员。
  * 与后端 com.caseflow.security.Roles#isFullAccess 保持一致。
  * 前端只用它控制按钮显隐（体验层），真正的拦截在后端 —— 前端隐藏只是避免误点。
  */
-const FULL_ACCESS_ROLES = ['BOSS', 'CHIEF', 'DEPUTY_CHIEF', 'LAW_OFFICER']
+const FULL_ACCESS_ROLES = ['BOSS', 'CHIEF', 'DEPUTY_CHIEF', 'CAPTAIN', 'LAW_OFFICER']
+
+/**
+ * 研判员：可查看全量案件 + 录入嫌疑人身份信息，但无指派/账号管理等管理权限。
+ * 前端用它控制「全量案件」入口与「录入嫌疑人」按钮的显隐。
+ */
+const JUDGE_ROLE = 'JUDGE'
 
 /**
  * 「系统管理类」栏目（员工图谱 / 类别管理 / 账号管理）的专属角色：只有系统管理员。
@@ -21,11 +27,17 @@ const SYSTEM_ADMIN_ROLES = ['BOSS']
 /** 供路由守卫做「整页级」权限判断（守卫里拿不到 Pinia 实例，只能读 localStorage） */
 export const isFullAccessRole = (role) => FULL_ACCESS_ROLES.includes(role)
 
+/** 是否研判员（可看全量案件 + 录入嫌疑人，无管理权限） */
+export const isJudgeRole = (role) => role === JUDGE_ROLE
+
+/** 是否可查看全量案件（全权限角色 + 研判员） */
+export const canViewAllCasesRole = (role) => FULL_ACCESS_ROLES.includes(role) || role === JUDGE_ROLE
+
 /** 是否系统管理员（唯一能看到系统管理类栏目的角色） */
 export const isSystemAdminRole = (role) => SYSTEM_ADMIN_ROLES.includes(role)
 
-/** 侧栏分档：STAFF 普通民警 / LEADER 业务领导 / ADMIN 系统管理员 */
-export const NAV_TIER = { STAFF: 'STAFF', LEADER: 'LEADER', ADMIN: 'ADMIN' }
+/** 侧栏分档：STAFF 普通民警 / JUDGE 研判员 / LEADER 业务领导 / ADMIN 系统管理员 */
+export const NAV_TIER = { STAFF: 'STAFF', JUDGE: 'JUDGE', LEADER: 'LEADER', ADMIN: 'ADMIN' }
 
 /**
  * 角色 → 侧栏分档。侧栏只有三套菜单（见 NavPanel.vue）：
@@ -39,6 +51,7 @@ export const NAV_TIER = { STAFF: 'STAFF', LEADER: 'LEADER', ADMIN: 'ADMIN' }
  * （isFullAccess 不变），后端接口一行没动。
  */
 export const navTierOf = (role) => {
+  if (isJudgeRole(role)) return NAV_TIER.JUDGE
   if (!isFullAccessRole(role)) return NAV_TIER.STAFF
   return isSystemAdminRole(role) ? NAV_TIER.ADMIN : NAV_TIER.LEADER
 }
@@ -46,7 +59,9 @@ export const navTierOf = (role) => {
 const ROLE_NAMES = {
   CHIEF: '所长',
   DEPUTY_CHIEF: '副所长',
+  CAPTAIN: '队长',
   LAW_OFFICER: '法制员',
+  JUDGE: '研判员',
   STAFF: '普通民警',
   BOSS: '系统管理员'
 }
@@ -60,6 +75,10 @@ export const useUserStore = defineStore('user', {
   getters: {
     /** 是否拥有指派、员工维护、账号管理、撤回等高级权限 */
     isFullAccess: (state) => FULL_ACCESS_ROLES.includes(state.userInfo?.role),
+    /** 是否研判员（可看全量案件 + 录入嫌疑人） */
+    isJudge: (state) => state.userInfo?.role === JUDGE_ROLE,
+    /** 是否可查看全量案件（全权限 + 研判员） */
+    canViewAllCases: (state) => canViewAllCasesRole(state.userInfo?.role),
     /** 侧栏分档：STAFF / LEADER / ADMIN —— 侧栏三套菜单的唯一判据 */
     navTier: (state) => navTierOf(state.userInfo?.role),
     /** 是否看得到系统管理类栏目（员工图谱 / 类别管理 / 账号管理） */

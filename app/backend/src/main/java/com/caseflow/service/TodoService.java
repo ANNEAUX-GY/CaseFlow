@@ -347,7 +347,9 @@ public class TodoService {
         if (content.trim().length() > 500) {
             throw new BizException("待办内容不能超过 500 字");
         }
-        requireAdmin("维护案件待办");
+        // 2026-10-29：新增待办从「仅管理层」放开到「管理层 或 本案承办人」——
+        // 民警可给自己经办的案件添加待办，当个人记事本用。
+        checkAdd(c);
         if (countOfCase(caseId) >= MAX_PER_CASE) {
             throw new BizException("单个案件最多 " + MAX_PER_CASE + " 条待办");
         }
@@ -1128,6 +1130,24 @@ public class TodoService {
                 .eq(CaseAssignee::getStatus, "ACTIVE"));
         if (cnt == null || cnt == 0) {
             throw new BizException(403, "只有案件承办人或管理层可以勾选待办完成");
+        }
+    }
+
+    /** 新增待办（2026-10-29）：管理层 或 本案现职承办人（民警给自己经办案件加待办当记事本） */
+    private void checkAdd(CaseInfo c) {
+        if (AuthContext.isFullAccess()) {
+            return;
+        }
+        Long empId = AuthContext.get() == null ? null : AuthContext.get().getEmployeeId();
+        if (empId == null) {
+            throw new BizException(403, "只有案件承办人或管理层可以新增待办");
+        }
+        Long cnt = assigneeMapper.selectCount(new LambdaQueryWrapper<CaseAssignee>()
+                .eq(CaseAssignee::getCaseId, c.getId())
+                .eq(CaseAssignee::getEmployeeId, empId)
+                .eq(CaseAssignee::getStatus, "ACTIVE"));
+        if (cnt == null || cnt == 0) {
+            throw new BizException(403, "只有案件承办人或管理层可以新增待办");
         }
     }
 

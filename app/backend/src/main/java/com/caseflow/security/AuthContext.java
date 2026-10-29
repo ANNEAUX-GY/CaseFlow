@@ -34,10 +34,22 @@ public final class AuthContext {
         return u == null ? null : u.getRole();
     }
 
-    /** 当前登录人是否拥有全权限（所长 / 副所长 / 法制员 / 系统管理员） */
+    /** 当前登录人是否拥有全权限（所长 / 副所长 / 队长 / 法制员 / 系统管理员） */
     public static boolean isFullAccess() {
         CurrentUser u = HOLDER.get();
         return u != null && Roles.isFullAccess(u.getRole());
+    }
+
+    /** 当前登录人是否可查看全量案件（全权限角色 + 研判员） */
+    public static boolean canViewAllCases() {
+        CurrentUser u = HOLDER.get();
+        return u != null && Roles.canViewAllCases(u.getRole());
+    }
+
+    /** 当前登录人是否为研判员（可录入嫌疑人身份信息，但无管理权限） */
+    public static boolean isJudge() {
+        CurrentUser u = HOLDER.get();
+        return u != null && Roles.JUDGE.equals(u.getRole());
     }
 
     public static void clear() {

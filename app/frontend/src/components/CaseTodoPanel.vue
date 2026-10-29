@@ -6,8 +6,11 @@
         已完成 {{ doneCount }} / {{ todos.length }} 项
       </span>
       <div class="cf-panel__head-actions">
-        <!-- 一个入口：提意见=生成待办，不再分「提意见 / 添加待办」两个按钮 -->
+        <!-- 一个入口：提意见=生成待办，不再分「提意见 / 添加待办」两个按钮。
+             2026-10-29：民警（承办人）也可给自己经办案件添加待办当记事本，
+             但民警走单条录入（todoApi.add），领导仍走批量提意见（addOpinions）。 -->
         <el-button v-if="isAdmin" link type="primary" @click="openAdd">＋ 添加</el-button>
+        <el-button v-else-if="canAdd" link type="primary" @click="openStaffAdd">＋ 添加记事</el-button>
       </div>
     </div>
 
@@ -21,6 +24,7 @@
         <li>反馈过后勾选前面的方框，该事项即标记完成</li>
       </ol>
       <el-button v-if="isAdmin" type="primary" @click="openAdd">＋ 添加第一条</el-button>
+      <el-button v-else-if="canAdd" type="primary" @click="openStaffAdd">＋ 添加记事</el-button>
       <div v-else class="cf-muted" style="margin-top: 6px">领导提出意见后，这里会自动出现待办</div>
     </div>
 
@@ -341,6 +345,33 @@
         <el-button type="primary" :loading="saving" @click="submitEdit">保存</el-button>
       </template>
     </el-dialog>
+
+    <!-- 民警添加记事（2026-10-29）：单条录入，走 todoApi.add，不设 A/B/C 分级（那是领导口径）。
+         民警给自己经办案件当记事本用，可写工作备忘，无需领导意见派生。 -->
+    <el-dialog
+      v-model="staffAddVisible"
+      title="添加记事"
+      width="460px"
+      append-to-body
+      destroy-on-close
+    >
+      <el-form label-width="72px">
+        <el-form-item label="内容" required>
+          <el-input
+            v-model="staffAddContent"
+            type="textarea"
+            :rows="4"
+            maxlength="500"
+            show-word-limit
+            placeholder="写给自己看的备忘，如：明天联系受害人补充笔录"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="staffAddVisible = false">取消</el-button>
+        <el-button type="primary" :loading="staffAddSaving" @click="submitStaffAdd">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -388,6 +419,8 @@ const emit = defineEmits(['changed'])
 
 const userStore = useUserStore()
 const isAdmin = computed(() => userStore.isFullAccess)
+/** 民警（非管理层、非研判员）也可给自己经办案件添加待办当记事本（2026-10-29） */
+const canAdd = computed(() => isAdmin.value || !userStore.isJudge)
 
 const urgencyOf = (t) => urgencyOfFn(t.opinionId ? t.opinionDeadline : t.deadline)
 const deadlineTextOf = deadlineTextOfFn
@@ -746,6 +779,35 @@ const openAdd = () => {
   addVisible.value = true
   batchRef.value?.focusFirst()
   loadPresets()
+}
+
+/* ============ 民警添加记事（2026-10-29）：单条，走 todoApi.add ============ */
+const staffAddVisible = ref(false)
+const staffAddContent = ref('')
+const staffAddSaving = ref(false)
+
+const openStaffAdd = () => {
+  staffAddContent.value = ''
+  staffAddVisible.value = true
+}
+
+const submitStaffAdd = async () => {
+  const content = (staffAddContent.value || '').trim()
+  if (!content) {
+    ElMessage.warning('请填写记事内容')
+    return
+  }
+  staffAddSaving.value = true
+  try {
+    await todoApi.add(props.caseId, { content })
+    ElMessage.success('已添加')
+    staffAddVisible.value = false
+    staffAddContent.value = ''
+    await load()
+    emit('changed')
+  } finally {
+    staffAddSaving.value = false
+  }
 }
 
 /* ============ 常用待办（后台记忆，2026-10-11） ============

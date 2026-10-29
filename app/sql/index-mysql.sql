@@ -25,3 +25,7 @@ CREATE INDEX idx_todo_feedback_case ON case_todo_feedback(case_id);
 
 -- 疑问问答（2026-10-04）：按案件取问答列表
 CREATE INDEX idx_question_case ON case_question(case_id, created_at);
+
+-- 工作记录本（2026-10-29）：按人取记录；按案件检索
+CREATE INDEX idx_worklog_emp ON work_log(employee_id, created_at);
+CREATE INDEX idx_worklog_case ON work_log(case_id);
