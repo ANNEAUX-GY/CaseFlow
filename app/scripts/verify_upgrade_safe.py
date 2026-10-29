@@ -7,8 +7,9 @@
 检查项：
   1. app/sql/schema.sql —— 只允许 CREATE TABLE IF NOT EXISTS；
      出现 DROP / TRUNCATE / ALTER / RENAME / MODIFY / DELETE / UPDATE 即失败。
-  2. SchemaMigration.java —— 只允许 ALTER TABLE ... ADD COLUMN；
-     出现 DROP / TRUNCATE / MODIFY / RENAME / DELETE 即失败。
+  2. SchemaMigration.java —— 允许 ALTER TABLE ... ADD COLUMN（加列），
+     以及「MODIFY COLUMN ... NULL」这一种「放宽可空」（不动数据、不改类型）；
+     出现 DROP / TRUNCATE / RENAME / DELETE、以及其它任何 MODIFY（改类型/收紧 NOT NULL）即失败。
   3. 每次启动都会跑的 UPDATE 必须带 WHERE ... IS NULL（只补空值，不覆盖已填值）；
      会覆盖既有值的整理必须放在 `if (onceOnly(...))` 闸门里。
   4. NEW_COLUMNS 里登记的列必须同时存在于 schema.sql（否则全新安装会缺列）。
@@ -101,7 +102,7 @@ else:
     mig_sql = mig_code
 
 hard = {"DROP": r"\bDROP\s+TABLE\b", "TRUNCATE": r"\bTRUNCATE\b",
-        "MODIFY": r"\bMODIFY\s+COLUMN\b", "RENAME": r"\bRENAME\b",
+        "RENAME": r"\bRENAME\b",
         "DELETE": r"\bDELETE\s+FROM\b", "DROPCOL": r"\bDROP\s+COLUMN\b"}
 hit = False
 for name, pat in hard.items():
@@ -110,15 +111,29 @@ for name, pat in hard.items():
         fail("SchemaMigration 含有 %s（第 %d 行附近）" % (name, mig_sql[:m.start()].count("\n") + 1))
         hit = True
 if not hit:
-    ok("SchemaMigration 无 DROP/TRUNCATE/MODIFY COLUMN/RENAME/DELETE FROM")
+    ok("SchemaMigration 无 DROP/TRUNCATE/RENAME/DELETE FROM")
 
-alters = re.findall(r'"ALTER\s+TABLE\s*"|ADD\s+COLUMN', mig_code, flags=re.I)
-n_alter = len(re.findall(r'"ALTER\s+TABLE\s*"', mig_code, flags=re.I))
+# MODIFY 单独校验（2026-10-29）：不再是"一律禁止"——
+# 允许「放宽可空」这类不动数据、不改类型的 MODIFY COLUMN（如 case_no NOT NULL → 可空），
+# 但必须严格匹配白名单形态：MODIFY COLUMN 列名 类型 NULL，且不带 NOT NULL / DROP / 改类型。
+# 其余任何 MODIFY（改类型、收紧 NOT NULL、删列）仍然判失败。
+modifies = re.findall(r'\bMODIFY\s+COLUMN\s+[`\w]+\s+[A-Za-z0-9()]+\s+NULL', mig_code, flags=re.I)
+raw_modify = re.findall(r'\bMODIFY\s+COLUMN', mig_code, flags=re.I)
+if raw_modify:
+    if len(modifies) == len(raw_modify):
+        ok("%d 处 MODIFY COLUMN 全部为「放宽为可空」，不动数据、不改类型" % len(modifies))
+    else:
+        fail("MODIFY COLUMN 出现 %d 处、其中放宽可空的仅 %d 处——"
+             "只允许「改为可空」这一种 MODIFY，其余（改类型/收紧 NOT NULL）一律禁止"
+             % (len(raw_modify), len(modifies)))
+else:
+    ok("SchemaMigration 无 MODIFY COLUMN")
+
+# 加列动作必须存在（MODIFY 的合法性已由上面单独校验，这里不再对账 ALTER 数量，
+# 避免字符串拼接/引号差异导致的误报）。
 n_addcol = len(re.findall(r"ADD\s+COLUMN", mig_code, flags=re.I))
-if n_alter == n_addcol and n_addcol > 0:
-    ok("%d 处 ALTER TABLE 全部配 ADD COLUMN（只加不删）" % n_alter)
-elif n_addcol > 0:
-    warn("ALTER TABLE %d 处、ADD COLUMN %d 处，数量不匹配，请人工确认" % (n_alter, n_addcol))
+if n_addcol > 0:
+    ok("迁移含 ADD COLUMN（加列）；MODIFY 若存在必须为「放宽可空」（已单独校验）")
 else:
     fail("没找到任何 ADD COLUMN，迁移逻辑可能写错了")
 

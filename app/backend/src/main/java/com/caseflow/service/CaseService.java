@@ -63,7 +63,6 @@ import java.util.stream.Collectors;
 public class CaseService {
 
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
-    private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("yyyyMMdd");
     /** 期限按天展示用的格式（只到日期，不带时分） */
     private static final DateTimeFormatter DAY_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
@@ -582,7 +581,9 @@ public class CaseService {
         String beforeSnapshot;
         if (isNew) {
             beforeSnapshot = snapshotService.absentJson();
-            c.setCaseNo(generateCaseNo());
+            // 案件编号（2026-10-29）：不再自动生成。编号由导入识别或手工输入决定，
+            // 没有则留空（case_no 已放宽为可空）。手工建案的业务编号走 filing_no。
+            c.setCaseNo(null);
             c.setCreatedBy(AuthContext.userId());
             c.setCreatedAt(now);
         } else {
@@ -901,7 +902,8 @@ public class CaseService {
         }
 
         CaseInfo c = new CaseInfo();
-        c.setCaseNo(StringUtils.hasText(row.getCaseNo()) ? row.getCaseNo() : generateCaseNo());
+        // 案件编号（2026-10-29）：导入识别到编号才填，否则留空（不再自动生成）。
+        c.setCaseNo(StringUtils.hasText(row.getCaseNo()) ? row.getCaseNo().trim() : null);
         c.setName(row.getName());
         c.setCaseType(caseType);
         c.setOccurPlace(row.getOccurPlace());
@@ -1132,28 +1134,6 @@ public class CaseService {
                 next == 1 ? "标注为重点关注：" + c.getName() : "取消重点关注：" + c.getName(),
                 before, snapshotService.capture(id));
         return detail(id);
-    }
-
-    private String generateCaseNo() {
-        String day = LocalDate.now().format(DAY);
-        // 2026-10-18：不再用「CA-」前缀（该编号无业务含义，且列表已改为展示案件时间）。
-        // 改成「日期-流水」，仅用于满足唯一约束与内部检索。
-        String prefix = day + "-";
-        // 取当天编号最大值 +1，而不是 count+1：删除案件后 count 变小会导致编号复用
-        List<CaseInfo> latest = caseMapper.selectList(new LambdaQueryWrapper<CaseInfo>()
-                .likeRight(CaseInfo::getCaseNo, prefix)
-                .orderByDesc(CaseInfo::getCaseNo)
-                .last("LIMIT 1"));
-        int next = 1;
-        if (!latest.isEmpty() && latest.get(0).getCaseNo() != null) {
-            String no = latest.get(0).getCaseNo();
-            try {
-                next = Integer.parseInt(no.substring(prefix.length())) + 1;
-            } catch (Exception ignored) {
-                // 历史编号格式异常时退回 1，最多与旧编号撞号由唯一约束兜底
-            }
-        }
-        return prefix + String.format("%03d", next);
     }
 
     @Transactional(rollbackFor = Exception.class)

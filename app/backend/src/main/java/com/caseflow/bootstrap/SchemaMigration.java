@@ -228,6 +228,10 @@ public class SchemaMigration implements ApplicationRunner {
             Set<String> existing = existingColumns(conn);
             // ① 结构：只加列、只建缺失的表，从不删列/改列类型/改表名
             ensureColumns(conn, existing, null);
+            // ①-1 放宽 case_no 可空（2026-10-29）：案件编号不再自动生成，
+            //      导入识别到/手工输入才填，否则留空。NOT NULL→可空是放宽约束，
+            //      不删列、不动已有值、不改类型，幂等可重复执行。
+            relaxCaseNoNullable(conn);
             // ② 数据：只补空值 / 只读检查，天然幂等，可以每次跑
             backfillCaseTime(conn);
             seedCategories(conn, existing);
@@ -250,6 +254,26 @@ public class SchemaMigration implements ApplicationRunner {
             // 报错信息会明确指出，不会静默损坏数据。
             log.error("[SchemaMigration] 增量建列失败，撤回功能可能不可用：{}。"
                     + "可手动执行：{}", e.getMessage(), describeAll());
+        }
+    }
+
+    /**
+     * 把 case_info.case_no 从 NOT NULL 放宽为可空（2026-10-29）。
+     *
+     * <p>原因：案件编号不再自动生成（原来 generateCaseNo 保证每案必有编号），
+     * 改为「导入识别到编号 / 手工输入编号才填，否则留空」。NOT NULL 会拦下空编号。
+     *
+     * <p>这是<b>放宽</b>约束：不删列、不改列类型、不动已有值（老案件编号仍在），
+     * 重复执行幂等无害，因此不进 onceOnly（那扇门是给「覆盖数据」的整理用的）。
+     * H2（MODE=MySQL）与 MySQL 都支持 MODIFY COLUMN ... NULL。
+     */
+    private void relaxCaseNoNullable(Connection conn) {
+        try (Statement st = conn.createStatement()) {
+            st.execute("ALTER TABLE case_info MODIFY COLUMN case_no VARCHAR(64) NULL");
+            log.info("[SchemaMigration] case_no 已放宽为可空（编号不再自动生成）");
+        } catch (Exception e) {
+            // 老库可能缺这张表或列；放宽失败不影响启动，只是空编号会被 NOT NULL 拦住
+            log.warn("[SchemaMigration] 放宽 case_no 可空失败（不影响启动）：{}", e.getMessage());
         }
     }
 

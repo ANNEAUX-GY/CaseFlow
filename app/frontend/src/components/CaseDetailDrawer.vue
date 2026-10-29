@@ -7,7 +7,7 @@
   >
     <template #header>
       <div class="cf-drawer__head">
-        <span>案件详情 · {{ detail.caseNo || '' }}</span>
+        <span>案件详情 · {{ detail.name || '' }}</span>
         <!-- 重点关注：列表是主入口，但详情里也要能改（否则得退出去再点星）。
              星标是打在案件上的全局标记，只给管理层。 -->
         <template v-if="canManage && detail.id">

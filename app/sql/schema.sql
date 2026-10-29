@@ -58,7 +58,7 @@ CREATE TABLE IF NOT EXISTS org_employee (
 --    案件类别（小类）：沿用 category 列存具体案由（如：电诈、殴打他人、盗窃类）
 CREATE TABLE IF NOT EXISTS case_info (
     id            BIGINT       AUTO_INCREMENT PRIMARY KEY COMMENT '主键',
-    case_no       VARCHAR(64)  NOT NULL UNIQUE COMMENT '案件编号，如 CA-20260928-001（唯一）',
+    case_no       VARCHAR(64)  UNIQUE COMMENT '案件编号（唯一）：导入识别到或手工输入才填，否则留空；不再自动生成',
     name          VARCHAR(255) NOT NULL COMMENT '案件名称',
     source_type   VARCHAR(16)  NOT NULL DEFAULT 'MANUAL' COMMENT '来源：MANUAL/PDF/WORD/EXCEL',
     source_file_id BIGINT      DEFAULT NULL COMMENT '原始案件材料文件 ID',

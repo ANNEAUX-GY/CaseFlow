@@ -142,12 +142,16 @@ def build_sql(entries, schema_cols):
 
 
 def read_latest_changelog():
-    """取《结构变更记录.md》里最新一节（人写的"本次改了什么、为什么"）"""
+    """取《结构变更记录.md》里最新一节（人写的"本次改了什么、为什么"）。
+
+    约定「最新放最上面」，所以取第一个 `##` 之后的节即可；
+    之前用 reversed(parts[1:]) 会取到最老一节（2026-10-25），是个隐藏 bug。
+    """
     if not os.path.exists(CHANGELOG):
         return ''
     text = io.open(CHANGELOG, encoding='utf-8').read()
     parts = re.split(r'^## ', text, flags=re.M)
-    for part in reversed(parts[1:]):
+    for part in parts[1:]:
         if part.strip():
             return part.strip()
     return ''
@@ -166,7 +170,7 @@ def build_readme(entries):
         '',
         '一句话结论',
         '-' * 62,
-        '只加字段、只加一张内部台账表；没有删字段、没有改字段类型、没有改表名。',
+        '只加字段、只放宽个别列的「非空」约束；不删字段、不改字段类型、不改表名。',
         '内网已经录入的案件、嫌疑人、意见、待办、附件一个字节都不会动。',
         '',
         '一、本次新增了什么（人话版）',
