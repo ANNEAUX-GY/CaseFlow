@@ -1,68 +1,84 @@
 <template>
   <div class="cf-page">
-    <div class="cf-panel" style="padding: 16px">
-      <div class="cf-panel__head" style="margin-bottom: 12px">
+    <div class="cf-panel">
+      <div class="cf-panel__head">
         <span>工作记录本</span>
-        <span class="cf-muted" style="font-size: 12px; margin-left: 10px">
+        <span class="cf-panel__head-tip">
           {{ canViewAll ? '可检索查看任意民警的工作记录' : '记录自己每天做了什么，仅本人可见' }}
         </span>
+        <div class="cf-panel__head-actions">
+          <el-button type="primary" @click="openAdd">新增记录</el-button>
+        </div>
       </div>
 
-      <!-- 工具栏 -->
-      <div class="cf-toolbar" style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px">
-        <!-- 管理侧：按民警筛选 -->
-        <el-select
-          v-if="canViewAll"
-          v-model="query.employeeId"
-          placeholder="按民警筛选"
-          clearable
-          filterable
-          style="width: 200px"
-          @change="load"
-        >
-          <el-option
-            v-for="e in employees"
-            :key="e.employeeId"
-            :label="e.name + (e.dept ? '（' + e.dept + '）' : '')"
-            :value="e.employeeId"
-          />
-        </el-select>
-        <el-input
-          v-model="query.keyword"
-          placeholder="搜索内容 / 案件名"
-          clearable
-          style="width: 220px"
-          @keyup.enter="load"
-          @clear="load"
-        >
-          <template #append>
-            <el-button @click="load">搜索</el-button>
-          </template>
-        </el-input>
-        <el-button type="primary" style="margin-left: auto" @click="openAdd">新增记录</el-button>
-      </div>
+      <div class="cf-panel__body">
+        <!-- 工具栏 -->
+        <div class="cf-filter-bar">
+          <!-- 管理侧：按民警筛选 -->
+          <el-select
+            v-if="canViewAll"
+            v-model="query.employeeId"
+            placeholder="按民警筛选"
+            clearable
+            filterable
+            style="width: 200px"
+            @change="load"
+          >
+            <el-option
+              v-for="e in employees"
+              :key="e.employeeId"
+              :label="e.name + (e.dept ? '（' + e.dept + '）' : '')"
+              :value="e.employeeId"
+            />
+          </el-select>
+          <el-input
+            v-model="query.keyword"
+            placeholder="搜索内容 / 案件名"
+            clearable
+            style="width: 220px"
+            @keyup.enter="load"
+            @clear="load"
+          >
+            <template #append>
+              <el-button @click="load">搜索</el-button>
+            </template>
+          </el-input>
+          <span class="cf-muted" style="font-size: 12px">共 {{ rows.length }} 条</span>
+        </div>
 
-      <!-- 列表 -->
-      <el-table :data="rows" v-loading="loading" style="width: 100%">
-        <el-table-column prop="employeeName" label="民警" width="120">
-          <template #default="{ row }">{{ row.employeeName || '—' }}</template>
-        </el-table-column>
-        <el-table-column prop="content" label="工作内容" min-width="320" show-overflow-tooltip />
-        <el-table-column prop="caseName" label="关联案件" width="180">
-          <template #default="{ row }">{{ row.caseName || '—' }}</template>
-        </el-table-column>
-        <el-table-column prop="createdAt" label="记录时间" width="170">
-          <template #default="{ row }">{{ fmtTime(row.createdAt) }}</template>
-        </el-table-column>
-        <el-table-column label="操作" width="120" align="right">
-          <template #default="{ row }">
-            <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
-            <el-button link type="danger" @click="onRemove(row)">删除</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-      <div v-if="!rows.length && !loading" class="cf-muted" style="padding: 24px; text-align: center">
-        暂无记录，点右上角「新增记录」开始写
+        <!-- 列表 -->
+        <el-table :data="rows" v-loading="loading" style="width: 100%">
+          <el-table-column v-if="canViewAll" prop="employeeName" label="民警" width="120">
+            <template #default="{ row }">{{ row.employeeName || '—' }}</template>
+          </el-table-column>
+          <el-table-column label="工作内容" min-width="320">
+            <template #default="{ row }">
+              <span class="cf-wlog-content">{{ row.content }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="关联案件" width="180">
+            <template #default="{ row }">
+              <el-tag v-if="row.caseName" size="small" type="info" effect="plain">{{ row.caseName }}</el-tag>
+              <span v-else class="cf-muted">—</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="记录时间" width="150">
+            <template #default="{ row }">
+              <span class="cf-wlog-time">{{ fmtTime(row.createdAt) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="120" align="right">
+            <template #default="{ row }">
+              <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
+              <el-button link type="danger" @click="onRemove(row)">删除</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+        <div v-if="!rows.length && !loading" class="cf-wlog-empty">
+          <span class="cf-wlog-empty__icon">📝</span>
+          <div>还没有工作记录</div>
+          <div class="cf-muted">点右上角「新增记录」，记下今天做了什么</div>
+        </div>
       </div>
     </div>
 
@@ -124,7 +140,16 @@ const editingId = ref(null)
 const query = reactive({ employeeId: null, keyword: '' })
 const form = reactive({ employeeId: null, content: '', caseName: '' })
 
-const fmtTime = (t) => (t ? dateKeyOf(t) : '—')
+const WEEK = ['日', '一', '二', '三', '四', '五', '六']
+const fmtTime = (t) => {
+  if (!t) return '—'
+  // 用字符串拆日期算星期，绕开 new Date('yyyy-MM-dd') 按 UTC 午夜解析的时区坑
+  const key = dateKeyOf(t)
+  if (!key) return '—'
+  const [y, m, d] = key.split('-').map(Number)
+  const week = WEEK[new Date(y, m - 1, d).getDay()]
+  return key + '（周' + week + '）'
+}
 
 async function load() {
   loading.value = true
@@ -213,3 +238,34 @@ onMounted(() => {
   loadEmployees()
 })
 </script>
+
+<style scoped>
+/* 工作内容：允许换行显示，长内容不强制单行截断（比 show-overflow-tooltip 更易读，且符合全项目禁悬浮提示的约定） */
+.cf-wlog-content {
+  display: inline-block;
+  max-width: 100%;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.7;
+}
+
+/* 记录时间：日期 + 星期，等宽数字对齐 */
+.cf-wlog-time {
+  font-variant-numeric: tabular-nums;
+  color: var(--cf-text-2);
+}
+
+/* 空状态：居中图标 + 主次两行文案 */
+.cf-wlog-empty {
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--cf-text-2);
+  line-height: 1.9;
+}
+.cf-wlog-empty__icon {
+  display: block;
+  font-size: 32px;
+  margin-bottom: 8px;
+  opacity: 0.6;
+}
+</style>
