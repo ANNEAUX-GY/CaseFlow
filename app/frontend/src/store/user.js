@@ -78,6 +78,8 @@ export const useUserStore = defineStore('user', {
     isFullAccess: (state) => FULL_ACCESS_ROLES.includes(state.userInfo?.role),
     /** 是否研判员（可看全量案件 + 录入嫌疑人） */
     isJudge: (state) => state.userInfo?.role === JUDGE_ROLE,
+    /** 是否案管员（可录入侦查反馈、代录反馈，2026-10-30） */
+    isCaseManager: (state) => state.userInfo?.role === 'CASE_MANAGER',
     /** 是否可查看全量案件（全权限 + 研判员） */
     canViewAllCases: (state) => canViewAllCasesRole(state.userInfo?.role),
     /** 侧栏分档：STAFF / LEADER / ADMIN —— 侧栏三套菜单的唯一判据 */

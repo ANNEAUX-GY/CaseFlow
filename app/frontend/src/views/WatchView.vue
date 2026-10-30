@@ -126,6 +126,9 @@
             <template #default="{ row }"><FocusStar :row="row" /></template>
           </el-table-column>
           <el-table-column prop="caseNo" label="编号" width="140" />
+          <el-table-column label="案件编号" width="140">
+            <template #default="{ row }">{{ row.filingNo || '—' }}</template>
+          </el-table-column>
           <el-table-column prop="name" label="案件名称" min-width="180" show-overflow-tooltip />
           <el-table-column label="类型" width="120">
             <template #default="{ row }">

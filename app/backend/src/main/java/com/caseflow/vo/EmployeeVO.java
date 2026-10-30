@@ -17,6 +17,8 @@ public class EmployeeVO implements Serializable {
     private Long id;
     private String name;
     private String employeeNo;
+    /** 警综人员编号（2026-10-30） */
+    private String policeSystemNo;
     private Long parentId;
     private String dept;
     private String title;

@@ -225,13 +225,13 @@
               <el-button size="small" type="primary" plain class="cf-todo__act" @click="openDetail(t)">
                 <el-icon><View /></el-icon>详情·子任务
               </el-button>
-              <!-- 反馈入口按角色分（2026-10-06 需求）：
-                   普通用户（承办人）=「提交反馈」：独立入口，不必先开浮窗，
+              <!-- 反馈入口按角色分（2026-10-06 需求，2026-10-30 案管员放开）：
+                   普通用户（承办人）+ 案管员 =「提交反馈」：独立入口，不必先开浮窗，
                      已完成的不再显示（没什么可提交的了）；
-                   管理层 =「查看反馈」：反馈是承办人的汇报，领导只查阅不代提交，
+                   其余管理层 =「查看反馈」：反馈是承办人的汇报，领导只查阅不代提交，
                      点开详情浮窗（反馈记录就在浮窗顶部），已完成的历史记录也能翻。
                    悬浮提示已去掉：会盖住旁边的操作按钮，改用按钮文字本身表意。 -->
-              <el-button v-if="isAdmin" size="small" class="cf-todo__act" @click="openDetail(t)">
+              <el-button v-if="isAdmin && !isCaseManager" size="small" class="cf-todo__act" @click="openDetail(t)">
                 <el-icon><View /></el-icon>查看反馈
               </el-button>
               <el-button v-else-if="canSubmit && t.status !== 'DONE'"
@@ -419,6 +419,8 @@ const emit = defineEmits(['changed'])
 
 const userStore = useUserStore()
 const isAdmin = computed(() => userStore.isFullAccess)
+/** 案管员（2026-10-30）：可代录侦查反馈，与承办人一样能「提交反馈」 */
+const isCaseManager = computed(() => userStore.isCaseManager)
 /** 民警（非管理层、非研判员）也可给自己经办案件添加待办当记事本（2026-10-29） */
 const canAdd = computed(() => isAdmin.value || !userStore.isJudge)
 
@@ -596,7 +598,7 @@ watch(isAdmin, () => nextTick(setupSortable))
  * 按钮对所有普通用户显示——非承办人点了会得到明确提示，
  * 比按钮凭空消失更好（后者会让人以为系统坏了）。
  */
-const canSubmit = computed(() => !isAdmin.value)
+const canSubmit = computed(() => !isAdmin.value || isCaseManager.value)
 
 const fbDlg = reactive({ visible: false, title: '', quote: '', status: '', loading: false })
 const submittingId = ref(null)

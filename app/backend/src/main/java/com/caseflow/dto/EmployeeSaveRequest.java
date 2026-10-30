@@ -16,6 +16,8 @@ public class EmployeeSaveRequest {
     private String name;
 
     private String employeeNo;
+    /** 警综人员编号（2026-10-30）：警综系统为人员生成的编号 */
+    private String policeSystemNo;
     private Long parentId;
     private String dept;
     private String title;

@@ -22,6 +22,8 @@ public class OrgEmployee implements Serializable {
     private Long id;
     private String name;
     private String employeeNo;
+    /** 警综人员编号（2026-10-30）：警综系统为该人员生成的编号，与内部工号 employeeNo 区分 */
+    private String policeSystemNo;
     private Long parentId;
     private String parentNo;
     private String idPath;

@@ -218,6 +218,11 @@
         </template>
       </div>
 
+      <el-form-item label="简要案情">
+        <el-input v-model="form.brief" type="textarea" :rows="3" maxlength="1000" show-word-limit
+          placeholder="一段话概括案件基本事实，例如：某月某日某地，嫌疑人以……方式实施……（选填）" />
+      </el-form-item>
+
       <el-form-item label="备注">
         <el-input v-model="form.description" type="textarea" :rows="2" placeholder="案件要点（选填）" />
       </el-form-item>
@@ -307,6 +312,7 @@ const emptyForm = () => ({
   // 强制措施：'NONE'/空 = 未采取；具体取值见 MEASURE_CHOICES
   caseMeasure: 'NONE',
   description: '',
+  brief: '',
   ownerId: null,
   memberIds: [],
   assignNote: ''
@@ -446,6 +452,7 @@ watch(() => props.modelValue, async (v) => {
     measureTaken.value = !!m && m !== 'NONE'
     form.value.caseMeasure = measureTaken.value ? m : 'NONE'
     form.value.description = d.description || ''
+    form.value.brief = d.brief || ''
   }
 })
 watch(visible, (v) => emit('update:modelValue', v))

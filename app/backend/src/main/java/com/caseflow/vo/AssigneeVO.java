@@ -18,6 +18,8 @@ public class AssigneeVO implements Serializable {
     private String employeeName;
     private String dept;
     private String title;
+    /** 警综人员编号（2026-10-30）：从员工档案透出，供盯办人员列表展示 */
+    private String policeSystemNo;
 
     /** 办案组别 INITIAL初查组/CLEAR清案组/NONE不限（指派约束用） */
     private String policeGroup;

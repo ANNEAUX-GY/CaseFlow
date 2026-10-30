@@ -1,8 +1,8 @@
 -- ============================================================
 --  CaseFlow 已有库升级补列脚本（幂等，可重复执行）
 -- ------------------------------------------------------------
---  生成时间：2026-10-30 16:48
---  来源：backend/.../bootstrap/SchemaMigration.java 的 NEW_COLUMNS（92 列）
+--  生成时间：2026-10-30 19:14
+--  来源：backend/.../bootstrap/SchemaMigration.java 的 NEW_COLUMNS（94 列）
 -- ------------------------------------------------------------
 --  【这段脚本做什么】
 --  把旧版本的 case_flow 库补齐到与当前版本一致：缺哪列补哪列。
@@ -174,6 +174,12 @@ PREPARE cf_stmt FROM @ddl; EXECUTE cf_stmt; DEALLOCATE PREPARE cf_stmt;
 SET @exists := (SELECT COUNT(*) FROM information_schema.COLUMNS
   WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'org_employee' AND COLUMN_NAME = 'origin');
 SET @ddl := IF(@exists = 0, 'ALTER TABLE `org_employee` ADD COLUMN `origin` VARCHAR(16) NULL COMMENT ''档案来源：SELF_REGISTER 本人注册自建 / NULL 管理员建档''', 'DO 0');
+PREPARE cf_stmt FROM @ddl; EXECUTE cf_stmt; DEALLOCATE PREPARE cf_stmt;
+
+-- org_employee.police_system_no  警综人员编号（警综系统为人员生成，盯办人员列表展示）
+SET @exists := (SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'org_employee' AND COLUMN_NAME = 'police_system_no');
+SET @ddl := IF(@exists = 0, 'ALTER TABLE `org_employee` ADD COLUMN `police_system_no` VARCHAR(64) NULL COMMENT ''警综人员编号（警综系统为人员生成，盯办人员列表展示）''', 'DO 0');
 PREPARE cf_stmt FROM @ddl; EXECUTE cf_stmt; DEALLOCATE PREPARE cf_stmt;
 
 
@@ -528,6 +534,12 @@ PREPARE cf_stmt FROM @ddl; EXECUTE cf_stmt; DEALLOCATE PREPARE cf_stmt;
 SET @exists := (SELECT COUNT(*) FROM information_schema.COLUMNS
   WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'case_info' AND COLUMN_NAME = 'external_id');
 SET @ddl := IF(@exists = 0, 'ALTER TABLE `case_info` ADD COLUMN `external_id` VARCHAR(32) NULL COMMENT ''源系统主键（导入溯源用）''', 'DO 0');
+PREPARE cf_stmt FROM @ddl; EXECUTE cf_stmt; DEALLOCATE PREPARE cf_stmt;
+
+-- case_info.brief  简要案情（一段话概括案件基本事实，详情页单独一栏）
+SET @exists := (SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'case_info' AND COLUMN_NAME = 'brief');
+SET @ddl := IF(@exists = 0, 'ALTER TABLE `case_info` ADD COLUMN `brief` TEXT NULL COMMENT ''简要案情（一段话概括案件基本事实，详情页单独一栏）''', 'DO 0');
 PREPARE cf_stmt FROM @ddl; EXECUTE cf_stmt; DEALLOCATE PREPARE cf_stmt;
 
 

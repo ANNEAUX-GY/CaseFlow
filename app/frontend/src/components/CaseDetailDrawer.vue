@@ -78,6 +78,9 @@
         </el-descriptions-item>
         <el-descriptions-item label="创建人">{{ detail.createdByName || '-' }}</el-descriptions-item>
         <el-descriptions-item label="创建时间">{{ detail.createdAt || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="简要案情" :span="2">
+          <span style="white-space: pre-wrap">{{ detail.brief || '-' }}</span>
+        </el-descriptions-item>
         <el-descriptions-item label="备注" :span="2">{{ detail.description || '-' }}</el-descriptions-item>
       </el-descriptions>
 

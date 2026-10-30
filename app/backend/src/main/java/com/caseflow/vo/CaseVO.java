@@ -30,6 +30,8 @@ public class CaseVO implements Serializable {
     /** 调解书编号（2026-10-09 起不再填写，仅历史数据可见） */
     private String mediationNo;
     private String description;
+    /** 简要案情（2026-10-30） */
+    private String brief;
     private String priority;
     private String priorityName;
     private LocalDateTime deadline;

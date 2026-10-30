@@ -60,6 +60,11 @@ public class CaseInfo implements Serializable {
      */
     private String flowStage;
     private String description;
+    /**
+     * 简要案情（2026-10-30）：一段话概括案件基本事实，案件详情单独一栏展示。
+     * 与 description（案件描述/备注）区分：description 是通用备注，brief 是专门用于「简要案情」栏。
+     */
+    private String brief;
     private String priority;
     /**
      * 截止期限。按天记录——落库统一归一成「该日 23:59:59」，

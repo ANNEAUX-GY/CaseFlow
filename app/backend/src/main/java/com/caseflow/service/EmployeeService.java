@@ -434,6 +434,7 @@ public class EmployeeService {
         vo.setId(e.getId());
         vo.setName(e.getName());
         vo.setEmployeeNo(e.getEmployeeNo());
+        vo.setPoliceSystemNo(e.getPoliceSystemNo());
         vo.setParentId(e.getParentId());
         vo.setDept(e.getDept());
    vo.setTitle(e.getTitle());
@@ -485,6 +486,7 @@ public class EmployeeService {
         OrgEmployee entity = new OrgEmployee();
         entity.setName(req.getName().trim());
         entity.setEmployeeNo(req.getEmployeeNo());
+        entity.setPoliceSystemNo(Validators.trim(req.getPoliceSystemNo()));
         entity.setDept(req.getDept());
         entity.setTitle(req.getTitle());
         // 办案组别：空/非法一律归一为「不限」，不因漏填卡住员工档案录入

@@ -50,6 +50,9 @@ public class CaseSaveRequest {
 
     private String description;
 
+    /** 简要案情（2026-10-30）：一段话概括案件基本事实 */
+    private String brief;
+
     /** URGENT / HIGH / NORMAL / LOW */
     private String priority = "NORMAL";
 

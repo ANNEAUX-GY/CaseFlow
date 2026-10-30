@@ -100,6 +100,9 @@
               <el-form-item label="工号">
                 <el-input v-model="form.employeeNo" placeholder="导入时的唯一标识" />
               </el-form-item>
+              <el-form-item label="警综编号">
+                <el-input v-model="form.policeSystemNo" placeholder="警综系统的人员编号（选填）" maxlength="64" />
+              </el-form-item>
               <el-form-item label="上级">
                 <el-select
                   v-model="form.parentId"
@@ -271,6 +274,7 @@ const emptyForm = () => ({
   id: null,
   name: '',
   employeeNo: '',
+  policeSystemNo: '',
   parentId: null,
   dept: '',
   title: '',
@@ -576,6 +580,7 @@ const onSelect = async (node) => {
     id: d.id,
     name: d.name,
     employeeNo: d.employeeNo || '',
+    policeSystemNo: d.policeSystemNo || '',
     parentId: d.parentId || null,
     dept: d.dept || '',
     title: d.title || '',

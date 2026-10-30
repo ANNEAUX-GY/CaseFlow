@@ -71,6 +71,8 @@ public class SchemaMigration implements ApplicationRunner {
             // 账号必须关联员工：档案来源标记。注册时由本人自建的档案记为 SELF_REGISTER，
             // 审核界面据此提示管理员核对，避免别人冒名建档。
             {"org_employee", "origin", "VARCHAR(16) NULL"},
+            // 警综人员编号（2026-10-30）：警综系统为人员生成的编号，盯办人员列表展示。可空，存量员工无此信息。
+            {"org_employee", "police_system_no", "VARCHAR(64) NULL"},
             // 领导意见（2026-10）：拖拽排序位次 / 落实截止时间 / 重要性分级。
             // 三列一律可空，兼容旧数据：
             //   sort_order NULL → 读取时按 id 升序回退，OpinionService 首次访问惰性初始化 1..N；
@@ -179,6 +181,8 @@ public class SchemaMigration implements ApplicationRunner {
             {"case_suspect", "measure_end_at", "DATETIME NULL"},
             {"case_info", "punish_time", "DATETIME NULL"},
             {"case_info", "external_id", "VARCHAR(32) NULL"},
+            // 简要案情（2026-10-30）：案件详情单独一栏，一段话概括基本事实。可空，存量案件无此信息。
+            {"case_info", "brief", "TEXT NULL"},
             // 老库的 case_deadline_state 可能建于行政/传讯节点加入之前；逐列补齐。
             {"case_deadline_state", "detention_term", "VARCHAR(8) NULL"},
             {"case_deadline_state", "paused_at", "DATETIME NULL"},

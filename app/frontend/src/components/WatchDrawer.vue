@@ -72,7 +72,8 @@
         </div>
       </div>
 
-      <!-- 主办人 / 盯办人（2026-10-04）：可点名字看该人的承办负荷 -->
+      <!-- 主办人 / 盯办人（2026-10-04）：可点名字看该人的承办负荷。
+           2026-10-30：加序号与「人员编号」（警综系统生成） -->
       <div class="cf-panel" style="margin-bottom: 12px">
         <div class="cf-panel__head">
           <span>主办人与盯办人</span>
@@ -80,12 +81,14 @@
         </div>
         <div style="padding: 12px 16px; font-size: 13px">
           <div v-if="assignees.length" class="cf-watch__owners">
-            <div v-for="a in assignees" :key="a.id" class="cf-watch__owner">
+            <div v-for="(a, idx) in assignees" :key="a.id" class="cf-watch__owner">
+              <span class="cf-watch__owner-no">{{ idx + 1 }}</span>
               <span class="cf-watch__owner-role"
                 :class="a.assignRole === 'OWNER' ? 'is-owner' : 'is-member'">
                 {{ a.assignRole === 'OWNER' ? '主办人' : '协办人' }}
               </span>
               <a class="cf-watch__owner-name" @click="openWorkload(a)">{{ a.employeeName }}</a>
+              <span v-if="a.policeSystemNo" class="cf-watch__owner-police-no">人员编号 {{ a.policeSystemNo }}</span>
               <el-tag v-if="a.policeGroup" size="small"
                 :type="(POLICE_GROUP_META[a.policeGroup] || {}).type" effect="plain">
                 {{ a.policeGroupName || policeGroupLabel(a.policeGroup) }}
@@ -338,4 +341,13 @@ const after = async () => { await reload(); emit('done') }
   color: #1b4a8c; cursor: pointer; text-decoration: underline dotted;
 }
 .cf-watch__owner-name:hover { color: #c62a2a; text-decoration: underline solid }
+/* 序号（2026-10-30）：小圆点序号，与人员并排 */
+.cf-watch__owner-no {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 18px; height: 18px; padding: 0 4px;
+  border-radius: 9px; background: #f2f4f7; color: #8a929e;
+  font-size: 11px; font-variant-numeric: tabular-nums;
+}
+/* 人员编号（2026-10-30）：警综系统生成，弱化展示 */
+.cf-watch__owner-police-no { font-size: 12px; color: #8a929e; font-variant-numeric: tabular-nums }
 </style>

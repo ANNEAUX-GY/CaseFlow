@@ -406,6 +406,7 @@ public class CaseService {
         vo.setFilingNo(c.getFilingNo());
         vo.setMediationNo(c.getMediationNo());
         vo.setDescription(c.getDescription());
+        vo.setBrief(c.getBrief());
         vo.setPriority(c.getPriority());
         vo.setPriorityName(DictHolder.name("PRIORITY", c.getPriority()));
         vo.setDeadline(c.getDeadline());
@@ -533,6 +534,7 @@ public class CaseService {
             vo.setEmployeeName(e == null ? "（已离职/已删除）" : e.getName());
             vo.setDept(e == null ? null : e.getDept());
             vo.setTitle(e == null ? null : e.getTitle());
+            vo.setPoliceSystemNo(e == null ? null : e.getPoliceSystemNo());
           String pg = com.caseflow.flow.PoliceGroup.normalize(e == null ? null : e.getPoliceGroup());
           vo.setPoliceGroup(pg);
           vo.setPoliceGroupName(com.caseflow.flow.PoliceGroup.label(pg));
@@ -616,6 +618,7 @@ public class CaseService {
         // 调解书（mediationNo）2026-10-09 起不再由建案表单填写：这里**干脆不写**，
         // 免得表单一去掉该字段、保存时就把历史值抹成 null。列保留只为看得见老数据。
         c.setDescription(req.getDescription());
+        c.setBrief(req.getBrief());
         c.setPriority(StringUtils.hasText(req.getPriority()) ? req.getPriority() : "NORMAL");
         // 期限三列（2026-10-13起不再直接采信表单）：
         // 时间节点表是唯一真源，这里只把表单填的那一个**临时**写到案件表，

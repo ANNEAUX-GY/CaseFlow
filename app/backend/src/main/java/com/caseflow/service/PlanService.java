@@ -232,12 +232,18 @@ public class PlanService {
     /**
      * 标准任务（流程模板生成）允许管理层勾选；民警自建任务仍限承办人。
      * 由 {@code checkOperate} 之后调用，拦住「管理层改民警自建任务」这一种情况。
+     *
+     * <p>2026-10-30 例外：案管员（CASE_MANAGER）可代录侦查反馈，自建任务也放行——
+     * 案管员是案件管理的专门角色，代承办人记录侦查进展是职责所在。
      */
     private void checkStdOrAssignee(CaseInfo c, CasePlan p) {
         if (p.getIsStd() != null && p.getIsStd() == 1) {
             return;   // 标准任务：checkOperate 已放行
         }
         if (AuthContext.isFullAccess()) {
+            if (com.caseflow.security.Roles.CASE_MANAGER.equals(AuthContext.role())) {
+                return;   // 案管员代录，放行
+            }
             throw new BizException(403, "该任务由办案人自行制定，管理层仅可查看");
         }
     }
