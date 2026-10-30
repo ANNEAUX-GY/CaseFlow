@@ -6,7 +6,7 @@ import { authApi } from '../api'
  * 与后端 com.caseflow.security.Roles#isFullAccess 保持一致。
  * 前端只用它控制按钮显隐（体验层），真正的拦截在后端 —— 前端隐藏只是避免误点。
  */
-const FULL_ACCESS_ROLES = ['BOSS', 'CHIEF', 'DEPUTY_CHIEF', 'CAPTAIN', 'LAW_OFFICER']
+const FULL_ACCESS_ROLES = ['BOSS', 'CHIEF', 'DEPUTY_CHIEF', 'CAPTAIN', 'LAW_OFFICER', 'CASE_MANAGER']
 
 /**
  * 研判员：可查看全量案件 + 录入嫌疑人身份信息，但无指派/账号管理等管理权限。
@@ -61,6 +61,7 @@ const ROLE_NAMES = {
   DEPUTY_CHIEF: '副所长',
   CAPTAIN: '队长',
   LAW_OFFICER: '法制员',
+  CASE_MANAGER: '案管',
   JUDGE: '研判员',
   STAFF: '普通民警',
   BOSS: '系统管理员'

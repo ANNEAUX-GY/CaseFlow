@@ -359,7 +359,9 @@ CREATE TABLE IF NOT EXISTS case_approval (
     from_measure    VARCHAR(20)  DEFAULT NULL COMMENT '申请前的措施（审批时对比用）',
     applicant_id    BIGINT       DEFAULT NULL COMMENT '申请人',
     applicant_name  VARCHAR(64)  DEFAULT NULL COMMENT '申请人姓名（冗余）',
-    applied_at      DATETIME     DEFAULT NULL COMMENT '申请时间'
+    applied_at      DATETIME     DEFAULT NULL COMMENT '申请时间',
+    flow_action     VARCHAR(20)  DEFAULT NULL COMMENT '阶段流转申请的动作（DETAIN/BAIL等，approveType=FLOW时用）',
+    from_stage      VARCHAR(24)  DEFAULT NULL COMMENT '阶段流转申请时的阶段'
 );
 
 -- 行政案件结案申请：经办人提交处理结果，管理层审核后办结；退回可重新申请。

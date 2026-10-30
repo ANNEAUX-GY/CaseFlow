@@ -162,6 +162,8 @@ export const caseApi = {
   requestClose: (id, data) => http.post('/cases/' + id + '/close-requests', data),
   latestCloseRequest: (id) => http.get('/cases/' + id + '/close-requests/latest'),
   reviewCloseRequest: (id, requestId, data) => http.post('/cases/' + id + '/close-requests/' + requestId + '/review', data),
+  /** 案管/领导直接结案（2026-10-30）：不走审批，立即生效 */
+  directClose: (id, data) => http.post(`/cases/${id}/close`, data),
   reminders: (params) => http.get('/cases/reminders', { params }),
   /** 一键重点关注（2026-10-09）：focus=1 标注 / 0 取消，列表里直接点星，不开详情 */
   focus: (id, focus) => http.post(`/cases/${id}/focus`, { focus: focus ? 1 : 0 }),
@@ -223,6 +225,12 @@ export const watchApi = {
   flowTransfer: (caseId, action) => http.post(`/watch/cases/${caseId}/flow/transfer`, { action }),
   // 阶段退回（2026-10-18）：不打回上一阶段，而是留在本阶段并把退回意见派成待办
   flowReturn: (caseId, comment) => http.post(`/watch/cases/${caseId}/flow/return`, { comment }),
+  /** 待审批的状态变更申请（工作台审批面板；传 caseId 只看该案） */
+  pendingFlowApprovals: (caseId) => http.get('/watch/flow-approvals/pending', { params: caseId ? { caseId } : {} }),
+  /** 本案是否已有待审批的状态变更申请（所有登录人可查，承办人要看"审批中"） */
+  flowPending: (caseId) => http.get(`/watch/cases/${caseId}/flow-pending`, { silent: true }),
+  /** 审批状态变更申请：approve=true 同意（流转落地）/ false 退回（须填意见） */
+  reviewFlow: (approvalId, data) => http.post(`/watch/flow-approvals/${approvalId}/review`, data),
   /** 勾选完成 / 撤销完成一条流程任务（双向切换） */
   planDone: (planId) => http.post(`/watch/plans/${planId}/done`),
   planRevert: (planId) => http.post(`/watch/plans/${planId}/revert`),

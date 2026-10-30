@@ -282,6 +282,41 @@ public class WatchController {
         return Result.ok();
     }
 
+    /** 待审批的状态变更申请列表（工作台审批面板用）；caseId 不为空时只看该案件 */
+    @GetMapping("/flow-approvals/pending")
+    @FullAccessOnly("查看待审批状态变更")
+    public Result<List<com.caseflow.vo.FlowApprovalVO>> pendingFlowApprovals(
+            @RequestParam(required = false) Long caseId) {
+        return Result.ok(flowService.pendingFlowApprovalVOs(caseId));
+    }
+
+    /** 本案是否已有待审批的状态变更申请（承办人也要能看到"审批中"） */
+    @GetMapping("/cases/{caseId}/flow-pending")
+    public Result<Map<String, Object>> flowPending(@PathVariable Long caseId) {
+        com.caseflow.entity.CaseApproval a = flowService.pendingFlowOf(caseId);
+        Map<String, Object> m = new java.util.HashMap<>();
+        m.put("pending", a != null);
+        if (a != null) {
+            m.put("approvalId", a.getId());
+            m.put("flowAction", a.getFlowAction());
+            m.put("flowActionName", com.caseflow.flow.CaseFlowTemplate.actionLabel(a.getFlowAction()));
+            m.put("fromStageName", com.caseflow.flow.CaseFlowTemplate.stageLabel(a.getFromStage()));
+            m.put("applicantName", a.getApplicantName());
+            m.put("appliedAt", a.getAppliedAt());
+        }
+        return Result.ok(m);
+    }
+
+    /** 审批状态变更申请：approve=true 同意（流转落地）；false 退回（须填意见） */
+    @PostMapping("/flow-approvals/{approvalId}/review")
+    @FullAccessOnly("审批状态变更")
+    public Result<Void> reviewFlow(@PathVariable Long approvalId, @RequestBody Map<String, Object> body) {
+        Object ap = body.get("approve");
+        boolean approve = ap == null || Boolean.parseBoolean(String.valueOf(ap));
+        flowService.reviewTransfer(approvalId, approve, str(body.get("comment")));
+        return Result.ok();
+    }
+
     // ---------------- 领导意见与落实反馈 ----------------
     // 提出 = 管理层；反馈（完成/进行中/未完成 + 说明）= 本案现职承办人（办案人）。
 

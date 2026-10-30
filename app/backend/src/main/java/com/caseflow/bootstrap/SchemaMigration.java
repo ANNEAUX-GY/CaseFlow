@@ -199,7 +199,12 @@ public class SchemaMigration implements ApplicationRunner {
             {"case_deadline_state", "admin_check_3_at", "DATETIME NULL"},
             {"case_deadline_state", "admin_check_10_at", "DATETIME NULL"},
             {"case_deadline_state", "admin_check_20_at", "DATETIME NULL"},
-            {"case_deadline_state", "updated_at", "DATETIME NULL"}
+            {"case_deadline_state", "updated_at", "DATETIME NULL"},
+            // 阶段流转申请（2026-10-30）：承办人可申请「变更案件状态」（初查→刑拘在办/取保监居等），
+            // 领导/案管审批后才落地。approveType=FLOW，flow_action 存流转动作（DETAIN/BAIL/...），
+            // from_stage 存申请时的阶段，便于审批人对比与防串档。两列可空：存量审批行不受影响。
+            {"case_approval", "flow_action", "VARCHAR(20) NULL"},
+            {"case_approval", "from_stage", "VARCHAR(24) NULL"}
     };
 
     /** 旧数据回填：把历史「案件类型」自由文本里的大类词归位到 case_type（小类位清空）。

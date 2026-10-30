@@ -30,6 +30,8 @@ public final class Roles {
     public static final String CAPTAIN = "CAPTAIN";
     /** 研判员：查看全量案件 + 录入嫌疑人身份信息（2026-10-29） */
     public static final String JUDGE = "JUDGE";
+    /** 案管：案件状态变更 / 结案的审批人，权限与法制员同级（2026-10-30） */
+    public static final String CASE_MANAGER = "CASE_MANAGER";
 
     /** 角色 code -> 中文名 */
     private static final Map<String, String> NAMES = new LinkedHashMap<>();
@@ -42,6 +44,7 @@ public final class Roles {
         NAMES.put(DEPUTY_CHIEF, "副所长");
         NAMES.put(CAPTAIN, "队长");
         NAMES.put(LAW_OFFICER, "法制员");
+        NAMES.put(CASE_MANAGER, "案管");
         NAMES.put(JUDGE, "研判员");
         NAMES.put(STAFF, "普通民警");
         NAMES.put(BOSS, "系统管理员");
@@ -49,6 +52,7 @@ public final class Roles {
         APPLICABLE.put(STAFF, "普通民警");
         APPLICABLE.put(JUDGE, "研判员");
         APPLICABLE.put(LAW_OFFICER, "法制员");
+        APPLICABLE.put(CASE_MANAGER, "案管");
         APPLICABLE.put(CAPTAIN, "队长");
         APPLICABLE.put(DEPUTY_CHIEF, "副所长");
         APPLICABLE.put(CHIEF, "所长");
@@ -57,13 +61,14 @@ public final class Roles {
     private Roles() {
     }
 
-    /** 是否拥有全部权限（指派、员工维护、账号管理、撤回） */
+    /** 是否拥有全部权限（指派、员工维护、账号管理、撤回、审批结案/状态变更） */
     public static boolean isFullAccess(String role) {
         return BOSS.equals(role)
                 || CHIEF.equals(role)
                 || DEPUTY_CHIEF.equals(role)
                 || CAPTAIN.equals(role)
-                || LAW_OFFICER.equals(role);
+                || LAW_OFFICER.equals(role)
+                || CASE_MANAGER.equals(role);
     }
 
     /**

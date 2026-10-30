@@ -43,4 +43,10 @@ public class CaseApproval implements Serializable {
     private Long applicantId;
     private String applicantName;
     private LocalDateTime appliedAt;
+
+    // ---- 阶段流转申请（2026-10-30）：承办人申请变更案件状态（初查→刑拘在办/取保监居等） ----
+    /** 流转动作：DETAIN刑拘 / BAIL取保 / ARREST逮捕 / RELEASE释放 / CLOSE解除收案 */
+    private String flowAction;
+    /** 申请时的阶段（审批时对比，防串档） */
+    private String fromStage;
 }

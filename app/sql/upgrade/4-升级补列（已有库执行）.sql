@@ -1,8 +1,8 @@
 -- ============================================================
 --  CaseFlow 已有库升级补列脚本（幂等，可重复执行）
 -- ------------------------------------------------------------
---  生成时间：2026-10-29 20:38
---  来源：backend/.../bootstrap/SchemaMigration.java 的 NEW_COLUMNS（90 列）
+--  生成时间：2026-10-30 16:48
+--  来源：backend/.../bootstrap/SchemaMigration.java 的 NEW_COLUMNS（92 列）
 -- ------------------------------------------------------------
 --  【这段脚本做什么】
 --  把旧版本的 case_flow 库补齐到与当前版本一致：缺哪列补哪列。
@@ -652,6 +652,22 @@ PREPARE cf_stmt FROM @ddl; EXECUTE cf_stmt; DEALLOCATE PREPARE cf_stmt;
 SET @exists := (SELECT COUNT(*) FROM information_schema.COLUMNS
   WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'case_deadline_state' AND COLUMN_NAME = 'updated_at');
 SET @ddl := IF(@exists = 0, 'ALTER TABLE `case_deadline_state` ADD COLUMN `updated_at` DATETIME NULL COMMENT ''更新时间''', 'DO 0');
+PREPARE cf_stmt FROM @ddl; EXECUTE cf_stmt; DEALLOCATE PREPARE cf_stmt;
+
+
+-- ------------------------------------------------------------
+--  表：case_approval
+-- ------------------------------------------------------------
+-- case_approval.flow_action  阶段流转申请的动作（DETAIN/BAIL等，approveType=FLOW时用）
+SET @exists := (SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'case_approval' AND COLUMN_NAME = 'flow_action');
+SET @ddl := IF(@exists = 0, 'ALTER TABLE `case_approval` ADD COLUMN `flow_action` VARCHAR(20) NULL COMMENT ''阶段流转申请的动作（DETAIN/BAIL等，approveType=FLOW时用）''', 'DO 0');
+PREPARE cf_stmt FROM @ddl; EXECUTE cf_stmt; DEALLOCATE PREPARE cf_stmt;
+
+-- case_approval.from_stage  阶段流转申请时的阶段
+SET @exists := (SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'case_approval' AND COLUMN_NAME = 'from_stage');
+SET @ddl := IF(@exists = 0, 'ALTER TABLE `case_approval` ADD COLUMN `from_stage` VARCHAR(24) NULL COMMENT ''阶段流转申请时的阶段''', 'DO 0');
 PREPARE cf_stmt FROM @ddl; EXECUTE cf_stmt; DEALLOCATE PREPARE cf_stmt;
 
 -- ============================================================

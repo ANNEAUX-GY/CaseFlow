@@ -61,4 +61,6 @@ public class DashboardVO implements Serializable {
     private List<MeasureAlertVO> measureAlerts;
     /** 待审批的措施变更申请数（领导可见；普通民警恒 0） */
     private long measurePending;
+    /** 待审批的状态变更申请数（领导可见；普通民警恒 0） */
+    private long flowPending;
 }

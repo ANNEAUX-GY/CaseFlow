@@ -37,7 +37,8 @@ public class DictHolder {
         DICT.put("ASSIGN_ROLE", map("OWNER", "主办", "MEMBER", "协办"));
         DICT.put("EMP_STATUS", map("1", "在职", "0", "停用"));
         DICT.put("ROLE", map("CHIEF", "所长", "DEPUTY_CHIEF", "副所长",
-                "LAW_OFFICER", "法制员", "STAFF", "普通民警", "BOSS", "系统管理员"));
+                "LAW_OFFICER", "法制员", "STAFF", "普通民警", "BOSS", "系统管理员",
+                "CAPTAIN", "队长", "JUDGE", "研判员", "CASE_MANAGER", "案管"));
         DICT.put("AUDIT_STATUS", map("0", "待审核", "1", "已通过", "2", "已驳回"));
         // 重要时间节点类型（2026-10-13）：一份案件有多个关键时间点，
         // 预设类型便于按节点筛选与统计；不在枚举内的走自定义名称（nodeKey 留空）。

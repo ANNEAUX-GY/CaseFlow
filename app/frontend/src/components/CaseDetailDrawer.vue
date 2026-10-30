@@ -84,23 +84,24 @@
       <!-- 案件待办（含领导意见）：提意见/定级/落实反馈都在这一个面板，避免同一事项两处展示 -->
       <CaseTodoPanel :case-id="detail.id" :anchor="anchor" style="margin-top: 12px" @changed="reload" />
 
-      <div v-if="detail.caseType === 'ADMINISTRATIVE' && canViewCloseRequest" class="cf-panel" style="margin-top: 12px">
+      <div v-if="canViewCloseRequest" class="cf-panel" style="margin-top: 12px">
         <div class="cf-panel__head">
-          <span>行政案件结案申请</span>
+          <span>案件结案</span>
+          <el-button v-if="canManage && !['DONE', 'CANCELLED'].includes(detail.status)" type="warning" size="small" @click="openDirectClose">直接结案</el-button>
           <el-button v-if="canRequestClose" type="primary" size="small" @click="closeDialogVisible = true">申请结案</el-button>
         </div>
         <template v-if="closeRequest">
           <p>处理结果：{{ closeOutcomeName(closeRequest.outcome) }} · {{ closeRequest.submittedByName }} 于 {{ closeRequest.submittedAt }} 提交</p>
           <p v-if="closeRequest.note" style="white-space: pre-wrap">处理说明：{{ closeRequest.note }}</p>
           <p v-if="closeRequest.operationPlatform">{{ closeOperationText }}</p>
-          <p>审核状态：<el-tag :type="closeRequest.status === 'APPROVED' ? 'success' : closeRequest.status === 'RETURNED' ? 'danger' : 'warning'" size="small">{{ closeRequest.status === 'APPROVED' ? '已同意' : closeRequest.status === 'RETURNED' ? '已退回' : '待管理层审核' }}</el-tag></p>
+          <p>审核状态：<el-tag :type="closeRequest.status === 'APPROVED' ? 'success' : closeRequest.status === 'RETURNED' ? 'danger' : 'warning'" size="small">{{ closeRequest.status === 'APPROVED' ? '已同意' : closeRequest.status === 'RETURNED' ? '已退回' : '待案管/领导审核' }}</el-tag></p>
           <p v-if="closeRequest.reviewComment">审核意见：{{ closeRequest.reviewComment }}</p>
           <div v-if="canManage && closeRequest.status === 'PENDING' && detail.status !== 'DONE'">
-            <el-button type="success" :loading="closeReviewSaving" @click="reviewClose(true)">同意并办结</el-button>
+            <el-button type="success" :loading="closeReviewSaving" @click="reviewClose(true)">同意并结案</el-button>
             <el-button :loading="closeReviewSaving" @click="reviewClose(false)">退回申请</el-button>
           </div>
         </template>
-        <span v-else class="cf-muted">尚无结案申请；经办人完成案件后可填写处理结果申请。</span>
+        <span v-else class="cf-muted">尚无结案申请；经办人完成案件后可填写结案结果申请。</span>
       </div>
 
       <!-- 重要时间节点（2026-10-13）：增删改都在这里，与建案弹窗的批量录入互补。
@@ -311,17 +312,33 @@
     </template>
   </el-drawer>
 
-  <FeedbackDialog v-model="closeDialogVisible" title="申请行政案件结案" confirm-text="提交结案申请"
+  <FeedbackDialog v-model="closeDialogVisible" title="申请案件结案" confirm-text="提交结案申请"
     :hide-status="true" :loading="closeSaving" @submit="submitCloseRequest">
-    <el-form-item label="处理结果" required style="margin-top: 12px">
-      <el-select v-model="closeOutcome" placeholder="请选择实际处理结果" style="width: 100%">
-        <el-option label="调解" value="MEDIATION" />
-        <el-option label="处罚" value="PENALTY" />
-        <el-option label="不予处罚" value="NO_PENALTY" />
-        <el-option label="终止" value="TERMINATED" />
+    <el-form-item label="结案结果" required style="margin-top: 12px">
+      <el-select v-model="closeOutcome" placeholder="请选择结案结果" style="width: 100%">
+        <el-option v-for="o in closeOutcomeOptions" :key="o.value" :label="o.label" :value="o.value" />
       </el-select>
     </el-form-item>
   </FeedbackDialog>
+
+  <!-- 案管/领导直接结案（2026-10-30）：不走审批，立即生效 -->
+  <el-dialog v-model="directCloseVisible" title="直接结案" width="520px" append-to-body>
+    <el-form label-width="80px">
+      <el-form-item label="结案结果" required>
+        <el-select v-model="directCloseOutcome" placeholder="请选择结案结果" style="width: 100%">
+          <el-option v-for="o in closeOutcomeOptions" :key="o.value" :label="o.label" :value="o.value" />
+        </el-select>
+      </el-form-item>
+      <el-form-item label="处理说明">
+        <el-input v-model="directCloseNote" type="textarea" :rows="3" maxlength="600" show-word-limit
+          placeholder="可填写结案处理说明" />
+      </el-form-item>
+    </el-form>
+    <template #footer>
+      <el-button @click="directCloseVisible = false">取消</el-button>
+      <el-button type="warning" :loading="directCloseSaving" @click="doDirectClose">确认结案</el-button>
+    </template>
+  </el-dialog>
 
   <!-- 时间节点录入：新增与修改共用（带 nodeId 即为修改） -->
   <el-dialog
@@ -474,12 +491,32 @@ const closeDialogVisible = ref(false)
 const closeSaving = ref(false)
 const closeReviewSaving = ref(false)
 const closeOutcome = ref('')
-const closeOutcomeName = (value) => ({ MEDIATION: '调解', PENALTY: '处罚', NO_PENALTY: '不予处罚', TERMINATED: '终止' })[value] || value
+/** 案管/领导直接结案（2026-10-30） */
+const directCloseVisible = ref(false)
+const directCloseOutcome = ref('')
+const directCloseNote = ref('')
+const directCloseSaving = ref(false)
+const closeOutcomeName = (value) => ({
+  MEDIATION: '调解', PENALTY: '处罚', NO_PENALTY: '不予处罚', TERMINATED: '终止调查',
+  WITHDRAW: '撤案', TRANSFER_PRETRIAL: '移送预审', TRANSFER_OTHER: '移送其他单位'
+})[value] || value
+/** 结案结果选项：刑事与行政不同（2026-10-30） */
+const closeOutcomeOptions = computed(() => detail.value.caseType === 'CRIMINAL'
+  ? [
+      { value: 'WITHDRAW', label: '撤案' },
+      { value: 'TRANSFER_PRETRIAL', label: '移送预审' },
+      { value: 'TRANSFER_OTHER', label: '移送其他单位' }
+    ]
+  : [
+      { value: 'PENALTY', label: '处罚' },
+      { value: 'NO_PENALTY', label: '不予处罚' },
+      { value: 'TERMINATED', label: '终止调查' },
+      { value: 'MEDIATION', label: '调解' }
+    ])
 const isCurrentHandler = computed(() => !!userStore.userInfo?.employeeId
   && [detail.value.owner, ...(detail.value.members || [])].some(a => a?.employeeId === userStore.userInfo.employeeId && a?.status === 'ACTIVE'))
 const canViewCloseRequest = computed(() => canManage.value || isCurrentHandler.value)
-const canRequestClose = computed(() => detail.value.caseType === 'ADMINISTRATIVE'
-  && !['DONE', 'CANCELLED'].includes(detail.value.status)
+const canRequestClose = computed(() => !['DONE', 'CANCELLED'].includes(detail.value.status)
   && closeRequest.value?.status !== 'PENDING'
   && isCurrentHandler.value)
 const closeOperationText = computed(() => closeRequest.value?.operationPlatform
@@ -502,19 +539,45 @@ const submitCloseRequest = async (feedback) => {
     })
     closeDialogVisible.value = false
     closeOutcome.value = ''
-    ElMessage.success('结案申请已提交，等待管理层审核')
+    ElMessage.success('结案申请已提交，等待案管/领导审核')
     emit('done')
   } finally {
     closeSaving.value = false
   }
 }
 
-const reviewClose = async (approve) => {
-  if (closeReviewSaving.value || !closeRequest.value) return
+/** 案管/领导直接结案（2026-10-30）：不走审批，立即生效 */
+const openDirectClose = () => {
+  directCloseOutcome.value = ''
+  directCloseNote.value = ''
+  directCloseVisible.value = true
+}
+
+const doDirectClose = async () => {
+  if (!directCloseOutcome.value) {
+    ElMessage.warning('请选择结案结果')
+    return
+  }
+  directCloseSaving.value = true
+  try {
+    await caseApi.directClose(detail.value.id, {
+      outcome: directCloseOutcome.value,
+      note: directCloseNote.value
+    })
+    ElMessage.success('案件已结案')
+    directCloseVisible.value = false
+    await reload()
+    emit('done')
+  } finally {
+    directCloseSaving.value = false
+  }
+}
+
+const reviewClose = async (approve) => {  if (closeReviewSaving.value || !closeRequest.value) return
   let comment = ''
   try {
     if (approve) {
-      await ElMessageBox.confirm('确认同意该申请并将行政案件办结？', '审核结案申请', { type: 'warning' })
+      await ElMessageBox.confirm('确认同意该申请并结案？', '审核结案申请', { type: 'warning' })
     } else {
       const answer = await ElMessageBox.prompt('请填写退回原因', '退回结案申请', {
         inputType: 'textarea', inputValidator: (v) => v?.trim() ? true : '请填写退回原因',
@@ -578,7 +641,7 @@ const reload = async () => {
   if (!props.caseId) return
   try {
     detail.value = await caseApi.detail(props.caseId)
-    closeRequest.value = detail.value.caseType === 'ADMINISTRATIVE' && canViewCloseRequest.value
+    closeRequest.value = canViewCloseRequest.value
       ? await caseApi.latestCloseRequest(props.caseId) : null
   } catch (e) {
     // 案件已被删除，或当前登录人已经看不到它（转手后不再承办）：

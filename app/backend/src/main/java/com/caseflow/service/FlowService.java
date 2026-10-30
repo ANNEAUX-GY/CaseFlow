@@ -48,6 +48,10 @@ public class FlowService {
     private CaseDeadlineStateMapper deadlineStateMapper;
     @Resource
     private LogService logService;
+    @Resource
+    private com.caseflow.mapper.CaseApprovalMapper approvalMapper;
+    @Resource
+    private com.caseflow.mapper.CaseAssigneeMapper assigneeMapper;
 
     /**
      * 领导意见服务。
@@ -170,7 +174,14 @@ public class FlowService {
     // ------------------------------------------------------------------
 
     /**
-     * 阶段流转（需领导确认）。
+     * 阶段流转（变更案件状态）。
+     *
+     * <p><b>2026-10-30 起分两类</b>：
+     * <ul>
+     *   <li>领导/案管（isFullAccess）→ 直接流转（原逻辑）；</li>
+     *   <li>承办人 → 不直接落地，而是生成一条 {@code FLOW} 审批申请，
+     *       等领导/案管审批通过后，由 {@link #reviewTransfer} 调落地逻辑。</li>
+     * </ul>
      *
      * <p>动作取自 {@link CaseFlowTemplate#transitionsOf}，这里做严格校验：
      * 不能跳阶段、不能流转到模板未定义的分支。
@@ -179,31 +190,198 @@ public class FlowService {
      * 待办<b>不删除</b>：旧阶段的待办原样留在库里（带 flow_stage 标记），
      * 只是不再计入新阶段进度——它们是办案痕迹，删掉等于毁掉已完成工作的留痕。
      *
-     * <p><b>为什么不强制「必须做完才能转」</b>：现实中存在提前转段
-     * （如证据不足变更强制措施）。系统只提示未完成数量，不硬拦；
-     * 但完成的案件一定要走到领导点确认这一步，不自动跳。
-     *
      * @param action 流转动作：DETAIN刑拘 / BAIL取保 / RELEASE释放 / ARREST逮捕 / PUNISH处罚 / CLOSE解除
      */
     @Transactional(rollbackFor = Exception.class)
     public void transfer(Long caseId, String action) {
         CaseInfo c = requireCase(caseId);
-        if (!AuthContext.isFullAccess()) {
-            throw new BizException(403, "阶段流转需领导确认");
-        }
         String stage = stageOf(c);
-        String caseType = c.getCaseType();
+        if (!AuthContext.isFullAccess()) {
+            // 承办人：转成审批申请，不直接落地
+            applyTransfer(c, stage, action, null);
+            return;
+        }
+        doTransfer(c, stage, action);
+    }
 
-        String targetStage = null;
-        for (String[] t : CaseFlowTemplate.transitionsOf(caseType, stage)) {
+    /**
+     * 承办人申请变更案件状态（2026-10-30）：生成 FLOW 审批申请，等领导/案管审批。
+     *
+     * <p>权限：本案现职承办人（主办/经办）或管理层；其余角色 403。
+     * 同一案件已有待审批的流转申请时不允许重复提交。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void applyTransfer(CaseInfo c, String stage, String action, String comment) {
+        // 校验：承办人必须是本案现职承办人（管理层已在 transfer 里直接落地，不会走到这）
+        if (!AuthContext.isFullAccess()) {
+            requireActiveHandler(c);
+        }
+        String targetStage = resolveTarget(c.getCaseType(), stage, action);
+        // 同一案件已有待审批的流转申请时不允许重复提交（避免审批人面对两条冲突申请）
+        Long pending = approvalMapper.selectCount(new LambdaQueryWrapper<com.caseflow.entity.CaseApproval>()
+                .eq(com.caseflow.entity.CaseApproval::getCaseId, c.getId())
+                .eq(com.caseflow.entity.CaseApproval::getApproveType, "FLOW")
+                .eq(com.caseflow.entity.CaseApproval::getResult, "PENDING"));
+        if (pending != null && pending > 0) {
+            throw new BizException("该案件已有一条待审批的状态变更申请，请等待审批后再提交");
+        }
+        com.caseflow.entity.CaseApproval a = new com.caseflow.entity.CaseApproval();
+        a.setCaseId(c.getId());
+        a.setApproveType("FLOW");
+        a.setResult("PENDING");
+        a.setComment(StringUtils.hasText(comment) ? comment.trim() : null);
+        a.setFlowAction(action);
+        a.setFromStage(stage);
+        a.setApplicantId(AuthContext.userId());
+        a.setApplicantName(AuthContext.userName());
+        a.setAppliedAt(java.time.LocalDateTime.now());
+        a.setCreatedAt(a.getAppliedAt());
+        approvalMapper.insert(a);
+        logService.log("CASE", "FLOW_APPLY", "CASE", c.getId(),
+                "申请变更案件状态：" + CaseFlowTemplate.stageLabel(stage)
+                        + " → " + CaseFlowTemplate.stageLabel(targetStage)
+                        + "（动作：" + CaseFlowTemplate.actionLabel(action) + "，待审批）");
+    }
+
+    /**
+     * 审批状态变更申请（领导/案管专属，2026-10-30）。
+     *
+     * <p>同意 → 调 {@link #doTransfer} 落地；退回 → 维持原阶段并留意见。
+     * 审批前校验案件当前阶段是否仍是申请时的阶段，防止期间已被别人改过导致串档。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void reviewTransfer(Long approvalId, boolean approve, String comment) {
+        if (!AuthContext.isFullAccess()) {
+            throw new BizException(403, "审批状态变更申请需所长/副所长/队长/法制员/案管/管理员");
+        }
+        com.caseflow.entity.CaseApproval a = approvalMapper.selectById(approvalId);
+        if (a == null || !"FLOW".equals(a.getApproveType()) || !"PENDING".equals(a.getResult())) {
+            throw new BizException("该申请不是待审批的状态变更申请");
+        }
+        if (!approve && !StringUtils.hasText(comment)) {
+            throw new BizException("退回必须填写意见");
+        }
+        CaseInfo c = requireCase(a.getCaseId());
+        String cur = stageOf(c);
+        // 防串档：申请时阶段与当前不一致，说明案件已被改过，申请失效
+        if (!cur.equals(a.getFromStage())) {
+            a.setResult("STALE");
+            a.setApproverId(AuthContext.userId());
+            a.setApproverName(AuthContext.userName());
+            a.setComment("案件阶段已变为「" + CaseFlowTemplate.stageLabel(cur) + "」，本申请自动失效");
+            approvalMapper.updateById(a);
+            throw new BizException("案件阶段已变更（当前：" + CaseFlowTemplate.stageLabel(cur) + "），该申请已失效，请重新提交");
+        }
+        a.setResult(approve ? "APPROVED" : "RETURNED");
+        a.setApproverId(AuthContext.userId());
+        a.setApproverName(AuthContext.userName());
+        a.setComment(StringUtils.hasText(comment) ? comment.trim() : "同意");
+        approvalMapper.updateById(a);
+        if (!approve) {
+            logService.log("CASE", "FLOW_RETURN_APPLY", "CASE", a.getCaseId(),
+                    "退回状态变更申请：" + CaseFlowTemplate.actionLabel(a.getFlowAction())
+                            + "（意见：" + abbrev(comment) + "）");
+            return;
+        }
+        doTransfer(c, cur, a.getFlowAction());
+    }
+
+    /** 本案是否已有待审批的状态变更申请 */
+    public com.caseflow.entity.CaseApproval pendingFlowOf(Long caseId) {
+        List<com.caseflow.entity.CaseApproval> list = approvalMapper.selectList(
+                new LambdaQueryWrapper<com.caseflow.entity.CaseApproval>()
+                        .eq(com.caseflow.entity.CaseApproval::getCaseId, caseId)
+                        .eq(com.caseflow.entity.CaseApproval::getApproveType, "FLOW")
+                        .eq(com.caseflow.entity.CaseApproval::getResult, "PENDING")
+                        .orderByDesc(com.caseflow.entity.CaseApproval::getId));
+        return list.isEmpty() ? null : list.get(0);
+    }
+
+    /** 待审批的状态变更申请列表（带案件名与阶段中文名，工作台审批面板直接用） */
+    public List<com.caseflow.vo.FlowApprovalVO> pendingFlowApprovalVOs(Long caseId) {
+        LambdaQueryWrapper<com.caseflow.entity.CaseApproval> q = new LambdaQueryWrapper<com.caseflow.entity.CaseApproval>()
+                .eq(com.caseflow.entity.CaseApproval::getApproveType, "FLOW")
+                .eq(com.caseflow.entity.CaseApproval::getResult, "PENDING")
+                .orderByAsc(com.caseflow.entity.CaseApproval::getAppliedAt);
+        if (caseId != null) {
+            q.eq(com.caseflow.entity.CaseApproval::getCaseId, caseId);
+        }
+        List<com.caseflow.entity.CaseApproval> rows = approvalMapper.selectList(q);
+        if (rows.isEmpty()) {
+            return java.util.Collections.emptyList();
+        }
+        java.util.Set<Long> ids = new java.util.HashSet<>();
+        for (com.caseflow.entity.CaseApproval a : rows) {
+            ids.add(a.getCaseId());
+        }
+        java.util.Map<Long, CaseInfo> cases = new java.util.HashMap<>();
+        for (CaseInfo c : caseMapper.selectBatchIds(ids)) {
+            cases.put(c.getId(), c);
+        }
+        List<com.caseflow.vo.FlowApprovalVO> list = new java.util.ArrayList<>();
+        for (com.caseflow.entity.CaseApproval a : rows) {
+            CaseInfo c = cases.get(a.getCaseId());
+            if (c == null) {
+                continue; // 孤儿申请兜底跳过
+            }
+            com.caseflow.vo.FlowApprovalVO v = new com.caseflow.vo.FlowApprovalVO();
+            v.setId(a.getId());
+            v.setCaseId(a.getCaseId());
+            v.setCaseNo(c.getCaseNo());
+            v.setCaseName(c.getName());
+            v.setFromStage(a.getFromStage());
+            v.setFromStageName(CaseFlowTemplate.stageLabel(a.getFromStage()));
+            v.setFlowAction(a.getFlowAction());
+            v.setFlowActionName(CaseFlowTemplate.actionLabel(a.getFlowAction()));
+            String target = resolveTarget(c.getCaseType(), a.getFromStage(), a.getFlowAction());
+            v.setTargetStage(target);
+            v.setTargetStageName(CaseFlowTemplate.stageLabel(target));
+            v.setComment(a.getComment());
+            v.setApplicantName(a.getApplicantName());
+            v.setAppliedAt(a.getAppliedAt());
+            list.add(v);
+        }
+        return list;
+    }
+
+    /** 解析流转动作对应的目标阶段（找不到即抛异常，与 transfer 校验一致） */
+    private String resolveTarget(String caseType, String stage, String action) {        for (String[] t : CaseFlowTemplate.transitionsOf(caseType, stage)) {
             if (t[0].equals(action)) {
-                targetStage = t[1];
-                break;
+                return t[1];
             }
         }
-        if (targetStage == null) {
-            throw new BizException("当前阶段不支持「" + CaseFlowTemplate.actionLabel(action) + "」这个流转动作");
+        throw new BizException("当前阶段不支持「" + CaseFlowTemplate.actionLabel(action) + "」这个流转动作");
+    }
+
+    /** 流转申请里，承办人是否有权提交：仅本案现职承办人 */
+    private void requireActiveHandler(CaseInfo c) {
+        Long empId = AuthContext.get() == null ? null : AuthContext.get().getEmployeeId();
+        if (empId == null) {
+            throw new BizException(403, "申请变更案件状态需由本案承办人提交，且账号需关联员工档案");
         }
+        Long cnt = assigneeMapper.selectCount(new LambdaQueryWrapper<com.caseflow.entity.CaseAssignee>()
+                .eq(com.caseflow.entity.CaseAssignee::getCaseId, c.getId())
+                .eq(com.caseflow.entity.CaseAssignee::getEmployeeId, empId)
+                .eq(com.caseflow.entity.CaseAssignee::getStatus, "ACTIVE"));
+        if (cnt == null || cnt == 0) {
+            throw new BizException(403, "只有本案现职承办人可以申请变更案件状态");
+        }
+    }
+
+    /**
+     * 阶段流转落地（领导直接操作与审批通过共用）。
+     *
+     * <p><b>为什么不强制「必须做完才能转」</b>：现实中存在提前转段
+     * （如证据不足变更强制措施）。系统只提示未完成数量，不硬拦；
+     * 但完成的案件一定要走到领导点确认这一步，不自动跳。
+     *
+     * @param stage 当前阶段（调用方已算好，避免落地时阶段被并发改动）
+     * @param action 流转动作：DETAIN刑拘 / BAIL取保 / RELEASE释放 / ARREST逮捕 / PUNISH处罚 / CLOSE解除
+     */
+    private void doTransfer(CaseInfo c, String stage, String action) {
+        Long caseId = c.getId();
+        String caseType = c.getCaseType();
+        String targetStage = resolveTarget(caseType, stage, action);
 
         // ---- 切换阶段（进度随之归零：新阶段暂无待办，分母为 0）----
         c.setFlowStage(targetStage);

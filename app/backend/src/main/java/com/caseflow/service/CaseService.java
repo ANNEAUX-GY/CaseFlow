@@ -1596,6 +1596,13 @@ public class CaseService {
                         .eq(com.caseflow.entity.CaseApproval::getResult, "PENDING")
                         .inSql(com.caseflow.entity.CaseApproval::getCaseId, "SELECT id FROM case_info"))
                 : 0);
+        // 待审批的状态变更申请数（2026-10-30）：与措施审批同口径，仅领导/案管可见。
+        vo.setFlowPending(AuthContext.isFullAccess() && scopeIds == null
+                ? approvalMapper.selectCount(new LambdaQueryWrapper<com.caseflow.entity.CaseApproval>()
+                        .eq(com.caseflow.entity.CaseApproval::getApproveType, "FLOW")
+                        .eq(com.caseflow.entity.CaseApproval::getResult, "PENDING")
+                        .inSql(com.caseflow.entity.CaseApproval::getCaseId, "SELECT id FROM case_info"))
+                : 0);
     }
 
     /**

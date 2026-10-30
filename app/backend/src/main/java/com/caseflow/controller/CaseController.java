@@ -130,6 +130,14 @@ public class CaseController {
         return Result.ok(closeRequestService.submit(id, body));
     }
 
+    /** 案管/领导直接结案（2026-10-30）：不走审批，立即生效。 */
+    @PostMapping("/{id}/close")
+    @FullAccessOnly("直接结案")
+    public Result<com.caseflow.entity.CaseCloseRequest> directClose(
+            @PathVariable Long id, @RequestBody Map<String, String> body) {
+        return Result.ok(closeRequestService.directClose(id, body));
+    }
+
     @GetMapping("/{id}/close-requests/latest")
     public Result<com.caseflow.entity.CaseCloseRequest> latestCloseRequest(@PathVariable Long id) {
         return Result.ok(closeRequestService.latest(id));

@@ -222,6 +222,14 @@
         >
           待审批 {{ data.measurePending }} 条
         </el-button>
+        <el-button
+          v-if="canFocus && (data.flowPending || 0) > 0"
+          type="warning" size="small"
+          :loading="flowDlg.loading"
+          @click="openFlowApprovals"
+        >
+          状态变更待审批 {{ data.flowPending }} 条
+        </el-button>
       </div>
       <div v-if="!(data.measureAlerts || []).length" class="cf-panel__body">
         <div class="cf-muted">暂无 7 天内到期或已到期的强制措施。</div>
@@ -425,6 +433,36 @@
       </el-table>
       <template #footer>
         <el-button @click="approvalDlg.visible = false">关闭</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 待审批的状态变更（2026-10-30）：承办人申请「初查→刑拘在办/取保监居」等，
+         案管/领导在这里审批，同意才落地。 -->
+    <el-dialog v-model="flowDlg.visible" title="待审批的案件状态变更" width="760px" class="cf-dialog">
+      <div v-if="!flowDlg.rows.length" class="cf-muted">没有待审批的申请。</div>
+      <el-table v-else :data="flowDlg.rows" size="small" max-height="400">
+        <el-table-column label="案件" min-width="170" show-overflow-tooltip>
+          <template #default="{ row }">
+            <el-link type="primary" @click="openDetail({ id: row.caseId })">{{ row.caseName }}</el-link>
+          </template>
+        </el-table-column>
+        <el-table-column label="状态变更" width="200">
+          <template #default="{ row }">
+            <span class="cf-muted">{{ row.fromStageName }}</span>
+            <span style="margin: 0 4px">→</span>
+            <b>{{ row.targetStageName }}</b>
+          </template>
+        </el-table-column>
+        <el-table-column prop="applicantName" label="申请人" width="90" />
+        <el-table-column label="操作" width="150" align="right">
+          <template #default="{ row }">
+            <el-button link type="success" @click="reviewFlowOne(row, true)">同意</el-button>
+            <el-button link type="danger" @click="reviewFlowOne(row, false)">退回</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <template #footer>
+        <el-button @click="flowDlg.visible = false">关闭</el-button>
       </template>
     </el-dialog>
 
@@ -804,6 +842,40 @@ const reviewOne = async (row, approve) => {
   ElMessage.success(approve ? '已同意，强制措施已生效' : '已退回，强制措施保持不变')
   approvalDlg.rows = (await watchApi.pendingMeasureApprovals()) || []
   if (!approvalDlg.rows.length) approvalDlg.visible = false
+  await load()
+}
+
+// ---- 待审批状态变更（2026-10-30）----
+const flowDlg = reactive({ visible: false, rows: [], loading: false })
+const openFlowApprovals = async () => {
+  flowDlg.loading = true
+  try {
+    flowDlg.rows = (await watchApi.pendingFlowApprovals()) || []
+    flowDlg.visible = true
+  } finally {
+    flowDlg.loading = false
+  }
+}
+const reviewFlowOne = async (row, approve) => {
+  let comment = ''
+  const tip = `案件：${row.caseName}\n变更：${row.fromStageName} → ${row.targetStageName}`
+  const r = await ElMessageBox.prompt(
+    approve ? `${tip}\n\n审批意见（可留空）` : `${tip}\n\n请填写退回原因（必填）`,
+    approve ? '同意状态变更' : '退回状态变更',
+    {
+      inputType: 'textarea',
+      inputPlaceholder: approve ? '同意' : '例如：尚未对全部嫌疑人采取强制措施',
+      inputValidator: (v) => (approve ? true : (!!v && !!v.trim()) || '退回必须填写意见'),
+      dangerouslyUseHTMLString: false,
+      customStyle: { whiteSpace: 'pre-line' }
+    }
+  ).catch(() => null)
+  if (!r) return
+  comment = (r.value || '').trim()
+  await watchApi.reviewFlow(row.id, { approve, comment })
+  ElMessage.success(approve ? '已同意，案件状态已变更' : '已退回，案件状态保持不变')
+  flowDlg.rows = (await watchApi.pendingFlowApprovals()) || []
+  if (!flowDlg.rows.length) flowDlg.visible = false
   await load()
 }
 

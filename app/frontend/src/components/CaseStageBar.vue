@@ -14,15 +14,15 @@
       <span v-if="total > 0" class="cf-stagebar__count">{{ done }} / {{ total }}</span>
       <span v-else class="cf-muted cf-stagebar__count">本阶段暂无待办</span>
 
-      <!-- 阶段做完不自动跳：明确告诉领导"该你拍板了"，并给出明确的下一步 -->
+      <!-- 阶段做完不自动跳：明确告诉"该拍板了"，并给出明确的下一步 -->
       <template v-if="canTransfer">
         <el-tooltip v-if="!finished" placement="top"
           :content="`本阶段还有 ${total - done} 项待办未完成，也可提前转入下一阶段`">
           <el-button v-if="branches.length === 1" size="small" type="info" plain
-            @click="openAsk(branches[0])">转入下一阶段</el-button>
+            @click="openAsk(branches[0])">{{ isFullAccess ? '转入下一阶段' : '申请转入下一阶段' }}</el-button>
           <el-dropdown v-else trigger="click" @command="openAsk">
             <el-button size="small" type="info" plain>
-              转入下一阶段<el-icon style="margin-left: 4px"><ArrowDown /></el-icon>
+              {{ isFullAccess ? '转入下一阶段' : '申请转入下一阶段' }}<el-icon style="margin-left: 4px"><ArrowDown /></el-icon>
             </el-button>
             <template #dropdown>
               <el-dropdown-menu>
@@ -34,10 +34,10 @@
           </el-dropdown>
         </el-tooltip>
         <el-button v-else-if="branches.length === 1" size="small" type="primary"
-          @click="openAsk(branches[0])">待办已办完，确认转入</el-button>
+          @click="openAsk(branches[0])">{{ isFullAccess ? '待办已办完，确认转入' : '待办已办完，申请转入' }}</el-button>
         <el-dropdown v-else trigger="click" @command="openAsk">
           <el-button size="small" type="primary">
-            待办已办完，确认转入<el-icon style="margin-left: 4px"><ArrowDown /></el-icon>
+            {{ isFullAccess ? '待办已办完，确认转入' : '待办已办完，申请转入' }}<el-icon style="margin-left: 4px"><ArrowDown /></el-icon>
           </el-button>
           <template #dropdown>
             <el-dropdown-menu>
@@ -49,18 +49,20 @@
         </el-dropdown>
         <!-- 退回（2026-10-18）：确认过待办已办完、但领导认为没办到位时走这里。
              退回不改阶段，而是把意见派成一条新待办，进度自然从 100% 掉回来。 -->
-        <el-button v-if="finished" size="small" type="danger" plain @click="openReturn">退回补办</el-button>
+        <el-button v-if="finished && isFullAccess" size="small" type="danger" plain @click="openReturn">退回补办</el-button>
       </template>
+      <!-- 承办人已提交流转申请，等待审批 -->
+      <el-tag v-else-if="flowPending" size="small" type="warning" effect="plain">状态变更审批中</el-tag>
       <el-tag v-else-if="finished" size="small" type="warning" effect="plain">
         待办已办完
       </el-tag>
-      <span v-else-if="finished" class="cf-muted" style="font-size: 12px">待领导确认转入</span>
+      <span v-else-if="finished" class="cf-muted" style="font-size: 12px">{{ isFullAccess ? '待领导确认转入' : '待领导确认流转' }}</span>
     </div>
 
     <!-- 流转确认：说清"这一步会改什么"，不让人稀里糊涂点下去 -->
     <el-dialog v-model="ask.visible" :title="askTitle" width="440px" append-to-body>
       <el-alert type="warning" :closable="false" show-icon style="margin-bottom: 12px">
-        <template #title>确认转入后会发生这些：</template>
+        <template #title>{{ isFullAccess ? '确认转入后会发生这些：' : '提交申请后，待案管/领导审批通过才生效：' }}</template>
         <ul class="cf-stagebar__warnlist">
           <li>案件阶段由「{{ flow.stageLabel }}」变为「{{ ask.targetLabel }}」</li>
           <li v-if="!finished">本阶段尚有 <b>{{ total - done }}</b> 项待办未完成，转入后不再计入进度</li>
@@ -71,7 +73,7 @@
       </el-alert>
       <template #footer>
         <el-button @click="ask.visible = false">取消</el-button>
-        <el-button type="primary" :loading="ask.loading" @click="doTransfer">确认转入</el-button>
+        <el-button type="primary" :loading="ask.loading" @click="doTransfer">{{ askConfirmText }}</el-button>
       </template>
     </el-dialog>
 
@@ -120,28 +122,41 @@ const isFullAccess = computed(() => userStore.isFullAccess)
 
 const flow = ref({})
 const loading = ref(false)
+const flowPending = ref(false)
 
 const done = computed(() => flow.value.progress?.done || 0)
 const total = computed(() => flow.value.progress?.total || 0)
 const percent = computed(() => flow.value.progress?.percent || 0)
 const finished = computed(() => !!flow.value.progress?.finished)
-/** 流转是管理层动作，普通民警只看到提示文案，点不到按钮 */
-const canTransfer = computed(() => isFullAccess.value && flow.value.caseType !== 'ADMINISTRATIVE' && !!flow.value.transferable)
-/** 可选出口：刑事主干只有一条（初查→刑拘在办、刑拘→取保），刑拘阶段另有通往终结的分支 */
+/** 流转：管理层直接确认；承办人可提交申请（2026-10-30）。行政案件不走阶段流转 */
+const canTransfer = computed(() => flow.value.caseType !== 'ADMINISTRATIVE' && !!flow.value.transferable && !flowPending.value)
+/** 可选出口：刑事初查→刑拘在办/取保监居；刑拘→取保；刑拘另有通往终结的分支 */
 const branches = computed(() => flow.value.transitions || [])
 
 const ask = reactive({ visible: false, loading: false, action: '', targetLabel: '', measureHint: '', assignHint: '' })
-const askTitle = computed(() => `确认转入「${ask.targetLabel}」`)
+const askTitle = computed(() => (isFullAccess.value ? '确认转入「' : '申请转入「') + ask.targetLabel + '」')
+const askConfirmText = computed(() => (isFullAccess.value ? '确认转入' : '提交申请'))
 
 const load = async () => {
   if (!props.caseId) return
   loading.value = true
   try {
     flow.value = await watchApi.flow(props.caseId)
+    await loadFlowPending()
   } catch (e) {
     flow.value = {}
   } finally {
     loading.value = false
+  }
+}
+
+/** 本案是否已有待审批的状态变更申请（承办人提交后按钮变"审批中"） */
+const loadFlowPending = async () => {
+  try {
+    const res = await watchApi.flowPending(props.caseId)
+    flowPending.value = !!(res.data && res.data.pending)
+  } catch (e) {
+    flowPending.value = false
   }
 }
 
@@ -167,7 +182,9 @@ const doTransfer = async () => {
   ask.loading = true
   try {
     await watchApi.flowTransfer(props.caseId, ask.action)
-    ElMessage.success(`已转入「${ask.targetLabel}」`)
+    ElMessage.success(isFullAccess.value
+      ? `已转入「${ask.targetLabel}」`
+      : '状态变更申请已提交，待案管/领导审批')
     ask.visible = false
     await load()
     emit('changed')

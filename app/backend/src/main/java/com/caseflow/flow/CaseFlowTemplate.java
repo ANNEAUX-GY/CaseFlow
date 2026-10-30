@@ -83,7 +83,11 @@ public final class CaseFlowTemplate {
             return out;
         }
         if (STAGE_INITIAL.equals(stage)) {
-            // 刑事初查在实际执行拘留或逮捕后自动转段，不由按钮提前流转。
+            // 刑事初查 → 刑拘在办 / 取保监居（2026-10-30）：
+            // 承办人对全部嫌疑人抓捕刑拘后点「变更案件状态」转刑拘在办，
+            // 取保候审后转取保监居；由领导/案管直接流转或审批承办人申请。
+            out.add(new String[]{"DETAIN", STAGE_DETAIN});
+            out.add(new String[]{"BAIL", STAGE_BAIL});
         } else if (STAGE_DETAIN.equals(stage)) {
             // 刑拘在办 → 取保及监居（主干）；逮捕 / 释放 通向终结，保留待议
             out.add(new String[]{"BAIL", STAGE_BAIL});
