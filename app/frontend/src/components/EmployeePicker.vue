@@ -42,7 +42,7 @@
         </div>
       </el-tab-pane>
 
-      <!-- 组织树：按 领导-副领导-组长-组员 逐级点选 -->
+      <!-- 组织树：按 所长-副所长-队长-民警 逐级点选 -->
       <el-tab-pane label="组织树" name="tree">
         <el-input v-model="filterText" placeholder="过滤组织树" clearable />
         <el-tree

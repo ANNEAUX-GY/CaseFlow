@@ -58,7 +58,10 @@
           </el-table-column>
           <el-table-column label="关联案件" width="180">
             <template #default="{ row }">
-              <el-tag v-if="row.caseName" size="small" type="info" effect="plain">{{ row.caseName }}</el-tag>
+              <el-tag v-if="row.caseName" size="small" type="info" effect="plain" class="cf-wlog-case-tag">
+                <a v-if="row.caseId" class="cf-wlog-case-link" @click="openCaseDetail(row)">{{ row.caseName }}</a>
+                <span v-else>{{ row.caseName }}</span>
+              </el-tag>
               <span v-else class="cf-muted">—</span>
             </template>
           </el-table-column>
@@ -106,7 +109,23 @@
           />
         </el-form-item>
         <el-form-item label="关联案件">
-          <el-input v-model="form.caseName" placeholder="可选，填写案件名称便于检索" />
+          <el-select
+            v-model="form.caseId"
+            filterable
+            remote
+            clearable
+            :remote-method="searchCases"
+            :loading="caseSearching"
+            placeholder="输入案件名称 / 编号关键字检索"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="c in caseOptions"
+              :key="c.id"
+              :label="caseLabel(c)"
+              :value="c.id"
+            />
+          </el-select>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -115,6 +134,9 @@
       </template>
     </el-dialog>
 
+    <!-- 关联案件详情（点列表里的案件名打开） -->
+    <CaseDetailDrawer v-model="caseDetailVisible" :case-id="caseDetailId" />
+
     <PageFooter />
   </div>
 </template>
@@ -122,9 +144,10 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { workLogApi } from '../api'
+import { workLogApi, caseApi } from '../api'
 import { useUserStore } from '../store/user'
 import PageFooter from '../components/PageFooter.vue'
+import CaseDetailDrawer from '../components/CaseDetailDrawer.vue'
 import { dateKeyOf } from '../utils/format'
 
 const userStore = useUserStore()
@@ -138,7 +161,37 @@ const dialogVisible = ref(false)
 const editingId = ref(null)
 
 const query = reactive({ employeeId: null, keyword: '' })
-const form = reactive({ employeeId: null, content: '', caseName: '' })
+const form = reactive({ employeeId: null, content: '', caseId: null, caseName: '' })
+
+// 关联案件：关键字远程联想下拉（选真实案件，关联 caseId）
+const caseOptions = ref([])
+const caseSearching = ref(false)
+const caseDetailVisible = ref(false)
+const caseDetailId = ref(null)
+
+const caseLabel = (c) => (c.filingNo ? `${c.name}（${c.filingNo}）` : c.name)
+
+const searchCases = async (kw) => {
+  if (!kw || !kw.trim()) {
+    caseOptions.value = []
+    return
+  }
+  caseSearching.value = true
+  try {
+    const data = await caseApi.page({ keyword: kw.trim(), size: 20 })
+    caseOptions.value = data.list || []
+  } catch (e) {
+    caseOptions.value = []
+  } finally {
+    caseSearching.value = false
+  }
+}
+
+const openCaseDetail = (row) => {
+  if (!row.caseId) return
+  caseDetailId.value = row.caseId
+  caseDetailVisible.value = true
+}
 
 const WEEK = ['日', '一', '二', '三', '四', '五', '六']
 const fmtTime = (t) => {
@@ -178,6 +231,7 @@ function openAdd() {
   editingId.value = null
   form.employeeId = null
   form.content = ''
+  form.caseId = null
   form.caseName = ''
   dialogVisible.value = true
 }
@@ -186,7 +240,12 @@ function openEdit(row) {
   editingId.value = row.id
   form.employeeId = row.employeeId
   form.content = row.content
+  form.caseId = row.caseId || null
   form.caseName = row.caseName || ''
+  // 编辑时把当前关联案件塞进下拉候选，保证回显时能看到名字
+  if (row.caseId && row.caseName) {
+    caseOptions.value = [{ id: row.caseId, name: row.caseName, filingNo: row.filingNo || '' }]
+  }
   dialogVisible.value = true
 }
 
@@ -195,20 +254,24 @@ async function save() {
     ElMessage.warning('请填写工作内容')
     return
   }
+  // 从选中的案件里取名称（下拉选的是 caseId，名称冗余存一份便于列表展示）
+  const chosen = form.caseId ? caseOptions.value.find((c) => c.id === form.caseId) : null
+  const caseName = chosen ? chosen.name : (form.caseName || null)
   saving.value = true
   try {
     if (editingId.value) {
       await workLogApi.update(editingId.value, {
         content: form.content,
-        caseId: form.caseId,
-        caseName: form.caseName
+        caseId: form.caseId || null,
+        caseName
       })
       ElMessage.success('已保存')
     } else {
       await workLogApi.add({
         employeeId: form.employeeId,
         content: form.content,
-        caseName: form.caseName
+        caseId: form.caseId || null,
+        caseName
       })
       ElMessage.success('已新增')
     }
@@ -253,6 +316,17 @@ onMounted(() => {
 .cf-wlog-time {
   font-variant-numeric: tabular-nums;
   color: var(--cf-text-2);
+}
+
+/* 关联案件：可点击查看详情，加下划线提示可点 */
+.cf-wlog-case-link {
+  color: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.cf-wlog-case-link:hover {
+  color: var(--cf-primary, #1b4a8c);
 }
 
 /* 空状态：居中图标 + 主次两行文案 */

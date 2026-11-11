@@ -31,13 +31,13 @@ public final class OrgRank {
     public static String label(int rank) {
         switch (rank) {
             case TOP:
-                return "总/领导";
+                return "所长";
             case DEPUTY:
-                return "副总";
+                return "副所长";
             case LEADER:
-                return "组长";
+                return "队长";
             default:
-                return "员工";
+                return "民警";
         }
     }
 

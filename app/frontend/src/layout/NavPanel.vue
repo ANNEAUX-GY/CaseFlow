@@ -93,7 +93,7 @@
         <template v-if="userStore.canSystemManage">
           <el-menu-item index="/org">
             <el-icon><Connection /></el-icon>
-            <span>员工图谱</span>
+            <span>人员图谱</span>
           </el-menu-item>
           <el-menu-item index="/categories">
             <el-icon><Collection /></el-icon>

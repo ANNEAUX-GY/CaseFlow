@@ -54,7 +54,7 @@ const routes = [
       { path: 'work-log', name: 'WorkLog', component: () => import('../views/WorkLog.vue'), meta: { title: '工作记录本' } },
       // 员工图谱：整页级限定「系统管理员」（systemManageOnly）。
       // 2026-10-09：业务领导侧栏不再出现该项，守卫同步兜底——否则「藏菜单」只是障眼法。
-      { path: 'org', name: 'Org', component: () => import('../views/EmployeeTree.vue'), meta: { title: '员工图谱', fullAccessOnly: true, systemManageOnly: true } },
+      { path: 'org', name: 'Org', component: () => import('../views/EmployeeTree.vue'), meta: { title: '人员图谱', fullAccessOnly: true, systemManageOnly: true } },
       // 案件盯办（初查/刑拘/取保监居 三子模块 + 看板）
       { path: 'watch', name: 'Watch', component: () => import('../views/WatchView.vue'), meta: { title: '案件盯办' } },
       // 案件待办总览：管理者查看各待办完成状态与对应佐证材料

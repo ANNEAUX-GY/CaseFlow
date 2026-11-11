@@ -230,7 +230,7 @@ const router = useRouter()
 const loading = ref(false)
 const roles = ref({})
 
-const TITLES = ['领导', '副领导', '组长', '组员']
+const TITLES = ['所长', '副所长', '队长', '法制员', '案管', '研判员', '普通民警', '系统管理员']
 
 const form = reactive({
   username: '',

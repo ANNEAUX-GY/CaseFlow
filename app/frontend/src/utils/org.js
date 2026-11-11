@@ -26,10 +26,10 @@ export const DEPT_ANOMALY_COLOR = '#d98a0b'
 
 /** 层级中文名 */
 export function rankLabel(rank) {
-  if (rank === RANK.TOP) return '总/领导'
-  if (rank === RANK.DEPUTY) return '副总'
-  if (rank === RANK.LEADER) return '组长'
-  return '员工'
+  if (rank === RANK.TOP) return '所长'
+  if (rank === RANK.DEPUTY) return '副所长'
+  if (rank === RANK.LEADER) return '队长'
+  return '民警'
 }
 
 /**

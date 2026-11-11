@@ -137,11 +137,15 @@
                 </div>
               </el-form-item>
               <el-form-item label="职务">
-                <el-select v-model="form.title" filterable allow-create clearable placeholder="领导 / 副领导 / 组长 / 组员" style="width: 100%">
-                  <el-option label="领导" value="领导" />
-                  <el-option label="副领导" value="副领导" />
-                  <el-option label="组长" value="组长" />
-                  <el-option label="组员" value="组员" />
+                <el-select v-model="form.title" filterable allow-create clearable placeholder="所长 / 副所长 / 队长 / 法制员 / 案管 / 研判员 / 普通民警 / 系统管理员" style="width: 100%">
+                  <el-option label="所长" value="所长" />
+                  <el-option label="副所长" value="副所长" />
+                  <el-option label="队长" value="队长" />
+                  <el-option label="法制员" value="法制员" />
+                  <el-option label="案管" value="案管" />
+                  <el-option label="研判员" value="研判员" />
+                  <el-option label="普通民警" value="普通民警" />
+                  <el-option label="系统管理员" value="系统管理员" />
                 </el-select>
                 <div class="cf-form-tip">职务决定组织层级：{{ formRankLabel }}。当前上级候选：{{ parentTip }}</div>
               </el-form-item>
@@ -303,12 +307,12 @@ const parentCandidates = computed(() => {
 })
 
 const parentHint = computed(() =>
-  formRank.value <= RANK.TOP ? '总/领导为最高层，无需选择上级' : '请选择上一级'
+  formRank.value <= RANK.TOP ? '所长为最高层，无需选择上级' : '请选择上一级'
 )
 
 const parentTip = computed(() => {
   const want = formRank.value - 1
-  if (want < RANK.TOP) return '总/领导是组织树第一层，不设上级'
+  if (want < RANK.TOP) return '所长是组织树第一层，不设上级'
   const names = parentCandidates.value.map((e) => e.name)
   if (!names.length) return `${rankLabel(want)}层还没有人，请先添加${rankLabel(want)}`
   return `可选：${names.join('、')}`
