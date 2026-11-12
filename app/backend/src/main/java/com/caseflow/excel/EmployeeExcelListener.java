@@ -25,7 +25,7 @@ public class EmployeeExcelListener extends AnalysisEventListener<EmployeeExcelRo
             return;
         }
         row.setName(name);
-        row.setEmployeeNo(trim(row.getEmployeeNo()));
+        row.setPoliceNo(trim(row.getPoliceNo()));
         row.setParentNo(trim(row.getParentNo()));
         row.setDept(trim(row.getDept()));
         row.setTitle(trim(row.getTitle()));

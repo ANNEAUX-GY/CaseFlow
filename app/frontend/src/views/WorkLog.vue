@@ -207,11 +207,12 @@ const fmtTime = (t) => {
 async function load() {
   loading.value = true
   try {
-    const res = await workLogApi.list({
+    // 拦截器已把 Result.data 解包，workLogApi.list 直接返回数组
+    const rowsData = await workLogApi.list({
       employeeId: query.employeeId || undefined,
       keyword: query.keyword || undefined
     })
-    rows.value = res.data || []
+    rows.value = rowsData || []
   } finally {
     loading.value = false
   }
@@ -220,8 +221,8 @@ async function load() {
 async function loadEmployees() {
   if (!canViewAll.value) return
   try {
-    const res = await workLogApi.employees()
-    employees.value = res.data || []
+    const emps = await workLogApi.employees()
+    employees.value = emps || []
   } catch (e) {
     // 忽略
   }

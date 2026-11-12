@@ -14,12 +14,20 @@ import com.caseflow.security.Roles;
 import com.caseflow.support.LogService;
 import com.caseflow.support.Validators;
 import com.caseflow.vo.UserVO;
+import net.sourceforge.pinyin4j.PinyinHelper;
+import net.sourceforge.pinyin4j.format.HanyuPinyinCaseType;
+import net.sourceforge.pinyin4j.format.HanyuPinyinOutputFormat;
+import net.sourceforge.pinyin4j.format.HanyuPinyinToneType;
+import net.sourceforge.pinyin4j.format.HanyuPinyinVCharType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -414,5 +422,116 @@ public class UserService {
             vo.setFullAccess(Roles.isFullAccess(u.getRole()));
             return vo;
         }).collect(Collectors.toList());
+    }
+
+    // ---------------- 批量建账号（2026-11-12：档案账号一对一） ----------------
+
+    /**
+     * 职务 → 角色映射：与账号「角色」下拉的 8 个词一一对应。
+     * 没匹配上（含空职务）一律归为普通民警，避免建出非法角色。
+     */
+    private static String roleOfTitle(String title) {
+        String t = title == null ? "" : title.trim();
+        if (t.contains("所长") && !t.contains("副")) return Roles.CHIEF;
+        if (t.contains("副")) return Roles.DEPUTY_CHIEF;
+        if (t.contains("队长") || t.contains("组长")) return Roles.CAPTAIN;
+        if (t.contains("法制")) return Roles.LAW_OFFICER;
+        if (t.contains("案管")) return Roles.CASE_MANAGER;
+        if (t.contains("研判") || t.contains("辅判") || t.contains("侦判")) return Roles.JUDGE;
+        if (t.contains("系统") || t.contains("管理员")) return Roles.BOSS;
+        return Roles.STAFF;
+    }
+
+    /**
+     * 中文姓名 → 全小写拼音（多音字取第一个读音）。
+     * 非中文（字母/数字）原样保留小写；无拼音的字符跳过。
+     */
+    private static String toPinyin(String name) {
+        if (name == null || name.isEmpty()) return "";
+        HanyuPinyinOutputFormat fmt = new HanyuPinyinOutputFormat();
+        fmt.setCaseType(HanyuPinyinCaseType.LOWERCASE);
+        fmt.setToneType(HanyuPinyinToneType.WITHOUT_TONE);
+        fmt.setVCharType(HanyuPinyinVCharType.WITH_V);
+        StringBuilder sb = new StringBuilder();
+        for (char ch : name.toCharArray()) {
+            if (Character.toString(ch).matches("[\\u4e00-\\u9fa5]")) {
+                try {
+                    String[] arr = PinyinHelper.toHanyuPinyinStringArray(ch, fmt);
+                    sb.append(arr == null || arr.length == 0 ? "" : arr[0]);
+                } catch (Exception e) {
+                    // 单个字转失败不影响整体
+                }
+            } else if (Character.isLetterOrDigit(ch)) {
+                sb.append(Character.toLowerCase(ch));
+            }
+        }
+        return sb.toString();
+    }
+
+    /**
+     * 为「没有账号」的员工档案批量建立账号，实现档案-账号严格一对一。
+     *
+     * <p>规则：用户名 = 姓名全小写拼音（重名/重号自动加数字后缀）、密码统一 123456、
+     * 角色由职务映射、displayName = 姓名、auditStatus = 1（已通过）。
+     * 返回 {created: n, usernames: [...]}，幂等：已有账号的档案自动跳过。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public Map<String, Object> batchCreateAccounts() {
+        if (!AuthContext.isFullAccess()) {
+            throw new BizException(403, "只有管理层可以批量建立账号");
+        }
+        List<OrgEmployee> employees = employeeMapper.selectList(null);
+        // 已绑定的员工 ID 集合（一名员工只该有一个账号，但历史数据可能重复绑定，用集合去重）
+        Set<Long> boundIds = new HashSet<>();
+        for (SysUser u : userMapper.selectList(null)) {
+            if (u.getEmployeeId() != null) boundIds.add(u.getEmployeeId());
+        }
+        // 已有用户名集合，用于重名加后缀
+        Set<String> usedNames = new HashSet<>();
+        for (SysUser u : userMapper.selectList(null)) {
+            if (u.getUsername() != null) usedNames.add(u.getUsername().toLowerCase());
+        }
+
+        int created = 0;
+        List<String> usernames = new ArrayList<>();
+        LocalDateTime now = LocalDateTime.now();
+        for (OrgEmployee e : employees) {
+            if (boundIds.contains(e.getId())) continue; // 已有账号，跳过
+            if (e.getStatus() != null && e.getStatus() == 0) continue; // 离职/停用不建号
+            String base = toPinyin(e.getName());
+            if (base.isEmpty()) base = "user";
+            String username = uniqueUsername(base, usedNames);
+            usedNames.add(username);
+
+            SysUser u = new SysUser();
+            u.setUsername(username);
+            u.setPassword(passwordService.encode("123456"));
+            u.setDisplayName(e.getName());
+            u.setRole(roleOfTitle(e.getTitle()));
+            u.setEmployeeId(e.getId());
+            u.setDept(e.getDept());
+            u.setAuditStatus(1);
+            u.setStatus(1);
+            u.setCreatedAt(now);
+            u.setUpdatedAt(now);
+            userMapper.insert(u);
+            created++;
+            usernames.add(username);
+        }
+        if (created > 0) {
+            logService.log("AUTH", "BATCH_CREATE_ACCOUNTS", "USER", null,
+                    "批量建立账号 " + created + " 个（档案-账号一对一补齐）");
+        }
+        Map<String, Object> out = new HashMap<>();
+        out.put("created", created);
+        out.put("usernames", usernames);
+        return out;
+    }
+
+    private static String uniqueUsername(String base, Set<String> used) {
+        if (!used.contains(base)) return base;
+        int i = 1;
+        while (used.contains(base + i)) i++;
+        return base + i;
     }
 }

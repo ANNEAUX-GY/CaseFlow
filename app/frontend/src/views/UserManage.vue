@@ -8,6 +8,7 @@
         </span>
         <div class="cf-panel__head-actions">
           <el-button type="primary" @click="openCreate">新建账号</el-button>
+          <el-button :loading="batchCreating" @click="batchCreateAccounts">为无账号民警批量建号</el-button>
         </div>
       </div>
 
@@ -206,8 +207,8 @@
                     <el-option v-for="t in TITLES" :key="t" :label="t" :value="t" />
                   </el-select>
                 </el-form-item>
-                <el-form-item label="工号">
-                  <el-input v-model="dlg.newEmp.employeeNo" placeholder="选填" maxlength="64" />
+                <el-form-item label="警号">
+                  <el-input v-model="dlg.newEmp.policeSystemNo" placeholder="登录系统的人员警号（选填）" maxlength="64" />
                 </el-form-item>
                 <el-form-item label="">
                   <el-button type="primary" size="small" @click="saveNewEmployee">加入待建立档案</el-button>
@@ -312,6 +313,7 @@ const tab = ref('pending')
 const keyword = ref('')
 const rows = ref([])
 const loading = ref(false)
+const batchCreating = ref(false)
 const roles = ref({})
 const employeeOptions = ref([])
 /** 已有部门（部门下拉的选项）：从已有里选，避免同部门被填成好几种写法 */
@@ -362,12 +364,12 @@ const dlg = reactive({
   form: {},
   // 就地建档的小表单
   newEmpOpen: false,
-  newEmp: { name: '', dept: '', title: '', employeeNo: '' }
+  newEmp: { name: '', dept: '', title: '', policeSystemNo: '' }
 })
 
 const resetNewEmp = () => {
   dlg.newEmpOpen = false
-  dlg.newEmp = { name: '', dept: '', title: '', employeeNo: '' }
+  dlg.newEmp = { name: '', dept: '', title: '', policeSystemNo: '' }
 }
 
 const resetForm = () => ({
@@ -412,8 +414,8 @@ const toggleNewEmployee = () => {
     dlg.newEmp = {
       name: dlg.form.displayName || '',
       dept: dlg.form.dept || '',
-      title: '组员',
-      employeeNo: ''
+      title: '普通民警',
+      policeSystemNo: ''
     }
   }
 }
@@ -429,7 +431,7 @@ const saveNewEmployee = () => {
     name,
     dept: (dlg.newEmp.dept || '').trim() || null,
     title: dlg.newEmp.title || null,
-    employeeNo: (dlg.newEmp.employeeNo || '').trim() || null
+    policeSystemNo: (dlg.newEmp.policeSystemNo || '').trim() || null
   }
   dlg.newEmpOpen = false
 }
@@ -482,6 +484,28 @@ const openCreate = () => {
   dlg.form = resetForm()
   employeeOptions.value = []
   dlg.visible = true
+}
+
+/** 为没有账号的员工档案批量补建账号（档案-账号一对一） */
+const batchCreateAccounts = async () => {
+  try {
+    await ElMessageBox.confirm(
+      '将为所有「没有账号」的在职民警档案批量建立账号：用户名=姓名拼音、密码=123456、角色按职务自动映射。是否继续？',
+      '批量建号',
+      { type: 'warning', confirmButtonText: '开始建号', cancelButtonText: '取消' }
+    )
+  } catch (e) {
+    return
+  }
+  batchCreating.value = true
+  try {
+    const res = await userApi.batchCreateAccounts()
+    const created = res?.created ?? 0
+    ElMessage.success(`已为 ${created} 名民警建立账号，默认密码 123456`)
+    load()
+  } finally {
+    batchCreating.value = false
+  }
 }
 
 const groupHint = computed(() => {

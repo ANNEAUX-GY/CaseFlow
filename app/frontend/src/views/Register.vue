@@ -160,8 +160,8 @@
         <el-form-item label="姓名" required>
           <el-input v-model="empDlg.form.name" placeholder="本人的真实姓名" maxlength="64" />
         </el-form-item>
-        <el-form-item label="工号">
-          <el-input v-model="empDlg.form.employeeNo" placeholder="警号 / 工号（选填）" maxlength="64" />
+        <el-form-item label="警号">
+          <el-input v-model="empDlg.form.policeSystemNo" placeholder="登录系统的人员警号（选填）" maxlength="64" />
         </el-form-item>
         <el-form-item label="部门">
           <el-select
@@ -272,7 +272,7 @@ const onPickEmployee = () => {
 /* ---------- 现场建档 ---------- */
 const empDlg = reactive({
   visible: false,
-  form: { name: '', employeeNo: '', dept: '', title: '', parentId: null, phone: '' }
+  form: { name: '', policeSystemNo: '', dept: '', title: '', parentId: null, phone: '' }
 })
 const parentOptions = ref([])
 /** 已有部门（部门下拉的选项）。注册页没有令牌，走公开接口 /auth/register/depts */
@@ -293,9 +293,9 @@ const openNewEmployee = () => {
   empDlg.form = {
     // 用已经填过的姓名/部门预填，少打一遍
     name: (form.displayName || '').trim(),
-    employeeNo: '',
+    policeSystemNo: '',
     dept: (form.dept || '').trim(),
-    title: '组员',
+    title: '普通民警',
     parentId: null,
     phone: (form.phone || '').trim()
   }
@@ -312,7 +312,7 @@ const saveNewEmployee = () => {
   form.employeeId = null
   form.newEmployee = {
     name,
-    employeeNo: (empDlg.form.employeeNo || '').trim() || null,
+    policeSystemNo: (empDlg.form.policeSystemNo || '').trim() || null,
     dept: (empDlg.form.dept || '').trim() || null,
     title: empDlg.form.title || null,
     parentId: empDlg.form.parentId || null,

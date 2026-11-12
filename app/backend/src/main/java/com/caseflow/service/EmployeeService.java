@@ -305,6 +305,7 @@ public class EmployeeService {
     private boolean hit(EmployeeVO node, String kw) {
         return contains(node.getName(), kw)
                 || contains(node.getEmployeeNo(), kw)
+                || contains(node.getPoliceSystemNo(), kw)
                 || contains(node.getDept(), kw)
                 || contains(node.getTitle(), kw)
                 || contains(node.getPhone(), kw);
@@ -411,6 +412,7 @@ public class EmployeeService {
         OrgEmployee e = new OrgEmployee();
         e.setName(name);
         e.setEmployeeNo(Validators.trim(brief.getEmployeeNo()));
+        e.setPoliceSystemNo(Validators.trim(brief.getPoliceSystemNo()));
         e.setParentId(parentId);
         e.setDept(Validators.trim(brief.getDept()));
         e.setTitle(Validators.trim(brief.getTitle()));
@@ -591,11 +593,11 @@ public class EmployeeService {
         }
 
         LocalDateTime now = LocalDateTime.now();
-        // 已存在的工号 -> 更新，否则新增（重复导入幂等）
+        // 已存在的警号 -> 更新，否则新增（重复导入幂等）
         Map<String, OrgEmployee> byNo = new HashMap<>();
         for (OrgEmployee e : employeeMapper.selectList(null)) {
-            if (e.getEmployeeNo() != null && !e.getEmployeeNo().isEmpty()) {
-                byNo.put(e.getEmployeeNo(), e);
+            if (e.getPoliceSystemNo() != null && !e.getPoliceSystemNo().isEmpty()) {
+                byNo.put(e.getPoliceSystemNo(), e);
             }
         }
 
@@ -603,19 +605,19 @@ public class EmployeeService {
         for (int i = 0; i < rows.size(); i++) {
             EmployeeExcelRow row = rows.get(i);
             int lineNo = i + 2; // 表头占第 1 行
-            if (row.getEmployeeNo() == null || row.getEmployeeNo().isEmpty()) {
-                errors.add("第 " + lineNo + " 行：缺少工号，跳过");
+            if (row.getPoliceNo() == null || row.getPoliceNo().isEmpty()) {
+                errors.add("第 " + lineNo + " 行：缺少警号，跳过");
                 continue;
             }
             try {
-                OrgEmployee entity = byNo.get(row.getEmployeeNo());
+                OrgEmployee entity = byNo.get(row.getPoliceNo());
                 boolean isNew = entity == null;
                 if (isNew) {
                     entity = new OrgEmployee();
                     entity.setCreatedAt(now);
                 }
                 entity.setName(row.getName());
-                entity.setEmployeeNo(row.getEmployeeNo());
+                entity.setPoliceSystemNo(row.getPoliceNo());
                 entity.setParentNo(row.getParentNo());
                 entity.setDept(row.getDept());
                 entity.setTitle(row.getTitle());
@@ -628,7 +630,7 @@ public class EmployeeService {
                     entity.setParentId(0L);
                     entity.setIdPath("/");
                     employeeMapper.insert(entity);
-                    byNo.put(entity.getEmployeeNo(), entity);
+                    byNo.put(entity.getPoliceSystemNo(), entity);
                 } else {
                     employeeMapper.updateById(entity);
                 }
@@ -646,10 +648,10 @@ public class EmployeeService {
                     e.setParentId(parent.getId());
                 } else if (parent != null) {
                     e.setParentId(0L);
-                    errors.add("工号 " + e.getEmployeeNo() + " 的上级指向了自己，已置为顶层");
+                    errors.add("警号 " + e.getPoliceSystemNo() + " 的上级指向了自己，已置为顶层");
                 } else {
                     e.setParentId(0L);
-                    errors.add("工号 " + e.getEmployeeNo() + " 的上级工号 " + e.getParentNo() + " 不存在，已置为顶层");
+                    errors.add("警号 " + e.getPoliceSystemNo() + " 的上级警号 " + e.getParentNo() + " 不存在，已置为顶层");
                 }
                 employeeMapper.updateById(e);
             }
@@ -698,10 +700,10 @@ public class EmployeeService {
     /** 下载导入模板 */
     public void writeTemplate(HttpServletResponse response) throws IOException {
         List<EmployeeExcelRow> demo = new ArrayList<>(Arrays.asList(
-                row("王总", "E001", "", "刑事侦查大队", "领导", "13800000001", "wang@example.com"),
-                row("李副总", "E002", "E001", "刑事侦查大队", "副领导", "13800000002", "li@example.com"),
-                row("张组长", "E003", "E002", "一组", "组长", "13800000003", "zhang@example.com"),
-                row("陈组员", "E004", "E003", "一组", "组员", "13800000004", "chen@example.com")
+                row("王所长", "J1001", "", "刑事侦查大队", "所长", "13800000001", "wang@example.com"),
+                row("李副所长", "J1002", "J1001", "刑事侦查大队", "副所长", "13800000002", "li@example.com"),
+                row("张队长", "J1003", "J1002", "一组", "队长", "13800000003", "zhang@example.com"),
+                row("陈民警", "J1004", "J1003", "一组", "普通民警", "13800000004", "chen@example.com")
         ));
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         response.setCharacterEncoding("UTF-8");
@@ -713,7 +715,7 @@ public class EmployeeService {
     private EmployeeExcelRow row(String name, String no, String parentNo, String dept, String title, String phone, String email) {
         EmployeeExcelRow r = new EmployeeExcelRow();
         r.setName(name);
-        r.setEmployeeNo(no);
+        r.setPoliceNo(no);
         r.setParentNo(parentNo);
         r.setDept(dept);
         r.setTitle(title);

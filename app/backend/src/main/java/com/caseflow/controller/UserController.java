@@ -51,6 +51,15 @@ public class UserController {
     }
 
     /**
+     * 批量建立账号（2026-11-12）：为没有账号的员工档案补建账号，实现档案-账号一对一。
+     * 幂等：已有账号的档案自动跳过。
+     */
+    @PostMapping("/batch-create-accounts")
+    public Result<Map<String, Object>> batchCreateAccounts() {
+        return Result.ok(userService.batchCreateAccounts());
+    }
+
+    /**
      * 「关联员工」下拉的候选名单：只返回还没被其他账号占用的员工。
      * 编辑账号时传 excludeUserId=当前账号，免得自己已绑的那个人被过滤掉。
      */

@@ -5,8 +5,8 @@ import lombok.Data;
 
 /**
  * 员工图谱 Excel 行模板。
- * 列顺序固定：姓名 / 工号 / 上级工号 / 部门 / 职务 / 手机 / 邮箱
- * 其中「上级工号」是形成 领导-副领导-组长-组员 层级的关键字段，顶层留空。
+ * 列顺序固定：姓名 / 警号 / 上级警号 / 部门 / 职务 / 手机 / 邮箱
+ * 其中「上级警号」是形成 所长-副所长-队长-民警 层级的关键字段，顶层留空。
  */
 @Data
 public class EmployeeExcelRow {
@@ -14,10 +14,10 @@ public class EmployeeExcelRow {
     @ExcelProperty(value = "姓名", index = 0)
     private String name;
 
-    @ExcelProperty(value = "工号", index = 1)
-    private String employeeNo;
+    @ExcelProperty(value = "警号", index = 1)
+    private String policeNo;
 
-    @ExcelProperty(value = "上级工号", index = 2)
+    @ExcelProperty(value = "上级警号", index = 2)
     private String parentNo;
 
     @ExcelProperty(value = "部门", index = 3)

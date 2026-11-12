@@ -148,7 +148,9 @@ export const userApi = {
   update: (id, data) => http.put(`/users/${id}`, data),
   resetPassword: (id, data) => http.post(`/users/${id}/reset-password`, data),
   changeStatus: (id, status) => http.post(`/users/${id}/status`, { status }),
-  remove: (id) => http.delete(`/users/${id}`)
+  remove: (id) => http.delete(`/users/${id}`),
+  // 批量建账号（2026-11-12）：为没有账号的员工档案补建账号，档案-账号一对一
+  batchCreateAccounts: () => http.post('/users/batch-create-accounts')
 }
 
 export const caseApi = {

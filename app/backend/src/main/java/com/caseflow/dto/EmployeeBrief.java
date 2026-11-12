@@ -16,13 +16,16 @@ public class EmployeeBrief {
     /** 姓名，必填 */
     private String name;
 
-    /** 工号，选填 */
+    /** 工号，选填（已废弃，改用 policeSystemNo） */
     private String employeeNo;
+
+    /** 警号（警综人员编号），选填 */
+    private String policeSystemNo;
 
     /** 部门（注册页默认带出「所属部门」） */
     private String dept;
 
-    /** 职务：领导 / 副领导 / 组长 / 组员 */
+    /** 职务：所长 / 副所长 / 队长 / 法制员 / 案管 / 研判员 / 普通民警 / 系统管理员 */
     private String title;
 
     /** 上级员工 ID，0 或留空 = 顶层；管理员后续可在员工图谱里调整 */
