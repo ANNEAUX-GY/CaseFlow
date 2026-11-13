@@ -510,7 +510,9 @@ CREATE TABLE IF NOT EXISTS work_log (
     case_id       BIGINT        DEFAULT NULL COMMENT '关联案件 ID（可空）',
     case_name     VARCHAR(255)  DEFAULT NULL COMMENT '关联案件名称（冗余展示）',
     created_at    DATETIME      DEFAULT CURRENT_TIMESTAMP COMMENT '记录时间',
-    updated_at    DATETIME      DEFAULT CURRENT_TIMESTAMP COMMENT '最后修改时间'
+    updated_at    DATETIME      DEFAULT CURRENT_TIMESTAMP COMMENT '最后修改时间',
+    source        VARCHAR(16)   DEFAULT NULL COMMENT '来源：MANUAL 手动 / AUTO 自动（操作留痕）',
+    log_id        BIGINT        DEFAULT NULL COMMENT '关联 operation_log.id（自动记录溯源，可空）'
 );
 
 -- 系统级配置（2026-11-13）：键值对，存全局开关。

@@ -208,7 +208,12 @@ public class SchemaMigration implements ApplicationRunner {
             // 领导/案管审批后才落地。approveType=FLOW，flow_action 存流转动作（DETAIN/BAIL/...），
             // from_stage 存申请时的阶段，便于审批人对比与防串档。两列可空：存量审批行不受影响。
             {"case_approval", "flow_action", "VARCHAR(20) NULL"},
-            {"case_approval", "from_stage", "VARCHAR(24) NULL"}
+            {"case_approval", "from_stage", "VARCHAR(24) NULL"},
+            // 工作记录本自动记录（2026-11-13）：source 区分手动（MANUAL）/自动（AUTO）来源，
+            // log_id 关联 operation_log 用于追溯与去重。两列可空：存量手动记录为 NULL，
+            // 读取时按 MANUAL 处理，行为不变。
+            {"work_log", "source", "VARCHAR(16) NULL"},
+            {"work_log", "log_id", "BIGINT NULL"}
     };
 
     /** 旧数据回填：把历史「案件类型」自由文本里的大类词归位到 case_type（小类位清空）。

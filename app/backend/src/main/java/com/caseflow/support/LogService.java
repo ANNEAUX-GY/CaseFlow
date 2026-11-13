@@ -32,6 +32,11 @@ public class LogService {
     /** 统一信箱：日志落库后派生通知（NotificationService 只依赖 mapper/sseHub，无循环） */
     @Resource
     private com.caseflow.service.NotificationService notificationService;
+    /** 工作记录本自动记录（2026-11-13）：@Lazy 打破 LogService↔WorkLogService 成环。
+     *  WorkLogService 为埋点注入了本类，本类再注入 WorkLogService 会循环依赖。 */
+    @org.springframework.context.annotation.Lazy
+    @Resource
+    private com.caseflow.service.WorkLogService workLogService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
@@ -118,6 +123,13 @@ public class LogService {
         } catch (Exception e) {
             org.slf4j.LoggerFactory.getLogger(LogService.class)
                     .warn("[LogService] 信箱通知派生失败（不影响业务）：{}", e.getMessage());
+        }
+        // 派生工作记录本自动记录（案件相关操作自动进工作记录本）。失败绝不影响主流程。
+        try {
+            workLogService.onCaseOperation(log);
+        } catch (Exception e) {
+            org.slf4j.LoggerFactory.getLogger(LogService.class)
+                    .warn("[LogService] 工作记录自动派生失败（不影响业务）：{}", e.getMessage());
         }
         return log;
     }

@@ -1,9 +1,12 @@
 package com.caseflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.caseflow.entity.CaseInfo;
+import com.caseflow.entity.OperationLog;
 import com.caseflow.entity.OrgEmployee;
 import com.caseflow.entity.WorkLog;
 import com.caseflow.exception.BizException;
+import com.caseflow.mapper.CaseInfoMapper;
 import com.caseflow.mapper.OrgEmployeeMapper;
 import com.caseflow.mapper.WorkLogMapper;
 import com.caseflow.security.AuthContext;
@@ -40,6 +43,8 @@ public class WorkLogService {
     private WorkLogMapper workLogMapper;
     @Resource
     private OrgEmployeeMapper employeeMapper;
+    @Resource
+    private CaseInfoMapper caseInfoMapper;
     @Resource
     private LogService logService;
 
@@ -98,11 +103,69 @@ public class WorkLogService {
         w.setCaseName(caseName);
         w.setCreatedAt(LocalDateTime.now());
         w.setUpdatedAt(w.getCreatedAt());
+        w.setSource("MANUAL");
         workLogMapper.insert(w);
 
         logService.log("WORKLOG", "WORKLOG_ADD", "EMPLOYEE", targetEmp,
                 "记录工作：" + abbrev(w.getContent()), null, null);
         return w;
+    }
+
+    /**
+     * 案件相关操作自动派生工作记录（2026-11-13）：由 {@code LogService.write} 在每次
+     * 写操作落库后调用，把民警对案件的「办案行为」自动记入工作记录本，与手动记录并列。
+     *
+     * <p><b>只记录「办案民警」的实际办案行为</b>，过滤规则：
+     * <ul>
+     *   <li>必须是案件本体操作（module=CASE 且 targetType=CASE 且 targetId 非空）；</li>
+     *   <li>操作人必须已绑定员工档案（employeeId 非空）——工作记录本挂在员工档案上，
+     *       没绑档案的账号（如纯管理员）不产生自动记录；</li>
+     *   <li>跳过「撤回」类动作（UNDO）——撤回是纠正，不是办案行为；</li>
+     *   <li>登录/员工/附件等非案件模块不在此列。</li>
+     * </ul>
+     *
+     * <p>失败绝不影响主流程（与信箱通知派生同一原则）：此处 try/catch 吞掉异常，
+     * 只在日志里告警，绝不让一次写操作因工作记录派生失败而回滚。
+     */
+    public void onCaseOperation(OperationLog log) {
+        try {
+            if (log == null || !"CASE".equals(log.getModule())
+                    || !"CASE".equals(log.getTargetType()) || log.getTargetId() == null) {
+                return;
+            }
+            if ("UNDO".equals(log.getAction())) {
+                return;
+            }
+            CurrentUser u = AuthContext.get();
+            if (u == null || u.getEmployeeId() == null) {
+                return;
+            }
+            // 内容：操作日志的 content 本身就是精心写的可读描述（如「待办反馈：123 → 已联系…」），
+            // 直接复用即可；content 为空时用动作中文名兜底，避免拼出「提交工作反馈：待办反馈」这类重复。
+            String body = log.getContent() == null ? "" : log.getContent().trim();
+            String actionName = OperationLogService.actionName(log.getModule(), log.getAction());
+            String content = StringUtils.hasText(body) ? body : actionName;
+            content = content.length() > 1000 ? content.substring(0, 1000) : content;
+
+            OrgEmployee emp = employeeMapper.selectById(u.getEmployeeId());
+            CaseInfo c = caseInfoMapper.selectById(log.getTargetId());
+
+            WorkLog w = new WorkLog();
+            w.setEmployeeId(u.getEmployeeId());
+            w.setEmployeeName(emp != null ? emp.getName() : u.getDisplayName());
+            w.setCreatorId(u.getUserId());
+            w.setContent(content);
+            w.setCaseId(log.getTargetId());
+            w.setCaseName(c != null ? c.getName() : null);
+            w.setCreatedAt(LocalDateTime.now());
+            w.setUpdatedAt(w.getCreatedAt());
+            w.setSource("AUTO");
+            w.setLogId(log.getId());
+            workLogMapper.insert(w);
+        } catch (Exception e) {
+            org.slf4j.LoggerFactory.getLogger(WorkLogService.class)
+                    .warn("[WorkLog] 案件操作自动记录派生失败（不影响业务）：{}", e.getMessage());
+        }
     }
 
     /**

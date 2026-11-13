@@ -5,6 +5,7 @@
         <span>工作记录本</span>
         <span class="cf-panel__head-tip">
           {{ canViewAll ? '可检索查看任意民警的工作记录' : '记录自己每天做了什么，仅本人可见' }}
+          · 办案操作自动记入，手动记录可自行补充
         </span>
         <div class="cf-panel__head-actions">
           <el-button type="primary" @click="openAdd">新增记录</el-button>
@@ -51,6 +52,12 @@
           <el-table-column v-if="canViewAll" prop="employeeName" label="民警" width="120">
             <template #default="{ row }">{{ row.employeeName || '—' }}</template>
           </el-table-column>
+          <el-table-column label="来源" width="80">
+            <template #default="{ row }">
+              <el-tag v-if="row.source === 'AUTO'" size="small" type="success" effect="plain">自动</el-tag>
+              <el-tag v-else size="small" type="info" effect="plain">手动</el-tag>
+            </template>
+          </el-table-column>
           <el-table-column label="工作内容" min-width="320">
             <template #default="{ row }">
               <span class="cf-wlog-content">{{ row.content }}</span>
@@ -72,8 +79,14 @@
           </el-table-column>
           <el-table-column label="操作" width="120" align="right">
             <template #default="{ row }">
-              <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
-              <el-button link type="danger" @click="onRemove(row)">删除</el-button>
+              <!-- 自动记录是系统派生的办案留痕，不可手动编辑/删除 -->
+              <template v-if="row.source === 'AUTO'">
+                <span class="cf-muted" style="font-size: 12px">系统记录</span>
+              </template>
+              <template v-else>
+                <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
+                <el-button link type="danger" @click="onRemove(row)">删除</el-button>
+              </template>
             </template>
           </el-table-column>
         </el-table>

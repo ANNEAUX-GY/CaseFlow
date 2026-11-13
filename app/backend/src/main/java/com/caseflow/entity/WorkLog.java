@@ -38,4 +38,8 @@ public class WorkLog implements Serializable {
     private LocalDateTime createdAt;
     /** 最后修改时间 */
     private LocalDateTime updatedAt;
+    /** 来源（2026-11-13）：MANUAL 手动记录 / AUTO 自动记录（操作留痕派生）。NULL 视为 MANUAL */
+    private String source;
+    /** 关联操作日志 ID（自动记录的溯源，手动记录为 NULL） */
+    private Long logId;
 }
