@@ -214,6 +214,7 @@ public class CaseService {
     /**
      * 把大类中文关键词翻译成 caseType 英文码。
      * 支持别名：刑事→CRIMINAL、行政→ADMINISTRATIVE、未立案/初查→PRELIMINARY。
+     * 「其他」→ OTHER（非刑事/非行政的兜底大类）。
      * 其余返回 null（不是大类名，走普通模糊搜）。
      */
     private String caseTypeCodeOf(String kw) {
@@ -221,6 +222,7 @@ public class CaseService {
         if (kw.contains("刑事")) return "CRIMINAL";
         if (kw.contains("行政")) return "ADMINISTRATIVE";
         if (kw.contains("未立案") || kw.contains("初查")) return "PRELIMINARY";
+        if (kw.contains("其他")) return "OTHER";
         return null;
     }
 
@@ -230,19 +232,25 @@ public class CaseService {
 
         if (StringUtils.hasText(query.getKeyword())) {
             String kw = query.getKeyword().trim();
-            // 大类中文名（刑事/行政/未立案/初查）也要能搜到：caseType 存的是英文码，
-            // 先把它翻译成码做精确匹配，否则搜「刑事」会落空。
+            // 分类检索（2026-11-13）：用户输入大类名（刑事/行政/未立案/初查/其他）时，
+            // 按案件归属类型精确过滤，列出该类全部案件；而不是拿「刑事」去模糊匹配案件名。
             String typeCode = caseTypeCodeOf(kw);
-            q.and(w -> {
-                w.like(CaseInfo::getName, kw)
+            if ("OTHER".equals(typeCode)) {
+                // 「其他」= 非刑事、非行政的兜底大类（未立案/民事/未分类等）
+                q.and(w -> w.notIn(CaseInfo::getCaseType, "CRIMINAL", "ADMINISTRATIVE")
+                        .or().isNull(CaseInfo::getCaseType));
+            } else if (typeCode != null) {
+                q.eq(CaseInfo::getCaseType, typeCode);
+            } else {
+                // 非大类名：案件名/编号/小类（案由）/受案号/描述 模糊搜。
+                // 小类（诈骗、盗窃、殴打他人、其他……）就靠这里 like(category) 命中，
+                // 属于「按归属小类过滤」而非「按案件名匹配」。
+                q.and(w -> w.like(CaseInfo::getName, kw)
                         .or().like(CaseInfo::getCaseNo, kw)
                         .or().like(CaseInfo::getCategory, kw)
                         .or().like(CaseInfo::getFilingNo, kw)
-                        .or().like(CaseInfo::getDescription, kw);
-                if (typeCode != null) {
-                    w.or().eq(CaseInfo::getCaseType, typeCode);
-                }
-            });
+                        .or().like(CaseInfo::getDescription, kw));
+            }
         }
         if (StringUtils.hasText(query.getStatus())) {
             if ("OPEN".equals(query.getStatus())) {
