@@ -192,7 +192,7 @@
               </el-button>
             </div>
 
-            <div v-if="dlg.form.newEmployee" class="cf-bind__new">
+            <div v-if="dlg.form.newEmployee && !dlg.newEmpOpen" class="cf-bind__new">
               <el-tag type="warning" size="small" effect="plain">待新建</el-tag>
               <span class="cf-bind__new-name">
                 {{ dlg.form.newEmployee.name }}
@@ -201,6 +201,7 @@
                   <template v-if="dlg.form.newEmployee.title"> · {{ dlg.form.newEmployee.title }}</template>
                 </span>
               </span>
+              <el-button link type="primary" @click="editNewEmployee">编辑</el-button>
               <el-button link type="danger" @click="dlg.form.newEmployee = null">取消</el-button>
             </div>
 
@@ -429,6 +430,18 @@ onMounted(async () => {
 
 const TITLES = ['所长', '副所长', '队长', '法制员', '案管', '研判员', '普通民警', '系统管理员']
 
+/** 职务（中文）→ 角色 code，用于建档时把职务反向回填到账号角色 */
+const TITLE_TO_ROLE = {
+  '所长': 'CHIEF',
+  '副所长': 'DEPUTY_CHIEF',
+  '队长': 'CAPTAIN',
+  '法制员': 'LAW_OFFICER',
+  '案管': 'CASE_MANAGER',
+  '研判员': 'JUDGE',
+  '普通民警': 'STAFF',
+  '系统管理员': 'BOSS'
+}
+
 /* ---------- 通过 / 编辑 / 新建 ---------- */
 const dlg = reactive({
   visible: false,
@@ -496,6 +509,19 @@ const toggleNewEmployee = () => {
   }
 }
 
+/** 编辑已建立的「待新建」档案：把当前值回填进就地表单重新改 */
+const editNewEmployee = () => {
+  const n = dlg.form.newEmployee
+  if (!n) return
+  dlg.newEmp = {
+    name: n.name || '',
+    dept: n.dept || '',
+    title: n.title || '',
+    policeSystemNo: n.policeSystemNo || ''
+  }
+  dlg.newEmpOpen = true
+}
+
 const saveNewEmployee = () => {
   const name = (dlg.newEmp.name || '').trim()
   if (!name) {
@@ -508,6 +534,13 @@ const saveNewEmployee = () => {
     dept: (dlg.newEmp.dept || '').trim() || null,
     title: dlg.newEmp.title || null,
     policeSystemNo: (dlg.newEmp.policeSystemNo || '').trim() || null
+  }
+  // 反向回填：建档里填的姓名/部门/职务同步到账号本身，两处保持一致
+  if (!dlg.form.displayName) dlg.form.displayName = name
+  if (!dlg.form.dept && dlg.form.newEmployee.dept) dlg.form.dept = dlg.form.newEmployee.dept
+  if (dlg.form.newEmployee.title) {
+    const roleCode = TITLE_TO_ROLE[dlg.form.newEmployee.title]
+    if (roleCode && roles.value[roleCode]) dlg.form.role = roleCode
   }
   dlg.newEmpOpen = false
 }

@@ -120,7 +120,8 @@
               </el-button>
             </div>
 
-            <!-- 现场建档的预览：提交注册时和后端一起创建，不会留下没人用的孤儿档案 -->
+            <!-- 现场建档的预览：提交注册时和后端一起创建，不会留下没人用的孤儿档案。
+                 点「编辑」可重新展开修改，不是一确定就锁死。 -->
             <div v-if="form.newEmployee" class="cf-bind__new">
               <el-tag type="warning" size="small" effect="plain">待新建</el-tag>
               <span class="cf-bind__new-name">
@@ -130,6 +131,7 @@
                   <template v-if="form.newEmployee.title"> · {{ form.newEmployee.title }}</template>
                 </span>
               </span>
+              <el-button link type="primary" @click="editNewEmployee">编辑</el-button>
               <el-button link type="danger" @click="form.newEmployee = null">取消</el-button>
             </div>
           </div>
@@ -232,6 +234,18 @@ const roles = ref({})
 
 const TITLES = ['所长', '副所长', '队长', '法制员', '案管', '研判员', '普通民警', '系统管理员']
 
+/** 职务（中文）→ 角色 code 的精确映射，用于建档时把职务反向回填到账号角色 */
+const TITLE_TO_ROLE = {
+  '所长': 'CHIEF',
+  '副所长': 'DEPUTY_CHIEF',
+  '队长': 'CAPTAIN',
+  '法制员': 'LAW_OFFICER',
+  '案管': 'CASE_MANAGER',
+  '研判员': 'JUDGE',
+  '普通民警': 'STAFF',
+  '系统管理员': 'BOSS'
+}
+
 const form = reactive({
   username: '',
   password: '',
@@ -295,9 +309,25 @@ const openNewEmployee = () => {
     name: (form.displayName || '').trim(),
     policeSystemNo: '',
     dept: (form.dept || '').trim(),
-    title: '普通民警',
+    title: roles.value[form.applyRole] || '普通民警',
     parentId: null,
     phone: (form.phone || '').trim()
+  }
+  empDlg.visible = true
+  if (!parentOptions.value.length) searchParent('')
+}
+
+/** 编辑已建立的「待新建」档案：把当前值回填进弹窗重新改 */
+const editNewEmployee = () => {
+  const n = form.newEmployee
+  if (!n) return
+  empDlg.form = {
+    name: n.name || '',
+    policeSystemNo: n.policeSystemNo || '',
+    dept: n.dept || '',
+    title: n.title || '',
+    parentId: n.parentId || null,
+    phone: n.phone || ''
   }
   empDlg.visible = true
   if (!parentOptions.value.length) searchParent('')
@@ -318,9 +348,13 @@ const saveNewEmployee = () => {
     parentId: empDlg.form.parentId || null,
     phone: (empDlg.form.phone || '').trim() || null
   }
-  // 建档里填的姓名/部门回填到账号本身，两处保持一致
+  // 反向回填：建档里填的姓名/部门/职务同步到账号本身，两处保持一致
   if (!form.displayName) form.displayName = name
   if (!form.dept && form.newEmployee.dept) form.dept = form.newEmployee.dept
+  if (form.newEmployee.title) {
+    const roleCode = TITLE_TO_ROLE[form.newEmployee.title]
+    if (roleCode && roles.value[roleCode]) form.applyRole = roleCode
+  }
   empDlg.visible = false
 }
 
