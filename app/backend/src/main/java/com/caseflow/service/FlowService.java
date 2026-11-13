@@ -297,6 +297,32 @@ public class FlowService {
         return list.isEmpty() ? null : list.get(0);
     }
 
+    /**
+     * 本案最近一条「可异议/可撤回」的自动变更留痕（result=AUTO 或 DISPUTE）。
+     * 前端据此渲染「提异议 / 撤回」按钮。
+     */
+    public com.caseflow.entity.CaseApproval latestAutoFlowOf(Long caseId) {
+        List<com.caseflow.entity.CaseApproval> list = approvalMapper.selectList(
+                new LambdaQueryWrapper<com.caseflow.entity.CaseApproval>()
+                        .eq(com.caseflow.entity.CaseApproval::getCaseId, caseId)
+                        .eq(com.caseflow.entity.CaseApproval::getApproveType, "FLOW")
+                        .in(com.caseflow.entity.CaseApproval::getResult, "AUTO", "DISPUTE")
+                        .orderByDesc(com.caseflow.entity.CaseApproval::getId));
+        return list.isEmpty() ? null : list.get(0);
+    }
+
+    /** 全局限的待审批自动变更异议（工作台用） */
+    public List<com.caseflow.entity.CaseApproval> pendingDisputes(Long caseId) {
+        LambdaQueryWrapper<com.caseflow.entity.CaseApproval> q = new LambdaQueryWrapper<com.caseflow.entity.CaseApproval>()
+                .eq(com.caseflow.entity.CaseApproval::getApproveType, "FLOW")
+                .eq(com.caseflow.entity.CaseApproval::getResult, "DISPUTE")
+                .orderByAsc(com.caseflow.entity.CaseApproval::getAppliedAt);
+        if (caseId != null) {
+            q.eq(com.caseflow.entity.CaseApproval::getCaseId, caseId);
+        }
+        return approvalMapper.selectList(q);
+    }
+
     /** 待审批的状态变更申请列表（带案件名与阶段中文名，工作台审批面板直接用） */
     public List<com.caseflow.vo.FlowApprovalVO> pendingFlowApprovalVOs(Long caseId) {
         LambdaQueryWrapper<com.caseflow.entity.CaseApproval> q = new LambdaQueryWrapper<com.caseflow.entity.CaseApproval>()
@@ -453,6 +479,107 @@ public class FlowService {
         opinionService.add(caseId, "【阶段退回】" + comment.trim(), null, "A");
         logService.log("CASE", "FLOW_RETURN", "CASE", caseId,
                 "阶段退回（" + CaseFlowTemplate.stageLabel(stage) + "）：" + abbrev(comment));
+    }
+
+    // ------------------------------------------------------------------
+    // 自动变更的异议与撤回（2026-11-13）
+    // ------------------------------------------------------------------
+
+    /**
+     * 承办人对「自动变更阶段」提异议。
+     *
+     * <p>针对 {@code result=AUTO} 的 FLOW 留痕：承办人认为自动转段不合理（例如措施
+     * 有误、应转取保却转成了刑拘），提一条异议，把该留痕置为 {@code DISPUTE}，
+     * 等领导审批。异议必填理由，且只能由本案现职承办人提出。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void disputeAutoFlow(Long approvalId, String comment) {
+        com.caseflow.entity.CaseApproval a = approvalMapper.selectById(approvalId);
+        if (a == null || !"FLOW".equals(a.getApproveType()) || !"AUTO".equals(a.getResult())) {
+            throw new BizException("该记录不是可异议的自动变更");
+        }
+        if (!StringUtils.hasText(comment)) {
+            throw new BizException("异议必须填写理由");
+        }
+        CaseInfo c = requireCase(a.getCaseId());
+        if (!AuthContext.isFullAccess()) {
+            requireActiveHandler(c);
+        }
+        a.setResult("DISPUTE");
+        a.setComment("【异议】" + comment.trim());
+        a.setApplicantId(AuthContext.userId());
+        a.setApplicantName(AuthContext.userName());
+        a.setAppliedAt(java.time.LocalDateTime.now());
+        approvalMapper.updateById(a);
+        logService.log("CASE", "FLOW_DISPUTE", "CASE", c.getId(),
+                "对自动变更提异议：" + CaseFlowTemplate.actionLabel(a.getFlowAction())
+                        + "（理由：" + abbrev(comment) + "）");
+    }
+
+    /**
+     * 领导审批「自动变更异议」（同意退回 / 不同意退回）。
+     *
+     * <p>同意退回：把阶段回退到变更前的 {@code from_stage}；
+     * 不同意：维持当前阶段。两种都留审批意见。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void reviewDispute(Long approvalId, boolean approve, String comment) {
+        if (!AuthContext.isFullAccess()) {
+            throw new BizException(403, "审批异议需管理层权限");
+        }
+        com.caseflow.entity.CaseApproval a = approvalMapper.selectById(approvalId);
+        if (a == null || !"FLOW".equals(a.getApproveType()) || !"DISPUTE".equals(a.getResult())) {
+            throw new BizException("该记录不是待审批的异议");
+        }
+        if (approve && !StringUtils.hasText(comment)) {
+            throw new BizException("同意退回须填写退回意见");
+        }
+        CaseInfo c = requireCase(a.getCaseId());
+        a.setResult(approve ? "RETURNED" : "REJECTED");
+        a.setApproverId(AuthContext.userId());
+        a.setApproverName(AuthContext.userName());
+        a.setComment(approve ? ("同意退回：" + comment.trim()) : ("不同意退回" + (StringUtils.hasText(comment) ? "：" + comment.trim() : "")));
+        approvalMapper.updateById(a);
+        if (approve && StringUtils.hasText(a.getFromStage())
+                && !a.getFromStage().equals(stageOf(c))) {
+            c.setFlowStage(a.getFromStage());
+            caseMapper.updateById(c);
+        }
+        logService.log("CASE", "FLOW_DISPUTE_REVIEW", "CASE", c.getId(),
+                (approve ? "同意退回异议" : "不同意退回异议")
+                        + "：" + CaseFlowTemplate.actionLabel(a.getFlowAction())
+                        + " → " + CaseFlowTemplate.stageLabel(a.getFromStage()));
+    }
+
+    /**
+     * 领导直接撤回「自动变更」，把阶段回退到变更前。
+     *
+     * <p>不需要民警异议，领导不认可这次自动变更即可直接撤回。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void withdrawAutoFlow(Long approvalId, String comment) {
+        if (!AuthContext.isFullAccess()) {
+            throw new BizException(403, "撤回自动变更需管理层权限");
+        }
+        com.caseflow.entity.CaseApproval a = approvalMapper.selectById(approvalId);
+        if (a == null || !"FLOW".equals(a.getApproveType())
+                || !("AUTO".equals(a.getResult()) || "DISPUTE".equals(a.getResult()))) {
+            throw new BizException("该记录不是可撤回的自动变更");
+        }
+        CaseInfo c = requireCase(a.getCaseId());
+        String from = a.getFromStage();
+        if (StringUtils.hasText(from) && !from.equals(stageOf(c))) {
+            c.setFlowStage(from);
+            caseMapper.updateById(c);
+        }
+        a.setResult("WITHDRAWN");
+        a.setApproverId(AuthContext.userId());
+        a.setApproverName(AuthContext.userName());
+        a.setComment("撤回自动变更" + (StringUtils.hasText(comment) ? "：" + comment.trim() : ""));
+        approvalMapper.updateById(a);
+        logService.log("CASE", "FLOW_WITHDRAW", "CASE", c.getId(),
+                "撤回自动变更：" + CaseFlowTemplate.actionLabel(a.getFlowAction())
+                        + " → " + CaseFlowTemplate.stageLabel(from));
     }
 
     /** 日志里的意见摘要：超长截断，避免整段退回意见挤占「案件最新一步」。 */

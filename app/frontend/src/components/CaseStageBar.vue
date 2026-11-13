@@ -57,6 +57,19 @@
         待办已办完
       </el-tag>
       <span v-else-if="finished" class="cf-muted" style="font-size: 12px">{{ isFullAccess ? '待领导确认转入' : '待领导确认流转' }}</span>
+
+      <!-- 自动变更的异议/撤回（2026-11-13）：执行措施后自动转段产生的留痕，
+           承办人可提异议，领导可直接撤回或审批异议 -->
+      <template v-if="autoFlow.has">
+        <el-tag v-if="autoFlow.result === 'AUTO'" size="small" type="info" effect="plain">已自动变更</el-tag>
+        <el-tag v-else-if="autoFlow.result === 'DISPUTE'" size="small" type="warning" effect="plain">异议待审批</el-tag>
+        <el-button v-if="autoFlow.result === 'AUTO' && !isFullAccess" size="small" type="warning" plain
+          @click="openDispute">对自动变更提异议</el-button>
+        <el-button v-if="autoFlow.result === 'AUTO' && isFullAccess" size="small" type="danger" plain
+          @click="openWithdraw">撤回变更</el-button>
+        <el-button v-if="autoFlow.result === 'DISPUTE' && isFullAccess" size="small" type="primary" plain
+          @click="openDisputeReview">审批异议</el-button>
+      </template>
     </div>
 
     <!-- 流转确认：说清"这一步会改什么"，不让人稀里糊涂点下去 -->
@@ -92,6 +105,50 @@
           @click="doReturn">确认退回</el-button>
       </template>
     </el-dialog>
+
+    <!-- 对自动变更提异议（2026-11-13）：承办人认为自动转段不合理 -->
+    <el-dialog v-model="dispute.visible" title="对自动变更提异议" width="460px" append-to-body>
+      <p class="cf-muted" style="margin: 0 0 10px; font-size: 13px; line-height: 1.7">
+        该案件因执行「{{ autoFlow.flowActionName }}」已自动变更阶段。<br />
+        如认为变更不合理，请填写异议理由，案管/领导审批同意后可退回。
+      </p>
+      <el-input v-model="dispute.comment" type="textarea" :rows="4" maxlength="300" show-word-limit
+        placeholder="请填写异议理由（必填）" />
+      <template #footer>
+        <el-button @click="dispute.visible = false">取消</el-button>
+        <el-button type="warning" :loading="dispute.loading" :disabled="!dispute.comment.trim()"
+          @click="doDispute">提交异议</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 撤回自动变更（2026-11-13）：领导直接撤回，回到变更前阶段 -->
+    <el-dialog v-model="withdraw.visible" title="撤回自动变更" width="460px" append-to-body>
+      <p class="cf-muted" style="margin: 0 0 10px; font-size: 13px; line-height: 1.7">
+        将案件阶段回退到变更前的「{{ autoFlow.fromStageName }}」。<br />
+        强制措施本身不会回退（已执行的事实保留），仅阶段归类回到变更前。
+      </p>
+      <el-input v-model="withdraw.comment" type="textarea" :rows="3" maxlength="200"
+        placeholder="撤回原因（选填）" />
+      <template #footer>
+        <el-button @click="withdraw.visible = false">取消</el-button>
+        <el-button type="danger" :loading="withdraw.loading" @click="doWithdraw">确认撤回</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 审批异议（2026-11-13）：领导同意退回 / 不同意退回 -->
+    <el-dialog v-model="disputeReview.visible" title="审批自动变更异议" width="480px" append-to-body>
+      <p class="cf-muted" style="margin: 0 0 10px; font-size: 13px; line-height: 1.7">
+        承办人异议理由：{{ autoFlow.comment || '—' }}
+      </p>
+      <el-input v-model="disputeReview.comment" type="textarea" :rows="3" maxlength="300"
+        placeholder="审批意见（同意退回时必填）" />
+      <template #footer>
+        <el-button @click="disputeReview.visible = false">取消</el-button>
+        <el-button :loading="disputeReview.loading" @click="doDisputeReview(false)">不同意退回</el-button>
+        <el-button type="danger" :loading="disputeReview.loading" :disabled="!disputeReview.comment.trim()"
+          @click="doDisputeReview(true)">同意退回</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -123,6 +180,7 @@ const isFullAccess = computed(() => userStore.isFullAccess)
 const flow = ref({})
 const loading = ref(false)
 const flowPending = ref(false)
+const autoFlow = ref({ has: false, approvalId: null, result: '', flowActionName: '', fromStageName: '', comment: '' })
 
 const done = computed(() => flow.value.progress?.done || 0)
 const total = computed(() => flow.value.progress?.total || 0)
@@ -143,6 +201,7 @@ const load = async () => {
   try {
     flow.value = await watchApi.flow(props.caseId)
     await loadFlowPending()
+    await loadAutoFlow()
   } catch (e) {
     flow.value = {}
   } finally {
@@ -157,6 +216,16 @@ const loadFlowPending = async () => {
     flowPending.value = !!(res.data && res.data.pending)
   } catch (e) {
     flowPending.value = false
+  }
+}
+
+/** 本案最近一条可异议/可撤回的自动变更 */
+const loadAutoFlow = async () => {
+  try {
+    const res = await watchApi.flowAuto(props.caseId)
+    autoFlow.value = res.data || { has: false }
+  } catch (e) {
+    autoFlow.value = { has: false }
   }
 }
 
@@ -218,6 +287,74 @@ const doReturn = async () => {
     emit('changed')
   } catch (e) { /* 拦截器已提示 */ } finally {
     ret.loading = false
+  }
+}
+
+// ---- 自动变更的异议/撤回（2026-11-13）----
+const dispute = reactive({ visible: false, loading: false, comment: '' })
+const withdraw = reactive({ visible: false, loading: false, comment: '' })
+const disputeReview = reactive({ visible: false, loading: false, comment: '' })
+
+const openDispute = () => {
+  dispute.comment = ''
+  dispute.visible = true
+}
+const doDispute = async () => {
+  const comment = dispute.comment.trim()
+  if (!comment) {
+    ElMessage.warning('请填写异议理由')
+    return
+  }
+  dispute.loading = true
+  try {
+    await watchApi.disputeFlow(autoFlow.value.approvalId, comment)
+    ElMessage.success('异议已提交，待案管/领导审批')
+    dispute.visible = false
+    await load()
+    emit('changed')
+  } catch (e) { /* 拦截器已提示 */ } finally {
+    dispute.loading = false
+  }
+}
+
+const openWithdraw = () => {
+  withdraw.comment = ''
+  withdraw.visible = true
+}
+const doWithdraw = async () => {
+  withdraw.loading = true
+  try {
+    await watchApi.withdrawFlow(autoFlow.value.approvalId, withdraw.comment.trim())
+    ElMessage.success('已撤回变更，阶段已回退')
+    withdraw.visible = false
+    await load()
+    emit('changed')
+  } catch (e) { /* 拦截器已提示 */ } finally {
+    withdraw.loading = false
+  }
+}
+
+const openDisputeReview = () => {
+  disputeReview.comment = ''
+  disputeReview.visible = true
+}
+const doDisputeReview = async (approve) => {
+  if (approve && !disputeReview.comment.trim()) {
+    ElMessage.warning('同意退回须填写退回意见')
+    return
+  }
+  disputeReview.loading = true
+  try {
+    await watchApi.reviewDispute(autoFlow.value.approvalId, {
+      approve,
+      comment: disputeReview.comment.trim()
+    })
+    ElMessage.success(approve ? '已同意退回，阶段已回退' : '已驳回异议，维持现状')
+    disputeReview.visible = false
+    await load()
+    emit('changed')
+  } catch (e) { /* 拦截器已提示 */ } finally {
+    disputeReview.loading = false
   }
 }
 

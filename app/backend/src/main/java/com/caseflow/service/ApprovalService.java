@@ -52,6 +52,8 @@ public class ApprovalService {
     private CaseSnapshotService snapshotService;
     @Resource
     private LogService logService;
+    @Resource
+    private SystemConfigService configService;
 
     public List<CaseApproval> approvalsOf(Long caseId) {
         return approvalMapper.selectList(new LambdaQueryWrapper<CaseApproval>()
@@ -211,6 +213,8 @@ public class ApprovalService {
                 : measureDate != null ? measureDate
                 : sameMeasure && c.getMeasureDate() != null ? c.getMeasureDate() : LocalDateTime.now();
         boolean newEpisode = !sameMeasure || !base.equals(c.getMeasureDate());
+        // 措施触发的目标阶段：拘留/逮捕 → 刑拘在办；取保/监视居住 → 取保及监居。
+        String targetStage = flowTargetStageOf(c, measure);
         boolean custodyExecuted = "CRIMINAL".equals(c.getCaseType())
                 && ("DETENTION".equals(measure) || "ARREST".equals(measure));
         if (custodyExecuted && newEpisode
@@ -222,7 +226,15 @@ public class ApprovalService {
             if (measureDate == null) throw new BizException("执行拘捕须填写实际措施日期");
             if (base.toLocalDate().isBefore(deadlineState.getFilingAt().toLocalDate()))
                 throw new BizException("拘捕执行时间不能早于立案时间");
-            c.setFlowStage(com.caseflow.flow.CaseFlowTemplate.STAGE_DETAIN);
+        }
+        // 阶段变更模式（2026-11-13）：措施落地后，按全局开关决定自动转段还是生成待确认。
+        // 手动模式下不在这里改 flow_stage，改由「待管理用户确认变更」审批通过后落地。
+        if (targetStage != null && newEpisode
+                && !targetStage.equals(c.getFlowStage())
+                && configService.autoFlowEnabled()) {
+            c.setFlowStage(targetStage);
+            // 自动变更留痕：记一条可异议的 FLOW 审批（result=AUTO），供民警异议退回/领导撤回。
+            recordAutoFlow(c, targetStage, measure);
         }
         // 换措施或重新确定措施起算日时，只清理本期措施记录。
         // 受案、立案及行政延期属于案件本身，不能随措施变更被删除。
@@ -269,6 +281,15 @@ public class ApprovalService {
                         + (StringUtils.hasText(applyComment) ? "；" + applyComment : "")
                         + (StringUtils.hasText(approvalComment) ? "；审批意见：" + approvalComment : ""));
 
+        // 手动确认模式（2026-11-13）：措施已落地但阶段不变，生成一条
+        // 「待管理用户确认变更阶段」的 FLOW 审批，落到待办总览/工作台。
+        if (targetStage != null && newEpisode
+                && !targetStage.equals(c.getFlowStage())
+                && configService.manualFlowEnabled()
+                && !configService.autoFlowEnabled()) {
+            recordManualPending(c, targetStage, measure);
+        }
+
         logService.log("CASE", "MEASURE", "CASE", caseId,
                 "强制措施：" + (DictHolder.name("CASE_MEASURE", c.getCaseMeasure()) == null ? "无"
                         : DictHolder.name("CASE_MEASURE", c.getCaseMeasure()))
@@ -278,10 +299,75 @@ public class ApprovalService {
     }
 
     /**
-     * 审批措施变更申请（领导专属）：同意则落地措施，退回则维持原措施并留意见。
-     *
-     * @return 审批后的案件（退回时是未变更的案件）
+     * 措施对应的目标阶段（仅刑事、且措施会引发阶段跃迁时返回非空）。
+     * 拘留/逮捕 → 刑拘在办；取保/监视居住 → 取保及监居；其余（含行政、无措施）→ null。
      */
+    private String flowTargetStageOf(CaseInfo c, String measure) {
+        if (c == null || !"CRIMINAL".equals(c.getCaseType())) {
+            return null;
+        }
+        if ("DETENTION".equals(measure) || "ARREST".equals(measure)) {
+            return com.caseflow.flow.CaseFlowTemplate.STAGE_DETAIN;
+        }
+        if ("BAIL".equals(measure) || "RESIDENCE".equals(measure)) {
+            return com.caseflow.flow.CaseFlowTemplate.STAGE_BAIL;
+        }
+        return null;
+    }
+
+    /**
+     * 自动变更留痕（AUTO 模式）：记一条 result=AUTO 的 FLOW 审批，
+     * 供民警提异议（退回申请）或领导直接撤回。不复用 PENDING，避免与承办人
+     * 手动申请的待审批混淆。
+     */
+    private void recordAutoFlow(CaseInfo c, String targetStage, String measure) {
+        String action = ("BAIL".equals(measure) || "RESIDENCE".equals(measure)) ? "BAIL" : "DETAIN";
+        CaseApproval a = new CaseApproval();
+        a.setCaseId(c.getId());
+        a.setApproveType("FLOW");
+        a.setResult("AUTO");
+        a.setFlowAction(action);
+        a.setFromStage(stageOfFlow(c));
+        a.setComment("执行强制措施后自动变更：" + DictHolder.name("CASE_MEASURE", measure));
+        a.setApproverId(AuthContext.userId());
+        a.setApproverName(AuthContext.userName());
+        a.setCreatedAt(LocalDateTime.now());
+        approvalMapper.insert(a);
+    }
+
+    /**
+     * 手动确认模式（MANUAL）：生成一条待管理用户确认的 FLOW 审批（result=PENDING），
+     * 审批同意后由 reviewTransfer 落地转段；退回则维持原阶段。
+     */
+    private void recordManualPending(CaseInfo c, String targetStage, String measure) {
+        String action = ("BAIL".equals(measure) || "RESIDENCE".equals(measure)) ? "BAIL" : "DETAIN";
+        // 已有待审批的流转申请则不再重复生成
+        Long pending = approvalMapper.selectCount(new LambdaQueryWrapper<CaseApproval>()
+                .eq(CaseApproval::getCaseId, c.getId())
+                .eq(CaseApproval::getApproveType, "FLOW")
+                .eq(CaseApproval::getResult, "PENDING"));
+        if (pending != null && pending > 0) {
+            return;
+        }
+        CaseApproval a = new CaseApproval();
+        a.setCaseId(c.getId());
+        a.setApproveType("FLOW");
+        a.setResult("PENDING");
+        a.setFlowAction(action);
+        a.setFromStage(stageOfFlow(c));
+        a.setComment("已执行强制措施「" + DictHolder.name("CASE_MEASURE", measure) + "」，待确认变更阶段");
+        a.setApplicantId(AuthContext.userId());
+        a.setApplicantName(AuthContext.userName());
+        a.setAppliedAt(LocalDateTime.now());
+        a.setCreatedAt(a.getAppliedAt());
+        approvalMapper.insert(a);
+    }
+
+    /** 阶段归位：NULL 按初查（与 FlowService.stageOf 口径一致） */
+    private String stageOfFlow(CaseInfo c) {
+        String s = c == null ? null : c.getFlowStage();
+        return StringUtils.hasText(s) ? s : com.caseflow.flow.CaseFlowTemplate.STAGE_INITIAL;
+    }
     @Transactional(rollbackFor = Exception.class)
     public CaseInfo reviewMeasure(Long approvalId, boolean approve, String comment) {
         if (!AuthContext.isFullAccess()) {

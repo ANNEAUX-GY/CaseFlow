@@ -13,6 +13,19 @@
       </div>
 
       <div class="cf-panel__body">
+        <!-- 案件阶段变更模式（2026-11-13）：全局开关，管理层设置 -->
+        <div style="display: flex; align-items: center; gap: 10px; padding: 10px 0; margin-bottom: 12px; border-bottom: 1px dashed var(--cf-border, #e4e7ed)">
+          <span style="font-weight: 600; font-size: 13px; color: var(--cf-text, #303133)">案件阶段变更模式</span>
+          <el-radio-group v-model="flowMode" size="small" @change="onFlowModeChange" :disabled="flowModeSaving">
+            <el-radio-button value="AUTO">自动变更</el-radio-button>
+            <el-radio-button value="MANUAL">手动确认</el-radio-button>
+            <el-radio-button value="BOTH">两套都要</el-radio-button>
+          </el-radio-group>
+          <span class="cf-muted" style="font-size: 12px; margin-left: 10px">
+            执行刑拘/取保措施后：自动变更阶段、或提示手动确认
+          </span>
+        </div>
+
         <div class="cf-toolbar" style="margin-bottom: 12px">
           <el-radio-group v-model="tab" @change="load">
             <el-radio-button value="pending">
@@ -298,7 +311,7 @@
 <script setup>
 import { computed, reactive, ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { authApi, userApi, employeeApi } from '../api'
+import { authApi, userApi, employeeApi, systemConfigApi } from '../api'
 import { useUserStore } from '../store/user'
 import { usePendingStore } from '../store/pending'
 
@@ -342,6 +355,30 @@ const load = async () => {
   }
 }
 
+// ---- 案件阶段变更模式（2026-11-13）----
+const flowMode = ref('MANUAL')
+const flowModeSaving = ref(false)
+const loadFlowMode = async () => {
+  try {
+    const r = await systemConfigApi.flowChangeMode()
+    flowMode.value = r?.mode || 'MANUAL'
+  } catch (e) {
+    flowMode.value = 'MANUAL'
+  }
+}
+const onFlowModeChange = async (mode) => {
+  flowModeSaving.value = true
+  try {
+    await systemConfigApi.setFlowChangeMode(mode)
+    ElMessage.success('案件阶段变更模式已更新')
+  } catch (e) {
+    // 拦截器已提示；失败时回读一次还原真实值
+    await loadFlowMode()
+  } finally {
+    flowModeSaving.value = false
+  }
+}
+
 onMounted(async () => {
   try {
     roles.value = await authApi.roles()
@@ -350,6 +387,7 @@ onMounted(async () => {
   }
   await loadDepts()
   await load()
+  await loadFlowMode()
 })
 
 const TITLES = ['所长', '副所长', '队长', '法制员', '案管', '研判员', '普通民警', '系统管理员']

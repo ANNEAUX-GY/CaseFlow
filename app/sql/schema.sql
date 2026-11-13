@@ -512,3 +512,11 @@ CREATE TABLE IF NOT EXISTS work_log (
     created_at    DATETIME      DEFAULT CURRENT_TIMESTAMP COMMENT '记录时间',
     updated_at    DATETIME      DEFAULT CURRENT_TIMESTAMP COMMENT '最后修改时间'
 );
+
+-- 系统级配置（2026-11-13）：键值对，存全局开关。
+-- flow_change_mode = AUTO 自动变更 / MANUAL 手动确认 / BOTH 两套都要。
+CREATE TABLE IF NOT EXISTS system_config (
+    cfg_key    VARCHAR(64)  NOT NULL PRIMARY KEY COMMENT '配置键',
+    cfg_value  VARCHAR(255) DEFAULT NULL COMMENT '配置值',
+    updated_at DATETIME     DEFAULT NULL COMMENT '最后更新时间'
+);

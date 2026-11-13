@@ -203,6 +203,12 @@ export const categoryApi = {
   remove: (id) => http.delete(`/case-categories/${id}`)
 }
 
+/** 系统级配置（2026-11-13）：全局开关 */
+export const systemConfigApi = {
+  flowChangeMode: () => http.get('/system-config/flow-change-mode'),
+  setFlowChangeMode: (mode) => http.post('/system-config/flow-change-mode', { mode })
+}
+
 export const watchApi = {
   cases: (params) => http.get('/watch/cases', { params }),
   board: (params) => http.get('/watch/board', { params }),
@@ -231,8 +237,16 @@ export const watchApi = {
   pendingFlowApprovals: (caseId) => http.get('/watch/flow-approvals/pending', { params: caseId ? { caseId } : {} }),
   /** 本案是否已有待审批的状态变更申请（所有登录人可查，承办人要看"审批中"） */
   flowPending: (caseId) => http.get(`/watch/cases/${caseId}/flow-pending`, { silent: true }),
+  /** 本案最近一条可异议/可撤回的自动变更（2026-11-13） */
+  flowAuto: (caseId) => http.get(`/watch/cases/${caseId}/flow-auto`, { silent: true }),
   /** 审批状态变更申请：approve=true 同意（流转落地）/ false 退回（须填意见） */
   reviewFlow: (approvalId, data) => http.post(`/watch/flow-approvals/${approvalId}/review`, data),
+  /** 承办人对自动变更提异议（2026-11-13） */
+  disputeFlow: (approvalId, comment) => http.post(`/watch/flow-approvals/${approvalId}/dispute`, { comment }),
+  /** 领导审批自动变更异议：approve=true 同意退回 / false 不同意退回 */
+  reviewDispute: (approvalId, data) => http.post(`/watch/flow-approvals/${approvalId}/review-dispute`, data),
+  /** 领导直接撤回自动变更 */
+  withdrawFlow: (approvalId, comment) => http.post(`/watch/flow-approvals/${approvalId}/withdraw`, { comment }),
   /** 勾选完成 / 撤销完成一条流程任务（双向切换） */
   planDone: (planId) => http.post(`/watch/plans/${planId}/done`),
   planRevert: (planId) => http.post(`/watch/plans/${planId}/revert`),

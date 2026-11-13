@@ -307,6 +307,24 @@ public class WatchController {
         return Result.ok(m);
     }
 
+    /** 本案最近一条可异议/可撤回的自动变更（2026-11-13）：前端据此渲染异议/撤回按钮 */
+    @GetMapping("/cases/{caseId}/flow-auto")
+    public Result<Map<String, Object>> flowAuto(@PathVariable Long caseId) {
+        com.caseflow.entity.CaseApproval a = flowService.latestAutoFlowOf(caseId);
+        Map<String, Object> m = new java.util.HashMap<>();
+        m.put("has", a != null);
+        if (a != null) {
+            m.put("approvalId", a.getId());
+            m.put("result", a.getResult());
+            m.put("flowAction", a.getFlowAction());
+            m.put("flowActionName", com.caseflow.flow.CaseFlowTemplate.actionLabel(a.getFlowAction()));
+            m.put("fromStage", a.getFromStage());
+            m.put("fromStageName", com.caseflow.flow.CaseFlowTemplate.stageLabel(a.getFromStage()));
+            m.put("comment", a.getComment());
+        }
+        return Result.ok(m);
+    }
+
     /** 审批状态变更申请：approve=true 同意（流转落地）；false 退回（须填意见） */
     @PostMapping("/flow-approvals/{approvalId}/review")
     @FullAccessOnly("审批状态变更")
@@ -314,6 +332,31 @@ public class WatchController {
         Object ap = body.get("approve");
         boolean approve = ap == null || Boolean.parseBoolean(String.valueOf(ap));
         flowService.reviewTransfer(approvalId, approve, str(body.get("comment")));
+        return Result.ok();
+    }
+
+    /** 承办人对自动变更提异议（2026-11-13）：body.comment = 异议理由（必填） */
+    @PostMapping("/flow-approvals/{approvalId}/dispute")
+    public Result<Void> disputeFlow(@PathVariable Long approvalId, @RequestBody Map<String, Object> body) {
+        flowService.disputeAutoFlow(approvalId, str(body.get("comment")));
+        return Result.ok();
+    }
+
+    /** 领导审批自动变更异议：approve=true 同意退回（须填意见）；false 不同意退回 */
+    @PostMapping("/flow-approvals/{approvalId}/review-dispute")
+    @FullAccessOnly("审批自动变更异议")
+    public Result<Void> reviewDispute(@PathVariable Long approvalId, @RequestBody Map<String, Object> body) {
+        Object ap = body.get("approve");
+        boolean approve = ap == null || Boolean.parseBoolean(String.valueOf(ap));
+        flowService.reviewDispute(approvalId, approve, str(body.get("comment")));
+        return Result.ok();
+    }
+
+    /** 领导直接撤回自动变更（2026-11-13）：把阶段回退到变更前 */
+    @PostMapping("/flow-approvals/{approvalId}/withdraw")
+    @FullAccessOnly("撤回自动变更")
+    public Result<Void> withdrawFlow(@PathVariable Long approvalId, @RequestBody Map<String, Object> body) {
+        flowService.withdrawAutoFlow(approvalId, str(body.get("comment")));
         return Result.ok();
     }
 
