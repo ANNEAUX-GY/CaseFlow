@@ -33,7 +33,7 @@
       <el-alert v-if="showGuide" type="info" class="cf-todo__guide" :closable="true" @close="dismissGuide">
         <template #title>
           三步完成待办：① 先办 <b>A 级</b>、<b>临期/逾期</b> 的 → ② 干完后点「详情」提交一条<b>反馈说明</b>
-          → ③ 再勾选前面的方框标记完成。有子任务的，先把子任务全部勾完。
+          → ③ 再勾选前面的方框标记完成。
         </template>
       </el-alert>
 
@@ -169,53 +169,6 @@
                 </div>
               </div>
 
-              <!-- 子任务入口：有子任务才显示，点开就地展开，不用进弹窗 -->
-              <div v-if="t.subtaskTotal" class="cf-todo__sub-toggle"
-                :class="{ 'is-open': subOpen[t.id] }" @click.stop="toggleSubs(t)">
-                <el-icon><component :is="subOpen[t.id] ? ArrowUp : ArrowDown" /></el-icon>
-                <span>子任务 {{ t.subtaskDone || 0 }}/{{ t.subtaskTotal }}</span>
-                <span v-if="t.subtaskDone === t.subtaskTotal" class="cf-todo__sub-all">已全部完成</span>
-                <span v-else-if="t.status !== 'DONE'" class="cf-todo__sub-tip">全部勾完才能勾选主任务</span>
-              </div>
-
-              <!-- 子任务就地展开：勾选/新增都在这里，不用进弹窗 -->
-              <div v-if="subOpen[t.id]" class="cf-todo__subs" @click.stop>
-                <div v-if="subData[t.id]?.loading" class="cf-muted" style="font-size: 12px; padding: 4px 0">
-                  加载中…
-                </div>
-                <template v-else>
-                  <div v-for="s in (subData[t.id]?.list || [])" :key="s.id" class="cf-todo__sub"
-                    :class="{ 'is-done': s.status === 'DONE' }">
-                    <el-checkbox class="cf-check"
-                      :model-value="s.status === 'DONE'"
-                      :disabled="!isAdmin || savingSubId === s.id"
-                      @change="(v) => toggleSub(t, s, v)" />
-                    <span class="cf-todo__sub-name">{{ s.content }}</span>
-                    <span v-if="s.status === 'DONE' && s.doneAt" class="cf-todo__sub-done">
-                      {{ fmtTime(s.doneAt) }}
-                    </span>
-                    <!-- 子任务详情：普通用户与管理层都能点开看这条子任务自己的反馈记录。
-                         不点就只能看到这一行字，看不到它到底交了什么。 -->
-                    <el-button link type="primary" size="small" class="cf-todo__sub-detail"
-                      @click="openSubDetail(t, s)">详情</el-button>
-                  </div>
-                  <div v-if="!(subData[t.id]?.list || []).length" class="cf-todo__sub-none cf-muted">
-                    还没有子任务，在下面添加第一条
-                  </div>
-                  <div v-if="!userStore.isJudge" class="cf-todo__sub-add">
-                    <el-input v-model="newSub[t.id]" size="small" maxlength="200"
-                      :placeholder="'补充细节工作，如：打印询问笔录并送达'"
-                      :disabled="(subData[t.id]?.list || []).length >= 50"
-                      @keyup.enter="addSub(t)" />
-                    <el-button type="primary" size="small" plain :loading="addingSubId === t.id"
-                      :disabled="!(newSub[t.id] || '').trim() || (subData[t.id]?.list || []).length >= 50"
-                      @click="addSub(t)">
-                      添加子任务
-                    </el-button>
-                  </div>
-                </template>
-              </div>
-
             </div>
           </div>
 
@@ -223,7 +176,7 @@
                改成卡片底部横排一行，竖向只占 32px，一屏能多看两三条 -->
           <div class="cf-todo__card-actions" @click.stop>
               <el-button size="small" type="primary" plain class="cf-todo__act" @click="openDetail(t)">
-                <el-icon><View /></el-icon>详情·子任务
+                <el-icon><View /></el-icon>详情
               </el-button>
               <!-- 反馈入口按角色分（2026-10-06 需求，2026-10-30 案管员放开）：
                    普通用户（承办人）+ 案管员 =「提交反馈」：独立入口，不必先开浮窗，
@@ -238,9 +191,6 @@
                 size="small" type="warning" plain class="cf-todo__act"
                 :loading="submittingId === t.id" @click="openSubmit(t)">
                 <el-icon><ChatLineSquare /></el-icon>提交反馈
-              </el-button>
-              <el-button size="small" class="cf-todo__act" :disabled="t.status === 'DONE'" @click="openSubsAndFocus(t)">
-                <el-icon><Plus /></el-icon>子任务
               </el-button>
               <el-dropdown v-if="isAdmin" trigger="click" @command="(cmd) => onAdminCmd(t, i, cmd)">
                 <el-button size="small" class="cf-todo__act">
@@ -389,7 +339,7 @@
  */
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Bell, View, Plus, ArrowDown, ArrowUp, User, Clock, AlarmClock, InfoFilled, ChatLineSquare } from '@element-plus/icons-vue'
+import { Bell, View, Plus, ArrowDown, User, Clock, AlarmClock, InfoFilled, ChatLineSquare } from '@element-plus/icons-vue'
 import Sortable from 'sortablejs'
 import { todoApi, watchApi } from '../api'
 import { useUserStore } from '../store/user'
@@ -470,19 +420,12 @@ const dismissGuide = () => {
 const fmtTime = (s) => (dateKeyOf(s) || '-')
 
 /**
- * 勾选前置条件（与后端一致）：
- * 1) 主任务至少要有一条反馈说明
- * 2) 子任务全完成才能完成主任务
+ * 勾选前置条件（与后端一致）：主任务至少要有一条反馈说明。
  */
 const blockReason = (t) => {
   // 标记完成只归领导/管理员（2026-10-14 用户要求）：民警只管干活和交反馈，
   // 勾掉任务的最后一步由领导拍板（后端 done() 有同样的校验，这里是第一道门）
   if (!isAdmin.value) return '完成需由领导或管理员确认'
-  const total = t.subtaskTotal || 0
-  const dn = t.subtaskDone || 0
-  if (total > 0 && dn < total) {
-    return `还有 ${total - dn} 个子任务未完成，全部完成后才能勾选`
-  }
   if (t.feedbackCount === 0 && !t.remark) {
     return '需先提交一条反馈说明，才能勾选完成'
   }
@@ -653,8 +596,6 @@ const openDetail = (t) => detailRef.value?.open(t.id)
  * 主任务标题一并传过去：切到子任务后浮窗里不再持有主任务对象，
  * 返回条上要显示「退回去是哪一个」。
  */
-const openSubDetail = (t, s) => detailRef.value?.openSubDetail(s.id, t.content)
-
 const toggle = async (t, checked) => {
   if (checked) {
     // 勾选 = 打开落实反馈弹窗（选「完成」才真正完成，完成情况要留落实状态）
@@ -674,87 +615,8 @@ const toggle = async (t, checked) => {
   }
 }
 
-// ---- 子任务就地展开 ----
-const subOpen = ref({})
-const subData = ref({})          // todoId -> { loading, list }
-const newSub = reactive({})      // todoId -> 输入内容
-const savingSubId = ref(null)
-const addingSubId = ref(null)
-
-const fetchSubs = async (t) => {
-  subData.value[t.id] = { loading: true, list: [] }
-  try {
-    const d = await todoApi.detail(t.id)
-    subData.value[t.id] = { loading: false, list: d.subtasks || [] }
-  } catch (e) {
-    subData.value[t.id] = { loading: false, list: [] }
-  }
-}
-
-const toggleSubs = async (t) => {
-  if (subOpen.value[t.id]) {
-    subOpen.value[t.id] = false
-    return
-  }
-  subOpen.value[t.id] = true
-  if (!subData.value[t.id]) await fetchSubs(t)
-}
-
-/** 「子任务」按钮：展开该卡的子任务区并把输入框聚焦 */
-const openSubsAndFocus = async (t) => {
-  subOpen.value[t.id] = true
-  if (!subData.value[t.id]) await fetchSubs(t)
-  nextTick(() => {
-    const card = [...document.querySelectorAll('.cf-todo__card')].find(
-      (el) => el.textContent.includes(t.content.slice(0, 12)))
-    ;(card && card.querySelector('.cf-todo__sub-add input'))?.focus()
-  })
-}
-
-const toggleSub = async (t, s, checked) => {
-  if (checked) {
-    // 勾选子任务 = 打开与主任务同一套的汇报弹窗（落实状态+说明+执行记录），
-    // 选「完成」才真正勾上——不能在列表里直接勾掉（用户明确的交互要求）。
-    detailRef.value?.openCompleteSub(t.id, s.id)
-    return
-  }
-  savingSubId.value = s.id
-  try {
-    await todoApi.toggleSubtask(s.id, false)
-    ElMessage.success('已撤销子任务完成')
-    await fetchSubs(t)
-    await load()
-    emit('changed')
-  } catch (e) {
-    await fetchSubs(t)
-  } finally {
-    savingSubId.value = null
-  }
-}
-
-const addSub = async (t) => {
-  const content = (newSub[t.id] || '').trim()
-  if (!content) return
-  addingSubId.value = t.id
-  try {
-    await todoApi.addSubtask(t.id, content)
-    newSub[t.id] = ''
-    ElMessage.success('子任务已添加')
-    await fetchSubs(t)
-    await load()
-    emit('changed')
-  } finally {
-    addingSubId.value = null
-  }
-}
-
-/** 详情弹窗内变动后，若某卡的子任务区开着，同步刷新 */
+/** 详情弹窗内变动后刷新列表 */
 const onDetailChanged = async () => {
-  const openId = Object.keys(subOpen.value).find((k) => subOpen.value[k])
-  if (openId) {
-    const t = todos.value.find((x) => String(x.id) === String(openId))
-    if (t) await fetchSubs(t)
-  }
   await load()
   emit('changed')
 }
@@ -1125,30 +987,6 @@ onBeforeUnmount(() => {
   max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .cf-todo__meta-item.is-hint { color: #8a929e }
-
-/* 子任务开合与列表 */
-.cf-todo__sub-toggle {
-  display: inline-flex; align-items: center; gap: 6px; margin-top: 7px;
-  font-size: 12px; color: #1b4a8c; background: #eef3fa; border-radius: 999px;
-  padding: 3px 12px; cursor: pointer; user-select: none;
-}
-.cf-todo__sub-toggle:hover { background: #e3edfa }
-.cf-todo__sub-toggle .el-icon { font-size: 12px }
-.cf-todo__sub-all { color: var(--cf-ok, #1e8e58); font-weight: 600 }
-.cf-todo__sub-tip { color: #8a929e }
-.cf-todo__subs {
-  margin-top: 8px; padding: 8px 10px; background: rgba(255, 255, 255, .28);
-  border: 1px dashed #d6dee9; border-radius: 6px;
-}
-.cf-todo__sub { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 13px }
-.cf-todo__sub.is-done .cf-todo__sub-name { color: #8a929e; text-decoration: line-through }
-.cf-todo__sub-name { flex: 1; min-width: 0; word-break: break-all; color: #1b2430 }
-.cf-todo__sub-done { flex: none; font-size: 12px; color: #8a929e }
-/* 子任务「详情」入口：与勾选框分开，点了只看反馈不改状态 */
-.cf-todo__sub-detail { flex: none; font-size: 12px; padding: 0 2px }
-.cf-todo__sub-none { font-size: 12px; padding: 2px 0 }
-.cf-todo__sub-add { display: flex; gap: 8px; margin-top: 6px }
-.cf-todo__sub-add .el-input { flex: 1 }
 
 /* 管理层意见设置（2026-10-18 紧凑化）：并进信息行、靠右对齐。
    原来是独立一行（虚线框 + 34px 高），把每张卡白白抬高一段。 */
