@@ -84,6 +84,18 @@
         <el-descriptions-item label="备注" :span="2">{{ detail.description || '-' }}</el-descriptions-item>
       </el-descriptions>
 
+      <!-- 办案阶段（2026-11-13）：与案件盯办同一套阶段推进条。
+           普通民警在「我的案件」详情里也能申请转入下一阶段；管理层可直接确认流转。 -->
+      <div class="cf-panel" style="margin-top: 12px">
+        <div class="cf-panel__head">
+          <span>办案阶段</span>
+          <span class="cf-panel__head-tip">{{ detail.caseType === 'ADMINISTRATIVE' ? '行政案件仅设初查阶段' : '本阶段待办全部办完后，由领导确认转入下一阶段' }}</span>
+        </div>
+        <div style="padding: 12px 16px">
+          <CaseStageBar :case-id="detail.id" @changed="reload" />
+        </div>
+      </div>
+
       <!-- 案件待办（含领导意见）：提意见/定级/落实反馈都在这一个面板，避免同一事项两处展示 -->
       <CaseTodoPanel :case-id="detail.id" :anchor="anchor" style="margin-top: 12px" @changed="reload" />
 
@@ -562,6 +574,7 @@ import { ElCollapseTransition } from 'element-plus'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { caseApi, fileApi, suspectApi, timeNodeApi, logApi, watchApi } from '../api'
 import CaseTodoPanel from './CaseTodoPanel.vue'
+import CaseStageBar from './CaseStageBar.vue'
 import CaseFormDialog from './CaseFormDialog.vue'
 import FeedbackDialog from './FeedbackDialog.vue'
 import FocusStar from './FocusStar.vue'
