@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<style>
+  body { font-family: "Microsoft YaHei", "SimSun", sans-serif; font-size: 11pt; color: #1b2430; line-height: 1.7; }
+  h1 { font-size: 20pt; color: #12294a; text-align: center; margin: 0 0 4px 0; }
+  .subtitle { text-align: center; color: #5a6472; font-size: 10pt; margin-bottom: 20px; }
+  h2 { font-size: 15pt; color: #1b4a8c; border-left: 4px solid #c8a45c; padding-left: 10px; margin-top: 28px; }
+  h3 { font-size: 12.5pt; color: #12294a; margin-top: 18px; }
+  p { text-indent: 2em; margin: 6px 0; }
+  .no-indent { text-indent: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 10px 0; }
+  th, td { border: 1px solid #cbd7e6; padding: 6px 10px; font-size: 10pt; }
+  th { background: #eef2f8; color: #12294a; text-align: left; }
+  img { display: block; max-width: 95%; margin: 10px auto; border: 1px solid #e4e7ed; }
+  .figcap { text-align: center; color: #5a6472; font-size: 9pt; margin: 4px 0 14px 0; text-indent: 0; }
+  .tip { background: #fbf7ec; border-left: 3px solid #d98a0b; padding: 8px 12px; margin: 10px 0; font-size: 10pt; }
+  .role-title { background: #eef2f8; border: 1px solid #cbd7e6; border-radius: 4px; padding: 8px 14px; margin: 14px 0 8px 0; font-size: 12pt; color: #12294a; font-weight: bold; }
+</style>
+</head>
+<body>
+
+<h1>CaseFlow 案件指派系统 · 操作教程</h1>
+<p class="subtitle">按角色分册 · 快速上手版</p>
+
+<h2>一、系统简介与登录</h2>
+<p>CaseFlow 是面向公安机关的案件指派与办理系统，覆盖「收案 → 指派 → 盯办 → 结案」全流程。系统按账号角色开放不同功能，本教程按角色分册说明。</p>
+<img src="D:/案件指派demo/app/docs/role-shots/r0-login.png" alt="登录页">
+<p class="figcap">图 1 · 登录页</p>
+
+<h2>二、角色一览</h2>
+<p>系统共分四类角色，侧栏菜单随角色不同而不同：</p>
+<table>
+<tr><th>角色</th><th>落地页</th><th>可用栏目</th><th>核心能力</th></tr>
+<tr><td>普通民警</td><td>我的案件</td><td>我的案件 / 我的待办 / 到期提醒 / 工作记录本</td><td>办理自己承办的案件、提交反馈</td></tr>
+<tr><td>研判员</td><td>案件管理</td><td>案件管理</td><td>查看全量案件、编辑嫌疑人、维护时间节点</td></tr>
+<tr><td>业务领导（所长/副所长/队长/法制员/案管）</td><td>工作台</td><td>工作台 / 案件盯办 / 待办总览 / 案件管理 / 到期提醒</td><td>指派、下达意见、审批、结案、状态变更</td></tr>
+<tr><td>系统管理员</td><td>工作台</td><td>业务栏目 + 人员图谱 / 类别管理 / 账号管理</td><td>全部业务权限 + 系统运维</td></tr>
+</table>
+
+<div class="role-title">分册一 · 普通民警</div>
+<h3>3.1 我的案件</h3>
+<p>登录后自动进入「我的案件」，这里只显示本人名下承办的案件。可以看到案件状态、截止期限、办案阶段等信息。</p>
+<img src="D:/案件指派demo/app/docs/role-shots/r1-staff-mycases.png" alt="我的案件">
+<p class="figcap">图 2 · 普通民警「我的案件」</p>
+
+<h3>3.2 我的待办</h3>
+<p>「我的待办」列出领导指派给您的待办事项。完成工作后点「详情」提交反馈说明，勾选完成需领导确认。</p>
+<img src="D:/案件指派demo/app/docs/role-shots/r1-staff-mytodos.png" alt="我的待办">
+<p class="figcap">图 3 · 普通民警「我的待办」</p>
+
+<h3>3.3 到期提醒</h3>
+<p>「到期提醒」汇总本人名下案件的期限情况，已逾期、今天到期、即将到期的案件会分桶提示，避免漏办。</p>
+<img src="D:/案件指派demo/app/docs/role-shots/r1-staff-reminders.png" alt="到期提醒">
+<p class="figcap">图 4 · 普通民警「到期提醒」</p>
+
+<div class="role-title">分册二 · 研判员</div>
+<h3>4.1 案件管理（唯一栏目）</h3>
+<p>研判员登录后进入「案件管理」，侧栏只有这一项。可查看全所全量案件，通过顶部筛选（状态、经办人、到期、更多筛选等）快速定位。</p>
+<img src="D:/案件指派demo/app/docs/role-shots/r2-judge-cases.png" alt="研判员案件管理">
+<p class="figcap">图 5 · 研判员「案件管理」</p>
+
+<h3>4.2 研判员可编辑：嫌疑人 + 时间节点</h3>
+<p>打开案件详情，研判员可「新增嫌疑人」录入身份信息、可「新增节点」维护重要时间节点；其余（待办反馈、状态变更、结案、案件编辑等）均为只读，仅能查看。</p>
+<img src="D:/案件指派demo/app/docs/role-shots/r2-judge-detail.png" alt="研判员案件详情">
+<p class="figcap">图 6 · 研判员案件详情（嫌疑人/时间节点可编辑，其余只读）</p>
+
+<div class="role-title">分册三 · 业务领导（所长 / 副所长 / 队长 / 法制员 / 案管）</div>
+<h3>5.1 工作台</h3>
+<p>工作台是全所案件的统计总览，含案件趋势、维度分布、强制措施到期、待审批（措施审批 / 状态变更 / 待确认结案 / 结案异议）等。领导在此集中处理审批。</p>
+<img src="D:/案件指派demo/app/docs/role-shots/r3-leader-dashboard.png" alt="工作台">
+<p class="figcap">图 7 · 业务领导「工作台」</p>
+
+<h3>5.2 案件盯办</h3>
+<p>「案件盯办」按侦查进度分模块盯办案件，可登记强制措施、推进阶段流转、审批承办人的变更申请。</p>
+<img src="D:/案件指派demo/app/docs/role-shots/r3-leader-watch.png" alt="案件盯办">
+<p class="figcap">图 8 · 业务领导「案件盯办」</p>
+
+<h3>5.3 待办总览</h3>
+<p>「待办总览」汇总各案件的待办完成情况，领导可在此下达意见、定级、催办。</p>
+<img src="D:/案件指派demo/app/docs/role-shots/r3-leader-todos.png" alt="待办总览">
+<p class="figcap">图 9 · 业务领导「待办总览」</p>
+
+<div class="role-title">分册四 · 系统管理员</div>
+<h3>6.1 账号管理</h3>
+<p>「账号管理」用于新建/审核/停用账号。顶部可设置「案件阶段变更模式」与「结案模式」两个全局开关（自动 / 手动确认 / 两套都要）。</p>
+<img src="D:/案件指派demo/app/docs/role-shots/r4-admin-users.png" alt="账号管理">
+<p class="figcap">图 10 · 系统管理员「账号管理」（含两个全局开关）</p>
+
+<h3>6.2 人员图谱</h3>
+<p>「人员图谱」维护组织架构与员工档案，部门、职务、警号等在此统一管理。</p>
+<img src="D:/案件指派demo/app/docs/role-shots/r4-admin-org.png" alt="人员图谱">
+<p class="figcap">图 11 · 系统管理员「人员图谱」</p>
+
+<h3>6.3 类别管理</h3>
+<p>「类别管理」维护案件大类与小类字典，供案件分类检索使用。</p>
+<img src="D:/案件指派demo/app/docs/role-shots/r4-admin-categories.png" alt="类别管理">
+<p class="figcap">图 12 · 系统管理员「类别管理」</p>
+
+<h2>七、结案说明（刑事 / 行政结果不同）</h2>
+<p>结案结果按案件类型区分：<b>刑事案件</b>＝撤案 / 移送预审 / 移送其他单位；<b>行政案件</b>＝处罚 / 不予处罚 / 终止调查 / 调解。撤案落地为「已撤销」，其余落地为「已办结」。</p>
+
+<div class="tip">提示：系统对数据库「只增不改」，所有升级均不覆盖、不清空已录入的业务数据，内网已有数据安全无虞。</div>
+
+</body>
+</html>
