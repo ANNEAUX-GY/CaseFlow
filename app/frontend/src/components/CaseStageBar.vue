@@ -18,10 +18,10 @@
       <template v-if="canTransfer">
         <el-tooltip v-if="!finished" placement="top"
           :content="`本阶段还有 ${total - done} 项待办未完成，也可提前转入下一阶段`">
-          <el-button v-if="branches.length === 1" size="small" type="info" plain
+          <el-button v-if="branches.length === 1" size="small" type="primary"
             @click="openAsk(branches[0])">{{ isFullAccess ? '转入下一阶段' : '申请转入下一阶段' }}</el-button>
           <el-dropdown v-else trigger="click" @command="openAsk">
-            <el-button size="small" type="info" plain>
+            <el-button size="small" type="primary">
               {{ isFullAccess ? '转入下一阶段' : '申请转入下一阶段' }}<el-icon style="margin-left: 4px"><ArrowDown /></el-icon>
             </el-button>
             <template #dropdown>
