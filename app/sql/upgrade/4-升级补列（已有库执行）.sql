@@ -1,8 +1,8 @@
 -- ============================================================
 --  CaseFlow 已有库升级补列脚本（幂等，可重复执行）
 -- ------------------------------------------------------------
---  生成时间：2026-11-13 11:47
---  来源：backend/.../bootstrap/SchemaMigration.java 的 NEW_COLUMNS（94 列）
+--  生成时间：2026-11-13 23:49
+--  来源：backend/.../bootstrap/SchemaMigration.java 的 NEW_COLUMNS（96 列）
 -- ------------------------------------------------------------
 --  【这段脚本做什么】
 --  把旧版本的 case_flow 库补齐到与当前版本一致：缺哪列补哪列。
@@ -680,6 +680,22 @@ PREPARE cf_stmt FROM @ddl; EXECUTE cf_stmt; DEALLOCATE PREPARE cf_stmt;
 SET @exists := (SELECT COUNT(*) FROM information_schema.COLUMNS
   WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'case_approval' AND COLUMN_NAME = 'from_stage');
 SET @ddl := IF(@exists = 0, 'ALTER TABLE `case_approval` ADD COLUMN `from_stage` VARCHAR(24) NULL COMMENT ''阶段流转申请时的阶段''', 'DO 0');
+PREPARE cf_stmt FROM @ddl; EXECUTE cf_stmt; DEALLOCATE PREPARE cf_stmt;
+
+
+-- ------------------------------------------------------------
+--  表：work_log
+-- ------------------------------------------------------------
+-- work_log.source  来源：MANUAL 手动 / AUTO 自动（操作留痕）
+SET @exists := (SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'work_log' AND COLUMN_NAME = 'source');
+SET @ddl := IF(@exists = 0, 'ALTER TABLE `work_log` ADD COLUMN `source` VARCHAR(16) NULL COMMENT ''来源：MANUAL 手动 / AUTO 自动（操作留痕）''', 'DO 0');
+PREPARE cf_stmt FROM @ddl; EXECUTE cf_stmt; DEALLOCATE PREPARE cf_stmt;
+
+-- work_log.log_id  关联 operation_log.id（自动记录溯源，可空）
+SET @exists := (SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'work_log' AND COLUMN_NAME = 'log_id');
+SET @ddl := IF(@exists = 0, 'ALTER TABLE `work_log` ADD COLUMN `log_id` BIGINT NULL COMMENT ''关联 operation_log.id（自动记录溯源，可空）''', 'DO 0');
 PREPARE cf_stmt FROM @ddl; EXECUTE cf_stmt; DEALLOCATE PREPARE cf_stmt;
 
 -- ============================================================
