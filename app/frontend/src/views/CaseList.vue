@@ -114,10 +114,19 @@
           filterable
           style="width: 170px"
         />
-        <el-select v-model="query.hasSuspect" placeholder="嫌疑人" clearable style="width: 110px" @change="applyFilters">
+        <el-select v-model="query.hasSuspect" placeholder="嫌疑人" clearable style="width: 110px" @change="onSuspectChange">
           <el-option label="有嫌疑人" value="YES" />
           <el-option label="无嫌疑人" value="NO" />
         </el-select>
+        <el-input
+          v-if="query.hasSuspect === 'YES'"
+          v-model="query.suspectName"
+          placeholder="嫌疑人姓名"
+          clearable
+          style="width: 140px"
+          @keyup.enter="applyFilters"
+          @clear="applyFilters"
+        />
       </div>
     </el-collapse-transition>
 
@@ -232,6 +241,7 @@ const query = reactive({
   caseType: '',
   category: '',
   hasSuspect: '',
+  suspectName: '',
   employeeId: null,
   dueBucket: '',
   focusOnly: false,
@@ -412,6 +422,12 @@ const applyFilters = () => {
 }
 const loadFiltered = () => isClosedPage.value ? reload() : load()
 
+/** 嫌疑人筛选联动（2026-11-13）：切换到非「有嫌疑人」时清空姓名，避免残留条件 */
+const onSuspectChange = (val) => {
+  if (val !== 'YES') query.suspectName = ''
+  applyFilters()
+}
+
 const trendData = computed(() => stats.value.trend || [])
 const distData = computed(() => stats.value[distDim.value] || [])
 
@@ -487,6 +503,7 @@ const reset = () => {
     caseType: '',
     category: '',
     hasSuspect: '',
+    suspectName: '',
     employeeId: null,
     dueBucket: '',
     focusOnly: false
