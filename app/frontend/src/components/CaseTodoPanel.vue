@@ -202,7 +202,7 @@
                   <div v-if="!(subData[t.id]?.list || []).length" class="cf-todo__sub-none cf-muted">
                     还没有子任务，在下面添加第一条
                   </div>
-                  <div class="cf-todo__sub-add">
+                  <div v-if="!userStore.isJudge" class="cf-todo__sub-add">
                     <el-input v-model="newSub[t.id]" size="small" maxlength="200"
                       :placeholder="'补充细节工作，如：打印询问笔录并送达'"
                       :disabled="(subData[t.id]?.list || []).length >= 50"
@@ -598,7 +598,7 @@ watch(isAdmin, () => nextTick(setupSortable))
  * 按钮对所有普通用户显示——非承办人点了会得到明确提示，
  * 比按钮凭空消失更好（后者会让人以为系统坏了）。
  */
-const canSubmit = computed(() => !isAdmin.value || isCaseManager.value)
+const canSubmit = computed(() => (!isAdmin.value || isCaseManager.value) && !userStore.isJudge)
 
 const fbDlg = reactive({ visible: false, title: '', quote: '', status: '', loading: false })
 const submittingId = ref(null)

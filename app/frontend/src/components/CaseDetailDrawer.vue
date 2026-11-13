@@ -148,7 +148,7 @@
       <div class="cf-panel" style="margin-top: 12px">
         <div class="cf-panel__head">
           <span>重要时间节点（{{ detail.timeNodes?.length || 0 }} 个）</span>
-          <el-button link type="primary" @click="openNode()">新增节点</el-button>
+          <el-button v-if="!userStore.isJudge" link type="primary" @click="openNode()">新增节点</el-button>
         </div>
         <div class="cf-tscroll">
           <el-table :data="detail.timeNodes || []" size="small">
@@ -170,7 +170,7 @@
             <el-table-column label="提前提醒" width="100">
               <template #default="{ row }">{{ row.remindDays ? `提前 ${row.remindDays} 天` : '不提醒' }}</template>
             </el-table-column>
-            <el-table-column label="操作" width="90" align="right">
+            <el-table-column v-if="!userStore.isJudge" label="操作" width="90" align="right">
               <template #default="{ row }">
                 <el-button link type="primary" @click="openNode(row)">修改</el-button>
                 <el-button link type="danger" @click="removeNode(row)">删除</el-button>
@@ -327,7 +327,7 @@
         </el-collapse-transition>
       </div>
       <div class="cf-toolbar" style="margin-top: 14px">
-        <el-button v-if="detail.caseType !== 'ADMINISTRATIVE' && detail.status === 'ASSIGNED'" type="primary" @click="changeStatus('IN_PROGRESS')">
+        <el-button v-if="!userStore.isJudge && detail.caseType !== 'ADMINISTRATIVE' && detail.status === 'ASSIGNED'" type="primary" @click="changeStatus('IN_PROGRESS')">
           开始处理
         </el-button>
         <el-button
