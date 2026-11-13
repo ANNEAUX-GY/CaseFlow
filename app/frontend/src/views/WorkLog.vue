@@ -116,7 +116,8 @@
             clearable
             :remote-method="searchCases"
             :loading="caseSearching"
-            placeholder="输入案件名称 / 编号关键字检索"
+            @visible-change="onCaseVisible"
+            placeholder="输入案件名 / 编号 / 类型 / 嫌疑人姓名检索"
             style="width: 100%"
           >
             <el-option
@@ -169,22 +170,73 @@ const caseSearching = ref(false)
 const caseDetailVisible = ref(false)
 const caseDetailId = ref(null)
 
-const caseLabel = (c) => (c.filingNo ? `${c.name}（${c.filingNo}）` : c.name)
+// 下拉 label：案件类型 · 案件名（编号），带截止时间，一眼可辨
+const caseLabel = (c) => {
+  const type = c.caseTypeName ? `${c.caseTypeName}·` : ''
+  const no = c.filingNo ? `（${c.filingNo}）` : ''
+  const due = c.deadlineText ? `｜截止 ${c.deadlineText}` : ''
+  return `${type}${c.name}${no}${due}`
+}
+
+// 统一排序：截止时间从近到远（空截止时间排最后），二级按创建时间兜底
+const sortCaseOptions = (list) => (list || []).sort((a, b) => {
+  const da = a.deadline ? String(a.deadline) : '9999-12-31'
+  const db = b.deadline ? String(b.deadline) : '9999-12-31'
+  if (da !== db) return da < db ? -1 : 1
+  const ca = String(a.createdAt || '')
+  const cb = String(b.createdAt || '')
+  return ca > cb ? -1 : 1
+})
+
+// 拼查询参数：民警只看本人经办；截止时间近→远
+const caseQueryParams = (extra = {}) => {
+  const params = { size: 50, sortField: 'deadline', sortOrder: 'asc', ...extra }
+  if (!canViewAll.value) params.onlyMine = true
+  return params
+}
 
 const searchCases = async (kw) => {
-  if (!kw || !kw.trim()) {
-    caseOptions.value = []
+  const key = (kw || '').trim()
+  // 空关键词：下拉展开时列出全部（管理）或本人经办（民警），按截止时间近→远
+  if (!key) {
+    await loadCases()
     return
   }
   caseSearching.value = true
   try {
-    const data = await caseApi.page({ keyword: kw.trim(), size: 20 })
-    caseOptions.value = data.list || []
+    // 同一关键词既可能是案件名/类别，也可能是嫌疑人姓名，两条路并行搜再合并去重
+    const [byKeyword, bySuspect] = await Promise.all([
+      caseApi.page(caseQueryParams({ keyword: key })),
+      caseApi.page(caseQueryParams({ suspectName: key }))
+    ])
+    const merged = new Map()
+    ;[...(byKeyword?.list || []), ...(bySuspect?.list || [])].forEach((c) => {
+      if (!merged.has(c.id)) merged.set(c.id, c)
+    })
+    caseOptions.value = sortCaseOptions(Array.from(merged.values()))
   } catch (e) {
     caseOptions.value = []
   } finally {
     caseSearching.value = false
   }
+}
+
+// 空关键词加载全量（或本人），供下拉展开即见列表
+const loadCases = async () => {
+  caseSearching.value = true
+  try {
+    const data = await caseApi.page(caseQueryParams())
+    caseOptions.value = sortCaseOptions(data?.list || [])
+  } catch (e) {
+    caseOptions.value = []
+  } finally {
+    caseSearching.value = false
+  }
+}
+
+// 下拉展开且还没选项时，加载一次全量列表
+const onCaseVisible = (visible) => {
+  if (visible && !caseOptions.value.length) loadCases()
 }
 
 const openCaseDetail = (row) => {

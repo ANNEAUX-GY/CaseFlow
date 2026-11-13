@@ -211,17 +211,38 @@ public class CaseService {
         return Boolean.TRUE.equals(query.getOnlyMine());
     }
 
+    /**
+     * 把大类中文关键词翻译成 caseType 英文码。
+     * 支持别名：刑事→CRIMINAL、行政→ADMINISTRATIVE、未立案/初查→PRELIMINARY。
+     * 其余返回 null（不是大类名，走普通模糊搜）。
+     */
+    private String caseTypeCodeOf(String kw) {
+        if (kw == null) return null;
+        if (kw.contains("刑事")) return "CRIMINAL";
+        if (kw.contains("行政")) return "ADMINISTRATIVE";
+        if (kw.contains("未立案") || kw.contains("初查")) return "PRELIMINARY";
+        return null;
+    }
+
     private LambdaQueryWrapper<CaseInfo> buildWrapper(CaseQuery query) {
         LambdaQueryWrapper<CaseInfo> q = new LambdaQueryWrapper<>();
         LocalDateTime now = LocalDateTime.now();
 
         if (StringUtils.hasText(query.getKeyword())) {
             String kw = query.getKeyword().trim();
-            q.and(w -> w.like(CaseInfo::getName, kw)
-                    .or().like(CaseInfo::getCaseNo, kw)
-                    .or().like(CaseInfo::getCategory, kw)
-                    .or().like(CaseInfo::getFilingNo, kw)
-                    .or().like(CaseInfo::getDescription, kw));
+            // 大类中文名（刑事/行政/未立案/初查）也要能搜到：caseType 存的是英文码，
+            // 先把它翻译成码做精确匹配，否则搜「刑事」会落空。
+            String typeCode = caseTypeCodeOf(kw);
+            q.and(w -> {
+                w.like(CaseInfo::getName, kw)
+                        .or().like(CaseInfo::getCaseNo, kw)
+                        .or().like(CaseInfo::getCategory, kw)
+                        .or().like(CaseInfo::getFilingNo, kw)
+                        .or().like(CaseInfo::getDescription, kw);
+                if (typeCode != null) {
+                    w.or().eq(CaseInfo::getCaseType, typeCode);
+                }
+            });
         }
         if (StringUtils.hasText(query.getStatus())) {
             if ("OPEN".equals(query.getStatus())) {
