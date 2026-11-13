@@ -91,35 +91,54 @@
         <div class="cf-panel__head">
           <span>案件结案</span>
           <el-button v-if="canRegisterClose" type="primary" size="small" @click="openRegisterClose">登记结案结果</el-button>
-          <el-button v-if="canManage && !['DONE', 'CANCELLED'].includes(detail.status)" type="warning" size="small" @click="openDirectClose">直接结案</el-button>
-          <el-button v-if="canRequestClose" type="primary" size="small" @click="closeDialogVisible = true">申请结案</el-button>
         </div>
-        <template v-if="closeRequest">
-          <p>处理结果：{{ closeOutcomeName(closeRequest.outcome) }} · {{ closeRequest.submittedByName }} 于 {{ closeRequest.submittedAt }} 提交</p>
-          <p v-if="closeRequest.note" style="white-space: pre-wrap">处理说明：{{ closeRequest.note }}</p>
-          <p v-if="closeRequest.operationPlatform">{{ closeOperationText }}</p>
-          <p>审核状态：<el-tag :type="closeRequest.status === 'APPROVED' ? 'success' : closeRequest.status === 'RETURNED' ? 'danger' : 'warning'" size="small">{{ closeRequest.status === 'APPROVED' ? '已同意' : closeRequest.status === 'RETURNED' ? '已退回' : '待案管/领导审核' }}</el-tag></p>
-          <p v-if="closeRequest.reviewComment">审核意见：{{ closeRequest.reviewComment }}</p>
-          <div v-if="canManage && closeRequest.status === 'PENDING' && detail.status !== 'DONE'">
-            <el-button type="success" :loading="closeReviewSaving" @click="reviewClose(true)">同意并结案</el-button>
-            <el-button :loading="closeReviewSaving" @click="reviewClose(false)">退回申请</el-button>
-          </div>
-        </template>
-        <span v-else class="cf-muted">尚无结案申请；经办人完成案件后可填写结案结果申请。</span>
 
-        <!-- 结案登记留痕（2026-11-13）：自动结案可异议/撤回；手动模式显示待确认 -->
-        <div v-if="closeAuto.has" style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--cf-border, #e4e7ed)">
-          <p style="margin: 0 0 8px">
-            <el-tag v-if="closeAuto.result === 'PENDING'" size="small" type="warning" effect="plain">结案待确认</el-tag>
-            <el-tag v-else-if="closeAuto.result === 'AUTO'" size="small" type="info" effect="plain">已自动结案</el-tag>
-            <el-tag v-else-if="closeAuto.result === 'DISPUTE'" size="small" type="warning" effect="plain">结案异议待审批</el-tag>
-            <span class="cf-muted" style="font-size: 12px; margin-left: 6px">结案结果：{{ closeAuto.outcomeName }}</span>
-          </p>
-          <p v-if="closeAuto.comment" class="cf-muted" style="font-size: 12px; white-space: pre-wrap; margin: 0 0 8px">{{ closeAuto.comment }}</p>
-          <el-button v-if="closeAuto.result === 'AUTO' && !canManage" size="small" type="warning" plain @click="openCloseDispute">对自动结案提异议</el-button>
-          <el-button v-if="closeAuto.result === 'AUTO' && canManage" size="small" type="danger" plain @click="openCloseWithdraw">撤回结案</el-button>
-          <el-button v-if="closeAuto.result === 'DISPUTE' && canManage" size="small" type="primary" plain @click="openCloseDisputeReview">审批异议</el-button>
-          <el-button v-if="closeAuto.result === 'PENDING' && canManage" size="small" type="primary" plain @click="openClosePendingReview">确认结案</el-button>
+        <div class="cf-panel__body">
+          <!-- 结案状态卡片：统一呈现「当前结案状态 + 结果 + 可执行动作」 -->
+          <div class="cf-close-card" :class="closeCardTone">
+            <div class="cf-close-card__main">
+              <div class="cf-close-card__badge">
+                <el-tag :type="closeCardTag.type" :effect="closeCardTag.effect" size="small">{{ closeCardTag.text }}</el-tag>
+              </div>
+              <div class="cf-close-card__desc">
+                <template v-if="closeAuto.has">
+                  <div class="cf-close-card__result">结案结果：<b>{{ closeAuto.outcomeName }}</b></div>
+                  <div v-if="closeAuto.comment" class="cf-close-card__note">{{ closeAuto.comment }}</div>
+                </template>
+                <template v-else-if="closeRequest">
+                  <div class="cf-close-card__result">
+                    处理结果：<b>{{ closeOutcomeName(closeRequest.outcome) }}</b>
+                    <span class="cf-muted" style="font-size: 12px"> · {{ closeRequest.submittedByName }} 提交</span>
+                  </div>
+                  <div v-if="closeRequest.note" class="cf-close-card__note">{{ closeRequest.note }}</div>
+                  <div v-if="closeRequest.operationPlatform" class="cf-close-card__note">{{ closeOperationText }}</div>
+                  <div v-if="closeRequest.reviewComment" class="cf-close-card__note">审核意见：{{ closeRequest.reviewComment }}</div>
+                </template>
+                <template v-else>
+                  <div class="cf-close-card__result cf-muted">尚未结案，可登记结案结果或提交结案申请。</div>
+                </template>
+              </div>
+            </div>
+
+            <!-- 操作区：只在确有动作时出现 -->
+            <div v-if="closeCardActions.length" class="cf-close-card__actions">
+              <el-button v-if="canManage && closeRequest?.status === 'PENDING' && detail.status !== 'DONE'"
+                type="success" size="small" :loading="closeReviewSaving" @click="reviewClose(true)">同意并结案</el-button>
+              <el-button v-if="canManage && closeRequest?.status === 'PENDING' && detail.status !== 'DONE'"
+                size="small" :loading="closeReviewSaving" @click="reviewClose(false)">退回申请</el-button>
+              <el-button v-if="closeAuto.result === 'AUTO' && !canManage" size="small" type="warning" plain @click="openCloseDispute">对自动结案提异议</el-button>
+              <el-button v-if="closeAuto.result === 'AUTO' && canManage" size="small" type="danger" plain @click="openCloseWithdraw">撤回结案</el-button>
+              <el-button v-if="closeAuto.result === 'DISPUTE' && canManage" size="small" type="primary" plain @click="openCloseDisputeReview">审批异议</el-button>
+              <el-button v-if="closeAuto.result === 'PENDING' && canManage" size="small" type="primary" plain @click="openClosePendingReview">确认结案</el-button>
+            </div>
+          </div>
+
+          <!-- 次要入口：管理层直接结案、承办人申请结案，与主按钮「登记结案结果」区分层级 -->
+          <div v-if="canManage || canRequestClose" class="cf-close-card__secondary">
+            <el-button v-if="canManage && !['DONE', 'CANCELLED'].includes(detail.status)"
+              type="warning" size="small" plain @click="openDirectClose">直接结案</el-button>
+            <el-button v-if="canRequestClose" type="primary" size="small" plain @click="closeDialogVisible = true">申请结案</el-button>
+          </div>
         </div>
       </div>
 
@@ -621,6 +640,42 @@ const canRegisterClose = computed(() => !['DONE', 'CANCELLED'].includes(detail.v
 const closeOperationText = computed(() => closeRequest.value?.operationPlatform
   ? '于 ' + (closeRequest.value.operationTime || closeRequest.value.submittedAt) + ' 在 '
     + closeRequest.value.operationPlatform + ' 执行了 ' + closeRequest.value.operationAction + ' 操作。' : '')
+
+/** 结案状态卡片（2026-11-13 重设计）：统一当前结案状态的标签与色调 */
+const closeCardTag = computed(() => {
+  if (closeAuto.value.has) {
+    if (closeAuto.value.result === 'PENDING') return { text: '结案待确认', type: 'warning', effect: 'light' }
+    if (closeAuto.value.result === 'AUTO') return { text: '已自动结案', type: 'success', effect: 'light' }
+    if (closeAuto.value.result === 'DISPUTE') return { text: '结案异议待审批', type: 'warning', effect: 'light' }
+  }
+  if (closeRequest.value) {
+    if (closeRequest.value.status === 'APPROVED') return { text: '已结案', type: 'success', effect: 'light' }
+    if (closeRequest.value.status === 'RETURNED') return { text: '结案已退回', type: 'danger', effect: 'light' }
+    return { text: '结案审核中', type: 'warning', effect: 'light' }
+  }
+  return { text: '未结案', type: 'info', effect: 'light' }
+})
+const closeCardTone = computed(() => {
+  if (closeAuto.value.has) {
+    if (closeAuto.value.result === 'AUTO') return 'cf-close-card--done'
+    if (closeAuto.value.result === 'PENDING' || closeAuto.value.result === 'DISPUTE') return 'cf-close-card--pending'
+  }
+  if (closeRequest.value?.status === 'APPROVED') return 'cf-close-card--done'
+  if (closeRequest.value?.status === 'RETURNED') return 'cf-close-card--returned'
+  return ''
+})
+const closeCardActions = computed(() => {
+  const a = []
+  if (canManage.value && closeRequest.value?.status === 'PENDING' && detail.value.status !== 'DONE') {
+    a.push('review')
+  }
+  if (closeAuto.value.has) {
+    if (closeAuto.value.result === 'AUTO') a.push(canManage.value ? 'withdraw' : 'dispute')
+    if (closeAuto.value.result === 'DISPUTE' && canManage.value) a.push('reviewDispute')
+    if (closeAuto.value.result === 'PENDING' && canManage.value) a.push('confirm')
+  }
+  return a
+})
 
 const submitCloseRequest = async (feedback) => {
   if (!closeOutcome.value) {
@@ -1134,4 +1189,39 @@ const removeNode = async (row) => {
 .cf-pcomment__head { display: flex; align-items: center; gap: 8px; font-size: 12px }
 .cf-pcomment__author { font-weight: 600; color: #1b2430 }
 .cf-pcomment__body { font-size: 13px; color: #3d4654; margin-top: 3px; white-space: pre-wrap; word-break: break-all }
+
+/* ---- 结案状态卡片（2026-11-13 重设计） ---- */
+.cf-close-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--cf-border, #e4e7ed);
+  border-radius: 6px;
+  background: var(--cf-panel, #fff);
+}
+.cf-close-card--done { border-left: 3px solid #3f9a5a; background: #f4faf6; }
+.cf-close-card--pending { border-left: 3px solid #d98a0b; background: #fdf8ef; }
+.cf-close-card--returned { border-left: 3px solid #c0392b; background: #fdf5f5; }
+
+.cf-close-card__main { display: flex; gap: 12px; align-items: flex-start; }
+.cf-close-card__badge { flex-shrink: 0; padding-top: 1px; }
+.cf-close-card__desc { flex: 1; min-width: 0; }
+.cf-close-card__result { font-size: 13px; color: var(--cf-text, #303133); line-height: 1.6; }
+.cf-close-card__note { font-size: 12px; color: var(--cf-text-3, #909399); line-height: 1.6; margin-top: 4px; white-space: pre-wrap; word-break: break-all; }
+
+.cf-close-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--cf-border, #e4e7ed);
+}
+
+.cf-close-card__secondary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
 </style>

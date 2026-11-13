@@ -228,8 +228,7 @@ public class CaseCloseRequestService {
         a.setResult("AUTO");
         a.setFlowAction(outcome);
         a.setFromStage(fromStatus);
-        a.setComment("自动结案：" + outcomeName(outcome)
-                + (note.isEmpty() ? "" : "；" + note));
+        a.setComment(note);
         a.setApproverId(AuthContext.userId());
         a.setApproverName(AuthContext.userName());
         a.setCreatedAt(LocalDateTime.now());
@@ -253,8 +252,7 @@ public class CaseCloseRequestService {
         a.setResult("PENDING");
         a.setFlowAction(outcome);
         a.setFromStage(fromStatus);
-        a.setComment("待确认结案：" + outcomeName(outcome)
-                + (note.isEmpty() ? "" : "；" + note));
+        a.setComment(note);
         a.setApplicantId(AuthContext.userId());
         a.setApplicantName(AuthContext.userName());
         a.setAppliedAt(LocalDateTime.now());
