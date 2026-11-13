@@ -355,7 +355,8 @@ public class TimeNodeService {
      * 办案信息，普通民警不该能改别人的案。
      */
     private void checkOperate(CaseInfo c) {
-        if (AuthContext.isFullAccess()) {
+        // 2026-11-13：放行研判员——研判员除嫌疑人外也可维护重要时间节点
+        if (AuthContext.isFullAccess() || AuthContext.isJudge()) {
             return;
         }
         Long empId = AuthContext.get() == null ? null : AuthContext.get().getEmployeeId();
