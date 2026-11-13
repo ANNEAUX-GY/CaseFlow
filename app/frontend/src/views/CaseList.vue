@@ -45,27 +45,6 @@
         <el-option label="已办结" value="DONE" />
         <el-option v-if="caseTypeStore.current !== 'ADMINISTRATIVE'" label="已撤销" value="CANCELLED" />
       </el-select>
-      <el-select v-model="query.priority" placeholder="优先级" clearable style="width: 110px" @change="applyFilters">
-        <el-option label="特急" value="URGENT" />
-        <el-option label="紧急" value="HIGH" />
-        <el-option label="普通" value="NORMAL" />
-        <el-option label="低" value="LOW" />
-      </el-select>
-      <el-select v-model="query.sourceType" placeholder="来源" clearable style="width: 110px" @change="applyFilters">
-        <el-option label="手工录入" value="MANUAL" />
-        <el-option label="PDF" value="PDF" />
-        <el-option label="Word" value="WORD" />
-        <el-option label="Excel" value="EXCEL" />
-      </el-select>
-      <el-cascader
-        v-model="cascadeFilter"
-        :options="categoryStore.tree"
-        :props="{ checkStrictly: true }"
-        placeholder="案件分类"
-        clearable
-        filterable
-        style="width: 170px"
-      />
       <el-select
         v-model="query.employeeId"
         filterable
@@ -80,10 +59,6 @@
       >
         <el-option v-for="e in employeeOptions" :key="e.id" :label="e.name" :value="e.id" />
       </el-select>
-      <el-select v-model="query.hasSuspect" placeholder="嫌疑人" clearable style="width: 110px" @change="applyFilters">
-        <el-option label="有嫌疑人" value="YES" />
-        <el-option label="无嫌疑人" value="NO" />
-      </el-select>
       <el-select v-if="!isClosedPage" v-model="query.dueBucket" placeholder="到期" clearable style="width: 130px" @change="applyFilters">
         <el-option label="已逾期" value="OVERDUE" />
         <el-option label="今天到期" value="TODAY" />
@@ -91,6 +66,15 @@
         <el-option label="7天内" value="D7" />
         <el-option label="未设期限" value="NONE" />
       </el-select>
+
+      <!-- 更多筛选（2026-11-13 重设计）：低频条件收进折叠，主行只留最常用的，
+           降低视觉噪声。有值未展开时按钮带计数圆点提醒。 -->
+      <el-button class="cf-filter-more" :class="{ 'has-value': advancedFilterCount > 0, 'is-open': advancedOpen }" @click="advancedOpen = !advancedOpen">
+        <span class="cf-filter-more__label">更多筛选</span>
+        <span v-if="advancedFilterCount > 0" class="cf-filter-more__dot">{{ advancedFilterCount }}</span>
+        <span class="cf-filter-more__caret"></span>
+      </el-button>
+
       <!-- 排序（2026-10-18）：默认由新到旧。案件时间 = 初查/行政按受案(或报案)时间，
            刑拘在办/取保在办按刑拘(或取保)时间（与列表时间列「所见即所排」同一口径）。 -->
       <el-select v-model="sortValue" style="width: 132px" @change="onSortChange">
@@ -105,6 +89,37 @@
            auto 外边距无论在哪一行都把它顶到最右。 -->
       <el-button v-if="!isClosedPage" type="primary" style="margin-left: auto" @click="onCreate">新建案件</el-button>
     </div>
+
+    <!-- 更多筛选折叠区（2026-11-13）：低频条件，默认收起 -->
+    <el-collapse-transition>
+      <div v-show="advancedOpen" class="cf-toolbar cf-toolbar--advanced">
+        <el-select v-model="query.priority" placeholder="优先级" clearable style="width: 110px" @change="applyFilters">
+          <el-option label="特急" value="URGENT" />
+          <el-option label="紧急" value="HIGH" />
+          <el-option label="普通" value="NORMAL" />
+          <el-option label="低" value="LOW" />
+        </el-select>
+        <el-select v-model="query.sourceType" placeholder="来源" clearable style="width: 110px" @change="applyFilters">
+          <el-option label="手工录入" value="MANUAL" />
+          <el-option label="PDF" value="PDF" />
+          <el-option label="Word" value="WORD" />
+          <el-option label="Excel" value="EXCEL" />
+        </el-select>
+        <el-cascader
+          v-model="cascadeFilter"
+          :options="categoryStore.tree"
+          :props="{ checkStrictly: true }"
+          placeholder="案件分类"
+          clearable
+          filterable
+          style="width: 170px"
+        />
+        <el-select v-model="query.hasSuspect" placeholder="嫌疑人" clearable style="width: 110px" @change="applyFilters">
+          <el-option label="有嫌疑人" value="YES" />
+          <el-option label="无嫌疑人" value="NO" />
+        </el-select>
+      </div>
+    </el-collapse-transition>
 
     <!-- 可视化：随筛选条件联动统计 -->
     <el-row :gutter="12">
@@ -223,6 +238,18 @@ const query = reactive({
   // 排序（2026-10-18）：默认按「案件时间」由新到旧，用户可在工具栏切换升降序
   sortField: 'case_time',
   sortOrder: 'desc'
+})
+
+// 更多筛选折叠（2026-11-13 重设计）：低频条件收进折叠，默认收起
+const advancedOpen = ref(false)
+// 折叠里有值时的计数（优先级/来源/案件分类/嫌疑人 4 项），用于按钮上的提示圆点
+const advancedFilterCount = computed(() => {
+  let n = 0
+  if (query.priority) n++
+  if (query.sourceType) n++
+  if (query.caseType || query.category) n++
+  if (query.hasSuspect) n++
+  return n
 })
 
 /** 排序下拉的合成值（字段-方向），与 query 的 sortField/sortOrder 双向绑定 */

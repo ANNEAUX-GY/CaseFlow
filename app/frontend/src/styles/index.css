@@ -610,6 +610,43 @@ body {
   gap: 8px;
 }
 
+/* 更多筛选折叠（2026-11-13）：主行之外的次级筛选行，视觉上弱化一层 */
+.cf-toolbar--advanced {
+  padding: 10px 12px;
+  margin: 8px 0 0;
+  background: var(--cf-head-bg, #f5f7fa);
+  border: 1px solid var(--cf-border, #e4e7ed);
+  border-radius: 4px;
+}
+
+/* 更多筛选开关按钮：普通描边按钮样式 + 尾部下箭头；展开时箭头翻转 */
+.cf-filter-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 12px;
+}
+.cf-filter-more__caret {
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid var(--cf-text-2, #606266);
+  transition: transform 0.18s ease;
+}
+.cf-filter-more.is-open .cf-filter-more__caret { transform: rotate(180deg); }
+.cf-filter-more__dot {
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--cf-primary, #1b4a8c);
+  color: #fff;
+  font-size: 11px;
+  line-height: 16px;
+  text-align: center;
+}
+
 .cf-spacer { flex: 1; }
 
 /* 措施到期明细条（2026-10-24）：我的案件页用；一行一案，点整行进案件 */
