@@ -83,9 +83,11 @@ import { notificationApi } from '../api'
 import { useEventStore } from '../store/events'
 import { dateKeyOf } from '../utils/format'
 import { useUserStore } from '../store/user'
+import { useCaseTypeStore } from '../store/caseType'
 
 const eventStore = useEventStore()
 const userStore = useUserStore()
+const caseTypeStore = useCaseTypeStore()
 const router = useRouter()
 const myUserId = computed(() => userStore.userInfo?.userId || null)
 
@@ -162,6 +164,12 @@ const read = async (n) => {
 if (n.caseId) {
   // 关面板再跳转：el-popover 的 hide()，别手动置 v-model（trigger=click 模式没有它）
   popRef.value?.hide()
+  // 点「查看案件」是要直达具体案件详情，与「浏览某一类案件」的门控无关。
+  // 若此刻还没选过案件类型，/cases 会被路由守卫拦去类型选择页、挡住详情——
+  // 这里临时兜一个「查看全部」，让守卫放行，直接落地 /cases?caseId=xxx 弹详情。
+  if (userStore.isFullAccess && !caseTypeStore.selected) {
+    caseTypeStore.select('ALL')
+  }
   const path = userStore.isFullAccess ? '/cases' : '/my-cases'
   const query = { caseId: n.caseId }
   if (n.anchorTodoId) query.todoId = n.anchorTodoId
