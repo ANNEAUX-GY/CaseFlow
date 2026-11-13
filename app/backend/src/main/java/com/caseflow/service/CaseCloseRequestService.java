@@ -397,6 +397,47 @@ public class CaseCloseRequestService {
         return approvalMapper.selectList(q);
     }
 
+    /**
+     * 待确认的结案申请（带案件名，工作台「待手动确认」面板直接渲染用）。
+     *
+     * <p>与 {@link #pendingCloseApprovals} 同口径，只是把 caseId 拼成案件编号 + 名称，
+     * 前端不用再逐条查案件。孤儿申请（案件已删）跳过，避免面板出现死链。
+     */
+    public List<com.caseflow.vo.CloseApprovalVO> pendingCloseApprovalVOs(Long caseId) {
+        List<CaseApproval> rows = pendingCloseApprovals(caseId);
+        if (rows.isEmpty()) {
+            return java.util.Collections.emptyList();
+        }
+        java.util.Set<Long> ids = new java.util.HashSet<>();
+        for (CaseApproval a : rows) {
+            ids.add(a.getCaseId());
+        }
+        java.util.Map<Long, CaseInfo> cases = new java.util.HashMap<>();
+        for (CaseInfo c : caseMapper.selectBatchIds(ids)) {
+            cases.put(c.getId(), c);
+        }
+        List<com.caseflow.vo.CloseApprovalVO> list = new java.util.ArrayList<>();
+        for (CaseApproval a : rows) {
+            CaseInfo c = cases.get(a.getCaseId());
+            if (c == null) {
+                continue; // 孤儿申请兜底跳过
+            }
+            com.caseflow.vo.CloseApprovalVO v = new com.caseflow.vo.CloseApprovalVO();
+            v.setId(a.getId());
+            v.setCaseId(a.getCaseId());
+            v.setCaseNo(c.getCaseNo());
+            v.setCaseName(c.getName());
+            v.setOutcome(a.getFlowAction());
+            v.setOutcomeName(outcomeName(a.getFlowAction()));
+            v.setFromStatus(a.getFromStage());
+            v.setComment(a.getComment());
+            v.setApplicantName(a.getApplicantName());
+            v.setAppliedAt(a.getAppliedAt());
+            list.add(v);
+        }
+        return list;
+    }
+
     /** 全局限的待审批自动结案异议（工作台用）；caseId 不为空时只看该案件 */
     public List<CaseApproval> pendingCloseDisputes(Long caseId) {
         LambdaQueryWrapper<CaseApproval> q = new LambdaQueryWrapper<CaseApproval>()

@@ -67,4 +67,8 @@ public class DashboardVO implements Serializable {
     private long closePending;
     /** 待审批的自动结案异议数（领导可见；普通民警恒 0） */
     private long closeDispute;
+    /** 待审批的状态变更申请列表（工作台「待手动确认」面板直接渲染；领导可见） */
+    private List<FlowApprovalVO> flowPendingList;
+    /** 待确认的结案申请列表（带案件名；领导可见） */
+    private List<CloseApprovalVO> closePendingList;
 }

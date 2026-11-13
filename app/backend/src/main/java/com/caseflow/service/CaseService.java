@@ -32,6 +32,7 @@ import com.caseflow.vo.CaseVO;
 import com.caseflow.vo.DashboardVO;
 import com.caseflow.vo.ImportResultVO;
 import com.caseflow.vo.SuspectVO;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -146,6 +147,16 @@ public class CaseService {
     /** 工作台「待审批的措施变更」计数（2026-10-24）；直接读 mapper，不依赖 ApprovalService，避免循环依赖 */
     @Resource
     private com.caseflow.mapper.CaseApprovalMapper approvalMapper;
+    /**
+     * 工作台「待手动确认」面板的状态变更列表（2026-11-13）。
+     * FlowService 不依赖 CaseService，无环，可直接注入；
+     * CaseCloseRequestService 依赖 CaseService（changeStatus），必须 @Lazy 否则启动期成环。
+     */
+    @Resource
+    private FlowService flowService;
+    @Resource
+    @Lazy
+    private CaseCloseRequestService closeRequestService;
     /**
      * 「提意见即派待办」的唯一落点。指派 / 建案要一并录入待办时也走它，
      * 保证待办只有一种产生方式（带 opinion_id、截止时间、重要程度、常用待办记忆）。
@@ -1648,6 +1659,17 @@ public class CaseService {
                         .eq(com.caseflow.entity.CaseApproval::getResult, "DISPUTE")
                         .inSql(com.caseflow.entity.CaseApproval::getCaseId, "SELECT id FROM case_info"))
                 : 0);
+
+        // 「待手动确认」面板的列表（2026-11-13）：状态变更待审批 + 待确认结案。
+        // 只有全量视角（scopeIds==null，即管理层工作台）才走到这里并填充；
+        // personalDashboard 传非 null 会在方法开头提前 return，这两个字段保持 null（前端兜底为空）。
+        if (AuthContext.isFullAccess() && scopeIds == null) {
+            vo.setFlowPendingList(flowService.pendingFlowApprovalVOs(null));
+            vo.setClosePendingList(closeRequestService.pendingCloseApprovalVOs(null));
+        } else {
+            vo.setFlowPendingList(java.util.Collections.emptyList());
+            vo.setClosePendingList(java.util.Collections.emptyList());
+        }
     }
 
     /**

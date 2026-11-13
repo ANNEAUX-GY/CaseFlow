@@ -120,6 +120,30 @@ body {
 
 .cf-panel__body { padding: 14px 16px; }
 
+/* 「待手动确认」面板（2026-11-13）：工作台单开一栏，列表化呈现待审批的状态变更/结案申请 */
+.cf-approve-panel .cf-panel__body { padding: 6px 16px 14px; }
+.cf-approve-section { padding: 8px 0; }
+.cf-approve-section + .cf-approve-section { border-top: 1px dashed var(--cf-border); }
+.cf-approve-section__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cf-text-2);
+  margin-bottom: 6px;
+}
+.cf-approve-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--cf-head-bg);
+}
+.cf-approve-item + .cf-approve-item { margin-top: 6px; }
+.cf-approve-item__main { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; min-width: 0; flex: 1; }
+.cf-approve-item__meta { font-size: 12px; color: var(--cf-text-2); }
+.cf-approve-item__ops { display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0; }
+
 /* 标题 */
 .cf-title {
   font-size: 18px;

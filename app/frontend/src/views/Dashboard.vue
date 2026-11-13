@@ -204,6 +204,62 @@
       />
     </div>
 
+    <!-- 待手动确认（2026-11-13）：单开一栏，管理用户在此确认承办人提交的状态变更/结案申请。
+         与「强制措施到期」面板里的审批按钮不同，这里是常驻列表，一眼看到"有几件要批、都是什么"。 -->
+    <div v-if="canFocus" class="cf-panel cf-approve-panel">
+      <div class="cf-panel__head">
+        <span>待手动确认</span>
+        <span class="cf-panel__head-tip">承办人提交的状态变更 / 结案申请，需在此确认后才生效</span>
+        <span class="cf-spacer"></span>
+        <el-tag v-if="hasManualConfirm" type="warning" size="small" effect="dark">
+          待处理 {{ flowPendingList.length + closePendingList.length }} 件
+        </el-tag>
+      </div>
+      <div class="cf-panel__body">
+        <template v-if="hasManualConfirm">
+          <!-- 状态变更待确认 -->
+          <div v-if="flowPendingList.length" class="cf-approve-section">
+            <div class="cf-approve-section__title">案件状态变更（{{ flowPendingList.length }}）</div>
+            <div v-for="row in flowPendingList" :key="'flow-' + row.id" class="cf-approve-item">
+              <div class="cf-approve-item__main">
+                <el-link type="primary" @click="openDetail({ id: row.caseId })">{{ row.caseName }}</el-link>
+                <span class="cf-approve-item__meta">
+                  {{ row.fromStageName }} → {{ row.targetStageName }}
+                </span>
+                <span class="cf-approve-item__meta cf-muted">
+                  {{ row.applicantName || '—' }} · {{ (row.appliedAt || '').slice(0, 16).replace('T', ' ') }}
+                </span>
+                <span v-if="row.comment" class="cf-approve-item__meta cf-muted">说明：{{ row.comment }}</span>
+              </div>
+              <div class="cf-approve-item__ops">
+                <el-button type="primary" size="small" @click="reviewFlowOne(row, true)">同意</el-button>
+                <el-button type="danger" size="small" plain @click="reviewFlowOne(row, false)">退回</el-button>
+              </div>
+            </div>
+          </div>
+          <!-- 结案待确认 -->
+          <div v-if="closePendingList.length" class="cf-approve-section">
+            <div class="cf-approve-section__title">结案申请（{{ closePendingList.length }}）</div>
+            <div v-for="row in closePendingList" :key="'close-' + row.id" class="cf-approve-item">
+              <div class="cf-approve-item__main">
+                <el-link type="primary" @click="openDetail({ id: row.caseId })">{{ row.caseName }}</el-link>
+                <span class="cf-approve-item__meta">结案结果：{{ row.outcomeName || closeOutcomeLabel(row.outcome) }}</span>
+                <span class="cf-approve-item__meta cf-muted">
+                  {{ row.applicantName || '—' }} · {{ (row.appliedAt || '').slice(0, 16).replace('T', ' ') }}
+                </span>
+                <span v-if="row.comment" class="cf-approve-item__meta cf-muted">说明：{{ row.comment }}</span>
+              </div>
+              <div class="cf-approve-item__ops">
+                <el-button type="primary" size="small" @click="reviewCloseOne(row, true)">同意结案</el-button>
+                <el-button type="danger" size="small" plain @click="reviewCloseOne(row, false)">退回</el-button>
+              </div>
+            </div>
+          </div>
+        </template>
+        <div v-else class="cf-muted">暂无待手动确认的事项。承办人提交状态变更或结案申请后，会出现在这里。</div>
+      </div>
+    </div>
+
     <!-- 强制措施到期（2026-10-24）：排在重点案件之后、逾期之前。
          措施到期 = 该措施不再有效，必须由领导或承办人登记下一个措施，
          比普通案件期限逾期更该先看到（超期羁押是硬风险）。 -->
@@ -561,6 +617,11 @@ const userStore = useUserStore()
 const canFocus = computed(() => userStore.isFullAccess)
 const data = ref({})
 const stats = ref({})
+
+// 「待手动确认」面板（2026-11-13）：dashboard 直接返回列表，管理用户在此单开一栏确认。
+const flowPendingList = computed(() => data.value.flowPendingList || [])
+const closePendingList = computed(() => data.value.closePendingList || [])
+const hasManualConfirm = computed(() => flowPendingList.value.length > 0 || closePendingList.value.length > 0)
 
 // 图表可调项：天数、图形类型、负载口径
 const trendDays = ref(14)
@@ -964,7 +1025,7 @@ const openCloseApprovals = async () => {
 }
 const reviewCloseOne = async (row, approve) => {
   let comment = ''
-  const tip = `案件：${row.caseName}\n结案结果：${closeOutcomeLabel(row.flowAction)}`
+  const tip = `案件：${row.caseName}\n结案结果：${closeOutcomeLabel(row.outcome || row.flowAction)}`
   const r = await ElMessageBox.prompt(
     approve ? `${tip}\n\n审批意见（可留空）` : `${tip}\n\n请填写退回原因（必填）`,
     approve ? '确认结案' : '退回结案申请',
