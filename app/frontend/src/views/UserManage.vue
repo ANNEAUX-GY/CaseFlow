@@ -486,10 +486,11 @@ const onPickEmployee = () => {
 const toggleNewEmployee = () => {
   dlg.newEmpOpen = !dlg.newEmpOpen
   if (dlg.newEmpOpen) {
+    // 自动填充：姓名/部门来自账号表单已填内容，职务跟随角色映射（如研判员→研判员）
     dlg.newEmp = {
       name: dlg.form.displayName || '',
       dept: dlg.form.dept || '',
-      title: '普通民警',
+      title: roles.value[dlg.form.role] || '',
       policeSystemNo: ''
     }
   }

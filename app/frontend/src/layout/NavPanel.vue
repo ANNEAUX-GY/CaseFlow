@@ -14,7 +14,7 @@
     <el-menu :default-active="activePath" router :collapse="false" class="cf-nav__menu" @select="onSelect">
       <!-- 侧栏三档（判据见 store/user.js 的 navTier）：
            ① 普通民警：只有「我的案件 / 我的待办 / 到期提醒」，内容都只与本人民下案件相关；
-           ② 研判员：查看全量案件（案件管理 / 已办结 / 到期提醒），可录入嫌疑人；
+           ② 研判员：可进入栏目只有「案件管理」（2026-11-13 收敛），查看全量案件 + 录入嫌疑人；
            ③ 业务领导（所长 / 副所长 / 队长 / 法制员）：全所业务栏目（工作台、盯办、待办总览、案件管理、到期提醒），
               **不含**员工图谱 / 类别管理 / 账号管理——这三项属于系统运维，只留给系统管理员；
            ④ 系统管理员：业务栏目 + 系统管理类三项。 -->
@@ -43,18 +43,6 @@
         <el-menu-item index="/cases">
           <el-icon><Tickets /></el-icon>
           <span>案件管理</span>
-        </el-menu-item>
-        <el-menu-item index="/closed-cases">
-          <el-icon><DocumentChecked /></el-icon>
-          <span>已办结案件</span>
-        </el-menu-item>
-        <el-menu-item index="/reminders">
-          <el-icon><AlarmClock /></el-icon>
-          <span>到期提醒</span>
-        </el-menu-item>
-        <el-menu-item index="/work-log">
-          <el-icon><Notebook /></el-icon>
-          <span>工作记录本</span>
         </el-menu-item>
       </template>
 

@@ -13,8 +13,10 @@ const STAFF_PAGES = ['/my-cases', '/reminders', '/my-todos', '/case-type', '/wor
 // 若此页不在白名单，会被上面那条规则弹回 /my-cases，形成
 // 「点菜单 → 跳选择页 → 被弹回」的循环，表现为菜单点不动（实测踩过）。
 
-/** 研判员（2026-10-29）：查看全量案件 + 录入嫌疑人。可进案件管理/已办结/到期提醒/类型门控页 */
-const JUDGE_PAGES = ['/cases', '/closed-cases', '/reminders', '/case-type', '/case-boards', '/case-stages', '/work-log']
+/** 研判员（2026-10-29 新增，2026-11-13 收敛）：查看全量案件 + 录入嫌疑人。
+ *  可进入栏目只有「案件管理」；/case-type、/case-boards、/case-stages 是案件管理的
+ *  类型门控过渡页，必须保留，否则研判员连案件管理都进不去（会卡在类型选择页）。 */
+const JUDGE_PAGES = ['/cases', '/case-type', '/case-boards', '/case-stages']
 
 /** 登录后的落地页：管理层进工作台，普通民警进我的案件，研判员进案件管理 */
 export const homePathOf = (role) => (isFullAccessRole(role) ? '/dashboard' : (isJudgeRole(role) ? '/cases' : '/my-cases'))
@@ -125,16 +127,21 @@ router.beforeEach(async (to) => {
   }
 
   const role = storedRole()
-  // 普通民警：不在白名单里的一律回落「我的案件」。
-  // 后端接口另有数据范围强制收敛，这里只是体验层，不留白屏和看不懂的页面。
-  if (!isFullAccessRole(role) && !STAFF_PAGES.includes(firstSeg(to.path))) {
-    // 研判员例外：可进案件管理/已办结/到期提醒等查看类页面
-    if (!(isJudgeRole(role) && JUDGE_PAGES.includes(firstSeg(to.path)))) {
+  // 研判员：可进入栏目只有「案件管理」，其余一律回落（2026-11-13 收敛）。
+  // 单独拎出来判断，避免 /reminders、/work-log 这类「普通民警也能进」的页面
+  // 顺带把研判员也放行——它们不在 JUDGE_PAGES 里，必须拦住。
+  if (isJudgeRole(role)) {
+    if (!JUDGE_PAGES.includes(firstSeg(to.path))) {
       return { path: homePathOf(role) }
     }
+  } else if (!isFullAccessRole(role) && !STAFF_PAGES.includes(firstSeg(to.path))) {
+    // 普通民警：不在白名单里的一律回落「我的案件」。
+    // 后端接口另有数据范围强制收敛，这里只是体验层，不留白屏和看不懂的页面。
+    return { path: homePathOf(role) }
   }
   // 整页级权限：普通民警手敲 /users 也不让进（后端接口另有 403 兜底）
-  // 研判员例外：研判员可查看全量案件，能进「已办结案件」等查看类 fullAccessOnly 页面。
+  // 研判员例外：案件管理的三级浏览过渡页（case-boards / case-stages）标了 fullAccessOnly，
+  // 研判员进「案件管理」选小类/阶段要走这两页，必须放行；其余 fullAccessOnly 页已被上方白名单拦下。
   if (to.meta.fullAccessOnly && !isFullAccessRole(role) && !isJudgeRole(role)) {
     return { path: homePathOf(role) }
   }
