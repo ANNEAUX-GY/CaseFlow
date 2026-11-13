@@ -90,6 +90,7 @@
       <div v-if="canViewCloseRequest" class="cf-panel" style="margin-top: 12px">
         <div class="cf-panel__head">
           <span>案件结案</span>
+          <el-button v-if="canRegisterClose" type="primary" size="small" @click="openRegisterClose">登记结案结果</el-button>
           <el-button v-if="canManage && !['DONE', 'CANCELLED'].includes(detail.status)" type="warning" size="small" @click="openDirectClose">直接结案</el-button>
           <el-button v-if="canRequestClose" type="primary" size="small" @click="closeDialogVisible = true">申请结案</el-button>
         </div>
@@ -105,6 +106,21 @@
           </div>
         </template>
         <span v-else class="cf-muted">尚无结案申请；经办人完成案件后可填写结案结果申请。</span>
+
+        <!-- 结案登记留痕（2026-11-13）：自动结案可异议/撤回；手动模式显示待确认 -->
+        <div v-if="closeAuto.has" style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--cf-border, #e4e7ed)">
+          <p style="margin: 0 0 8px">
+            <el-tag v-if="closeAuto.result === 'PENDING'" size="small" type="warning" effect="plain">结案待确认</el-tag>
+            <el-tag v-else-if="closeAuto.result === 'AUTO'" size="small" type="info" effect="plain">已自动结案</el-tag>
+            <el-tag v-else-if="closeAuto.result === 'DISPUTE'" size="small" type="warning" effect="plain">结案异议待审批</el-tag>
+            <span class="cf-muted" style="font-size: 12px; margin-left: 6px">结案结果：{{ closeAuto.outcomeName }}</span>
+          </p>
+          <p v-if="closeAuto.comment" class="cf-muted" style="font-size: 12px; white-space: pre-wrap; margin: 0 0 8px">{{ closeAuto.comment }}</p>
+          <el-button v-if="closeAuto.result === 'AUTO' && !canManage" size="small" type="warning" plain @click="openCloseDispute">对自动结案提异议</el-button>
+          <el-button v-if="closeAuto.result === 'AUTO' && canManage" size="small" type="danger" plain @click="openCloseWithdraw">撤回结案</el-button>
+          <el-button v-if="closeAuto.result === 'DISPUTE' && canManage" size="small" type="primary" plain @click="openCloseDisputeReview">审批异议</el-button>
+          <el-button v-if="closeAuto.result === 'PENDING' && canManage" size="small" type="primary" plain @click="openClosePendingReview">确认结案</el-button>
+        </div>
       </div>
 
       <!-- 重要时间节点（2026-10-13）：增删改都在这里，与建案弹窗的批量录入互补。
@@ -343,6 +359,72 @@
     </template>
   </el-dialog>
 
+  <!-- 登记结案结果（2026-11-13）：按全局开关自动结案或生成待确认结案 -->
+  <el-dialog v-model="registerCloseVisible" title="登记结案结果" width="520px" append-to-body>
+    <el-alert type="info" :closable="false" show-icon style="margin-bottom: 12px">
+      <template #title>刑事：撤案 / 移送预审 / 移送其他单位即结案；行政：处罚 / 不予处罚 / 终止调查即结案</template>
+    </el-alert>
+    <el-form label-width="80px">
+      <el-form-item label="结案结果" required>
+        <el-select v-model="registerCloseOutcome" placeholder="请选择结案结果" style="width: 100%">
+          <el-option v-for="o in closeOutcomeOptions" :key="o.value" :label="o.label" :value="o.value" />
+        </el-select>
+      </el-form-item>
+      <el-form-item label="处理说明">
+        <el-input v-model="registerCloseNote" type="textarea" :rows="3" maxlength="600" show-word-limit
+          placeholder="可填写结案处理说明" />
+      </el-form-item>
+    </el-form>
+    <template #footer>
+      <el-button @click="registerCloseVisible = false">取消</el-button>
+      <el-button type="primary" :loading="registerCloseSaving" @click="doRegisterClose">确认登记</el-button>
+    </template>
+  </el-dialog>
+
+  <!-- 对自动结案提异议（2026-11-13） -->
+  <el-dialog v-model="closeDispute.visible" title="对自动结案提异议" width="460px" append-to-body>
+    <p class="cf-muted" style="margin: 0 0 10px; font-size: 13px; line-height: 1.7">
+      该案件已自动结案（{{ closeAuto.outcomeName }}）。<br />
+      如认为结案不合理，请填写异议理由，案管/领导审批同意后可退回。
+    </p>
+    <el-input v-model="closeDispute.comment" type="textarea" :rows="4" maxlength="300" show-word-limit
+      placeholder="请填写异议理由（必填）" />
+    <template #footer>
+      <el-button @click="closeDispute.visible = false">取消</el-button>
+      <el-button type="warning" :loading="closeDispute.loading" :disabled="!closeDispute.comment.trim()"
+        @click="doCloseDispute">提交异议</el-button>
+    </template>
+  </el-dialog>
+
+  <!-- 撤回自动结案（2026-11-13） -->
+  <el-dialog v-model="closeWithdraw.visible" title="撤回自动结案" width="460px" append-to-body>
+    <p class="cf-muted" style="margin: 0 0 10px; font-size: 13px; line-height: 1.7">
+      将案件状态回退到结案前的「{{ closeAuto.fromStatus }}」，案件重新进入办理。<br />
+      结案结果本身是客观事实，撤回仅让案件回到可继续办理的状态。
+    </p>
+    <el-input v-model="closeWithdraw.comment" type="textarea" :rows="3" maxlength="200"
+      placeholder="撤回原因（选填）" />
+    <template #footer>
+      <el-button @click="closeWithdraw.visible = false">取消</el-button>
+      <el-button type="danger" :loading="closeWithdraw.loading" @click="doCloseWithdraw">确认撤回</el-button>
+    </template>
+  </el-dialog>
+
+  <!-- 审批自动结案异议（2026-11-13） -->
+  <el-dialog v-model="closeDisputeReview.visible" title="审批自动结案异议" width="480px" append-to-body>
+    <p class="cf-muted" style="margin: 0 0 10px; font-size: 13px; line-height: 1.7">
+      承办人异议理由：{{ closeAuto.comment || '—' }}
+    </p>
+    <el-input v-model="closeDisputeReview.comment" type="textarea" :rows="3" maxlength="300"
+      placeholder="审批意见（同意退回时必填）" />
+    <template #footer>
+      <el-button @click="closeDisputeReview.visible = false">取消</el-button>
+      <el-button :loading="closeDisputeReview.loading" @click="doCloseDisputeReview(false)">不同意退回</el-button>
+      <el-button type="danger" :loading="closeDisputeReview.loading" :disabled="!closeDisputeReview.comment.trim()"
+        @click="doCloseDisputeReview(true)">同意退回</el-button>
+    </template>
+  </el-dialog>
+
   <!-- 时间节点录入：新增与修改共用（带 nodeId 即为修改） -->
   <el-dialog
     v-model="nodeVisible"
@@ -456,7 +538,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ElCollapseTransition } from 'element-plus'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { caseApi, fileApi, suspectApi, timeNodeApi, logApi, watchApi } from '../api'
@@ -499,6 +581,16 @@ const directCloseVisible = ref(false)
 const directCloseOutcome = ref('')
 const directCloseNote = ref('')
 const directCloseSaving = ref(false)
+/** 登记结案结果（2026-11-13）：按全局开关自动结案或生成待确认结案 */
+const registerCloseVisible = ref(false)
+const registerCloseOutcome = ref('')
+const registerCloseNote = ref('')
+const registerCloseSaving = ref(false)
+/** 自动结案留痕（2026-11-13）：可异议/撤回 */
+const closeAuto = ref({ has: false, approvalId: null, result: '', outcome: '', outcomeName: '', fromStatus: '', comment: '' })
+const closeDispute = reactive({ visible: false, loading: false, comment: '' })
+const closeWithdraw = reactive({ visible: false, loading: false, comment: '' })
+const closeDisputeReview = reactive({ visible: false, loading: false, comment: '' })
 const closeOutcomeName = (value) => ({
   MEDIATION: '调解', PENALTY: '处罚', NO_PENALTY: '不予处罚', TERMINATED: '终止调查',
   WITHDRAW: '撤案', TRANSFER_PRETRIAL: '移送预审', TRANSFER_OTHER: '移送其他单位'
@@ -522,6 +614,10 @@ const canViewCloseRequest = computed(() => canManage.value || isCurrentHandler.v
 const canRequestClose = computed(() => !['DONE', 'CANCELLED'].includes(detail.value.status)
   && closeRequest.value?.status !== 'PENDING'
   && isCurrentHandler.value)
+/** 登记结案结果（2026-11-13）：未结案的案件，管理层或本案承办人可登记 */
+const canRegisterClose = computed(() => !['DONE', 'CANCELLED'].includes(detail.value.status)
+  && (canManage.value || isCurrentHandler.value)
+  && closeRequest.value?.status !== 'PENDING')
 const closeOperationText = computed(() => closeRequest.value?.operationPlatform
   ? '于 ' + (closeRequest.value.operationTime || closeRequest.value.submittedAt) + ' 在 '
     + closeRequest.value.operationPlatform + ' 执行了 ' + closeRequest.value.operationAction + ' 操作。' : '')
@@ -574,6 +670,121 @@ const doDirectClose = async () => {
   } finally {
     directCloseSaving.value = false
   }
+}
+
+// ---- 登记结案结果（2026-11-13）：自动/手动由全局开关决定 ----
+const openRegisterClose = () => {
+  registerCloseOutcome.value = ''
+  registerCloseNote.value = ''
+  registerCloseVisible.value = true
+}
+
+const doRegisterClose = async () => {
+  if (!registerCloseOutcome.value) {
+    ElMessage.warning('请选择结案结果')
+    return
+  }
+  registerCloseSaving.value = true
+  try {
+    await caseApi.registerCloseOutcome(detail.value.id, {
+      outcome: registerCloseOutcome.value,
+      note: registerCloseNote.value
+    })
+    ElMessage.success('结案结果已登记')
+    registerCloseVisible.value = false
+    await reload()
+    emit('done')
+  } finally {
+    registerCloseSaving.value = false
+  }
+}
+
+// ---- 自动结案的异议/撤回/审批（2026-11-13）----
+const loadCloseAuto = async () => {
+  try {
+    closeAuto.value = await caseApi.closeAuto(detail.value.id) || { has: false }
+  } catch (e) {
+    closeAuto.value = { has: false }
+  }
+}
+
+const openCloseDispute = () => {
+  closeDispute.comment = ''
+  closeDispute.visible = true
+}
+const doCloseDispute = async () => {
+  const comment = closeDispute.comment.trim()
+  if (!comment) {
+    ElMessage.warning('请填写异议理由')
+    return
+  }
+  closeDispute.loading = true
+  try {
+    await caseApi.disputeClose(closeAuto.value.approvalId, comment)
+    ElMessage.success('异议已提交，待案管/领导审批')
+    closeDispute.visible = false
+    await reload()
+    emit('done')
+  } catch (e) { /* 拦截器已提示 */ } finally {
+    closeDispute.loading = false
+  }
+}
+
+const openCloseWithdraw = () => {
+  closeWithdraw.comment = ''
+  closeWithdraw.visible = true
+}
+const doCloseWithdraw = async () => {
+  closeWithdraw.loading = true
+  try {
+    await caseApi.withdrawClose(closeAuto.value.approvalId, closeWithdraw.comment.trim())
+    ElMessage.success('已撤回结案，案件已重新打开')
+    closeWithdraw.visible = false
+    await reload()
+    emit('done')
+  } catch (e) { /* 拦截器已提示 */ } finally {
+    closeWithdraw.loading = false
+  }
+}
+
+const openCloseDisputeReview = () => {
+  closeDisputeReview.comment = ''
+  closeDisputeReview.visible = true
+}
+const doCloseDisputeReview = async (approve) => {
+  if (approve && !closeDisputeReview.comment.trim()) {
+    ElMessage.warning('同意退回须填写退回意见')
+    return
+  }
+  closeDisputeReview.loading = true
+  try {
+    await caseApi.reviewCloseDispute(closeAuto.value.approvalId, {
+      approve,
+      comment: closeDisputeReview.comment.trim()
+    })
+    ElMessage.success(approve ? '已同意退回，案件已重新打开' : '已驳回异议，维持结案')
+    closeDisputeReview.visible = false
+    await reload()
+    emit('done')
+  } catch (e) { /* 拦截器已提示 */ } finally {
+    closeDisputeReview.loading = false
+  }
+}
+
+/** 领导在案件详情确认「待确认结案」（手动模式） */
+const openClosePendingReview = async () => {
+  try {
+    await ElMessageBox.confirm(
+      `确认结案？结案结果：${closeAuto.value.outcomeName}`,
+      '确认结案', { type: 'warning', confirmButtonText: '确认结案', cancelButtonText: '取消' }
+    )
+  } catch { return }
+  try {
+    await caseApi.reviewManualClose(closeAuto.value.approvalId, { approve: true, comment: '' })
+    ElMessage.success('已确认结案')
+    await reload()
+    emit('done')
+  } catch (e) { /* 拦截器已提示 */ }
 }
 
 const reviewClose = async (approve) => {  if (closeReviewSaving.value || !closeRequest.value) return
@@ -646,6 +857,11 @@ const reload = async () => {
     detail.value = await caseApi.detail(props.caseId)
     closeRequest.value = canViewCloseRequest.value
       ? await caseApi.latestCloseRequest(props.caseId) : null
+    if (canViewCloseRequest.value) {
+      await loadCloseAuto()
+    } else {
+      closeAuto.value = { has: false }
+    }
   } catch (e) {
     // 案件已被删除，或当前登录人已经看不到它（转手后不再承办）：
     // 抽屉继续开着只会是一张空白卡，不如关掉并说清原因。

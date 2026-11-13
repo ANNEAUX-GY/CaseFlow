@@ -1635,6 +1635,19 @@ public class CaseService {
                         .eq(com.caseflow.entity.CaseApproval::getResult, "PENDING")
                         .inSql(com.caseflow.entity.CaseApproval::getCaseId, "SELECT id FROM case_info"))
                 : 0);
+        // 待确认的结案申请数 + 待审批的自动结案异议数（2026-11-13）：与上面同口径。
+        vo.setClosePending(AuthContext.isFullAccess() && scopeIds == null
+                ? approvalMapper.selectCount(new LambdaQueryWrapper<com.caseflow.entity.CaseApproval>()
+                        .eq(com.caseflow.entity.CaseApproval::getApproveType, "CLOSE")
+                        .eq(com.caseflow.entity.CaseApproval::getResult, "PENDING")
+                        .inSql(com.caseflow.entity.CaseApproval::getCaseId, "SELECT id FROM case_info"))
+                : 0);
+        vo.setCloseDispute(AuthContext.isFullAccess() && scopeIds == null
+                ? approvalMapper.selectCount(new LambdaQueryWrapper<com.caseflow.entity.CaseApproval>()
+                        .eq(com.caseflow.entity.CaseApproval::getApproveType, "CLOSE")
+                        .eq(com.caseflow.entity.CaseApproval::getResult, "DISPUTE")
+                        .inSql(com.caseflow.entity.CaseApproval::getCaseId, "SELECT id FROM case_info"))
+                : 0);
     }
 
     /**

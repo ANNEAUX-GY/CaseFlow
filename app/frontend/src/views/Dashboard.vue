@@ -230,6 +230,22 @@
         >
           状态变更待审批 {{ data.flowPending }} 条
         </el-button>
+        <el-button
+          v-if="canFocus && (data.closePending || 0) > 0"
+          type="primary" size="small"
+          :loading="closeDlg.loading"
+          @click="openCloseApprovals"
+        >
+          待确认结案 {{ data.closePending }} 条
+        </el-button>
+        <el-button
+          v-if="canFocus && (data.closeDispute || 0) > 0"
+          type="danger" size="small"
+          :loading="closeDisputeDlg.loading"
+          @click="openCloseDisputes"
+        >
+          结案异议待审批 {{ data.closeDispute }} 条
+        </el-button>
       </div>
       <div v-if="!(data.measureAlerts || []).length" class="cf-panel__body">
         <div class="cf-muted">暂无 7 天内到期或已到期的强制措施。</div>
@@ -463,6 +479,56 @@
       </el-table>
       <template #footer>
         <el-button @click="flowDlg.visible = false">关闭</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 待确认结案（2026-11-13） -->
+    <el-dialog v-model="closeDlg.visible" title="待确认的结案申请" width="720px" class="cf-dialog">
+      <div v-if="!closeDlg.rows.length" class="cf-muted">没有待确认的结案申请。</div>
+      <el-table v-else :data="closeDlg.rows" size="small" max-height="400">
+        <el-table-column label="案件" min-width="170" show-overflow-tooltip>
+          <template #default="{ row }">
+            <el-link type="primary" @click="openDetail({ id: row.caseId })">{{ row.caseName }}</el-link>
+          </template>
+        </el-table-column>
+        <el-table-column label="结案结果" width="130">
+          <template #default="{ row }">{{ closeOutcomeLabel(row.flowAction) }}</template>
+        </el-table-column>
+        <el-table-column prop="applicantName" label="申请人" width="90" />
+        <el-table-column label="操作" width="150" align="right">
+          <template #default="{ row }">
+            <el-button link type="success" @click="reviewCloseOne(row, true)">同意结案</el-button>
+            <el-button link type="danger" @click="reviewCloseOne(row, false)">退回</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <template #footer>
+        <el-button @click="closeDlg.visible = false">关闭</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 待审批的自动结案异议（2026-11-13） -->
+    <el-dialog v-model="closeDisputeDlg.visible" title="待审批的自动结案异议" width="720px" class="cf-dialog">
+      <div v-if="!closeDisputeDlg.rows.length" class="cf-muted">没有待审批的结案异议。</div>
+      <el-table v-else :data="closeDisputeDlg.rows" size="small" max-height="400">
+        <el-table-column label="案件" min-width="170" show-overflow-tooltip>
+          <template #default="{ row }">
+            <el-link type="primary" @click="openDetail({ id: row.caseId })">{{ row.caseName }}</el-link>
+          </template>
+        </el-table-column>
+        <el-table-column label="结案结果" width="130">
+          <template #default="{ row }">{{ closeOutcomeLabel(row.flowAction) }}</template>
+        </el-table-column>
+        <el-table-column prop="comment" label="异议理由" min-width="180" show-overflow-tooltip />
+        <el-table-column label="操作" width="170" align="right">
+          <template #default="{ row }">
+            <el-button link type="danger" @click="reviewCloseDisputeOne(row, true)">同意退回</el-button>
+            <el-button link type="info" @click="reviewCloseDisputeOne(row, false)">不同意退回</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <template #footer>
+        <el-button @click="closeDisputeDlg.visible = false">关闭</el-button>
       </template>
     </el-dialog>
 
@@ -876,6 +942,74 @@ const reviewFlowOne = async (row, approve) => {
   ElMessage.success(approve ? '已同意，案件状态已变更' : '已退回，案件状态保持不变')
   flowDlg.rows = (await watchApi.pendingFlowApprovals()) || []
   if (!flowDlg.rows.length) flowDlg.visible = false
+  await load()
+}
+
+// ---- 待确认结案 + 待审批结案异议（2026-11-13）----
+const closeDlg = reactive({ visible: false, rows: [], loading: false })
+const closeDisputeDlg = reactive({ visible: false, rows: [], loading: false })
+const closeOutcomeLabel = (v) => ({
+  MEDIATION: '调解', PENALTY: '处罚', NO_PENALTY: '不予处罚', TERMINATED: '终止调查',
+  WITHDRAW: '撤案', TRANSFER_PRETRIAL: '移送预审', TRANSFER_OTHER: '移送其他单位'
+})[v] || v || '-'
+
+const openCloseApprovals = async () => {
+  closeDlg.loading = true
+  try {
+    closeDlg.rows = (await caseApi.pendingCloseApprovals()) || []
+    closeDlg.visible = true
+  } finally {
+    closeDlg.loading = false
+  }
+}
+const reviewCloseOne = async (row, approve) => {
+  let comment = ''
+  const tip = `案件：${row.caseName}\n结案结果：${closeOutcomeLabel(row.flowAction)}`
+  const r = await ElMessageBox.prompt(
+    approve ? `${tip}\n\n审批意见（可留空）` : `${tip}\n\n请填写退回原因（必填）`,
+    approve ? '确认结案' : '退回结案申请',
+    {
+      inputType: 'textarea',
+      inputPlaceholder: approve ? '同意' : '例如：尚有事实未查清，暂不结案',
+      inputValidator: (v) => (approve ? true : (!!v && !!v.trim()) || '退回必须填写原因')
+    }
+  ).catch(() => null)
+  if (!r) return
+  comment = (r.value || '').trim()
+  await caseApi.reviewManualClose(row.id, { approve, comment })
+  ElMessage.success(approve ? '已确认结案' : '已退回，案件保持未结案')
+  closeDlg.rows = (await caseApi.pendingCloseApprovals()) || []
+  if (!closeDlg.rows.length) closeDlg.visible = false
+  await load()
+}
+
+const openCloseDisputes = async () => {
+  closeDisputeDlg.loading = true
+  try {
+    closeDisputeDlg.rows = (await caseApi.pendingCloseDisputes()) || []
+    closeDisputeDlg.visible = true
+  } finally {
+    closeDisputeDlg.loading = false
+  }
+}
+const reviewCloseDisputeOne = async (row, approve) => {
+  let comment = ''
+  const tip = `案件：${row.caseName}\n结案结果：${closeOutcomeLabel(row.flowAction)}\n异议理由：${row.comment || '—'}`
+  const r = await ElMessageBox.prompt(
+    approve ? `${tip}\n\n请填写退回意见（必填）` : `${tip}\n\n审批意见（可留空）`,
+    approve ? '同意退回结案' : '不同意退回',
+    {
+      inputType: 'textarea',
+      inputPlaceholder: approve ? '例如：同意退回，案件继续办理' : '不同意退回',
+      inputValidator: (v) => (approve ? (!!v && !!v.trim()) || '同意退回须填写意见' : true)
+    }
+  ).catch(() => null)
+  if (!r) return
+  comment = (r.value || '').trim()
+  await caseApi.reviewCloseDispute(row.id, { approve, comment })
+  ElMessage.success(approve ? '已同意退回，案件已重新打开' : '已驳回异议，维持结案')
+  closeDisputeDlg.rows = (await caseApi.pendingCloseDisputes()) || []
+  if (!closeDisputeDlg.rows.length) closeDisputeDlg.visible = false
   await load()
 }
 

@@ -1,10 +1,12 @@
 package com.caseflow.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.caseflow.entity.CaseApproval;
 import com.caseflow.entity.CaseAssignee;
 import com.caseflow.entity.CaseCloseRequest;
 import com.caseflow.entity.CaseInfo;
 import com.caseflow.exception.BizException;
+import com.caseflow.mapper.CaseApprovalMapper;
 import com.caseflow.mapper.CaseAssigneeMapper;
 import com.caseflow.mapper.CaseCloseRequestMapper;
 import com.caseflow.mapper.CaseInfoMapper;
@@ -35,8 +37,10 @@ public class CaseCloseRequestService {
     @Resource private CaseCloseRequestMapper requestMapper;
     @Resource private CaseInfoMapper caseMapper;
     @Resource private CaseAssigneeMapper assigneeMapper;
+    @Resource private CaseApprovalMapper approvalMapper;
     @Resource private CaseService caseService;
     @Resource private LogService logService;
+    @Resource private SystemConfigService configService;
 
     public CaseCloseRequest latest(Long caseId) {
         requireCase(caseId);
@@ -159,6 +163,258 @@ public class CaseCloseRequestService {
         caseService.changeStatus(caseId, status);
     }
 
+    // ------------------------------------------------------------------
+    // 结案结果的自动/手动登记（2026-11-13）
+    // ------------------------------------------------------------------
+    //
+    // 与「案件阶段变更模式」同构：全局开关 close_mode 决定登记结案结果后
+    // 自动结案还是生成待确认结案；自动结案后盯办提醒管理用户与承办人，
+    // 承办人可提异议退回，领导可直接撤回或审批异议。
+    //
+    // 复用 case_approval 表（approveType=CLOSE）承载结案留痕：
+    //   flow_action  → 结案结果编码（WITHDRAW/TRANSFER_PRETRIAL/...）
+    //   from_stage   → 结案前的案件状态（撤回/退回时据此回退）
+    //   result       → AUTO自动结案 / PENDING待确认 / DISPUTE异议 /
+    //                  RETURNED同意退回 / REJECTED驳回异议 / WITHDRAWN撤回
+    // 与既有「一键结案」（directClose 立即生效、submit+review 申请审批）并存互不干扰。
+
+    /**
+     * 登记结案结果（自动/手动由全局开关分派）。
+     *
+     * <p>权限：管理层（isFullAccess）或本案现职承办人。
+     * 结果按案件类型校验：刑事=撤案/移送预审/移送其他单位；行政=处罚/不予处罚/终止调查/调解。
+     *
+     * <ul>
+     *   <li>{@code AUTO}  → 直接结案落地，记一条 result=AUTO 的留痕，可异议/撤回；</li>
+     *   <li>{@code MANUAL}→ 不落地，生成 result=PENDING 的待确认结案，领导审批后落地；</li>
+     *   <li>{@code BOTH}  → 自动结案 + 保留手动确认入口（与 AUTO 同构，手动申请入口仍在）。</li>
+     * </ul>
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public synchronized CaseApproval registerOutcome(Long caseId, Map<String, String> body) {
+        CaseInfo c = requireOpenCase(caseId);
+        if (!AuthContext.isFullAccess()) {
+            requireHandler(caseId);
+        }
+        if (body == null) throw new BizException("请填写结案结果");
+        String outcome = trim(body.get("outcome"));
+        String note = trim(body.get("note"));
+        if (!validOutcome(c.getCaseType(), outcome)) throw new BizException("请选择合法的结案结果");
+        if (note.length() > 600) throw new BizException("处理说明超出长度限制");
+
+        String fromStatus = c.getStatus() == null ? "IN_PROGRESS" : c.getStatus();
+
+        // 自动结案（AUTO / BOTH）：落地 + 留 AUTO 留痕
+        if (configService.autoCloseEnabled()) {
+            CaseApproval a = recordAutoClose(c.getId(), outcome, fromStatus, note);
+            applyOutcome(caseId, outcome);
+            logService.log("CASE", "CLOSE_AUTO", "CASE", caseId,
+                    "登记结案结果并自动结案：" + outcomeName(outcome) + "；" + note);
+            return a;
+        }
+
+        // 手动确认（MANUAL）：生成待确认结案，领导审批后落地
+        CaseApproval a = recordManualClose(c.getId(), outcome, fromStatus, note);
+        logService.log("CASE", "CLOSE_PENDING", "CASE", caseId,
+                "登记结案结果（待管理用户确认结案）：" + outcomeName(outcome) + "；" + note);
+        return a;
+    }
+
+    /** 自动结案留痕：result=AUTO，供承办人异议 / 领导撤回 */
+    private CaseApproval recordAutoClose(Long caseId, String outcome, String fromStatus, String note) {
+        CaseApproval a = new CaseApproval();
+        a.setCaseId(caseId);
+        a.setApproveType("CLOSE");
+        a.setResult("AUTO");
+        a.setFlowAction(outcome);
+        a.setFromStage(fromStatus);
+        a.setComment("自动结案：" + outcomeName(outcome)
+                + (note.isEmpty() ? "" : "；" + note));
+        a.setApproverId(AuthContext.userId());
+        a.setApproverName(AuthContext.userName());
+        a.setCreatedAt(LocalDateTime.now());
+        approvalMapper.insert(a);
+        return a;
+    }
+
+    /** 手动结案留痕：result=PENDING 待确认，领导审批同意后落地 */
+    private CaseApproval recordManualClose(Long caseId, String outcome, String fromStatus, String note) {
+        // 已有待确认的结案申请则不再重复生成
+        List<CaseApproval> pending = approvalMapper.selectList(new LambdaQueryWrapper<CaseApproval>()
+                .eq(CaseApproval::getCaseId, caseId)
+                .eq(CaseApproval::getApproveType, "CLOSE")
+                .eq(CaseApproval::getResult, "PENDING"));
+        if (!pending.isEmpty()) {
+            return pending.get(0);
+        }
+        CaseApproval a = new CaseApproval();
+        a.setCaseId(caseId);
+        a.setApproveType("CLOSE");
+        a.setResult("PENDING");
+        a.setFlowAction(outcome);
+        a.setFromStage(fromStatus);
+        a.setComment("待确认结案：" + outcomeName(outcome)
+                + (note.isEmpty() ? "" : "；" + note));
+        a.setApplicantId(AuthContext.userId());
+        a.setApplicantName(AuthContext.userName());
+        a.setAppliedAt(LocalDateTime.now());
+        a.setCreatedAt(a.getAppliedAt());
+        approvalMapper.insert(a);
+        return a;
+    }
+
+    /**
+     * 领导审批「待确认结案」（手动模式落地）。
+     *
+     * <p>同意 → 落地结案（changeStatus）；退回 → 不结案，留意见。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void reviewManualClose(Long approvalId, boolean approve, String comment) {
+        if (!AuthContext.isFullAccess()) throw new BizException(403, "确认结案需管理层权限");
+        CaseApproval a = approvalMapper.selectById(approvalId);
+        if (a == null || !"CLOSE".equals(a.getApproveType()) || !"PENDING".equals(a.getResult())) {
+            throw new BizException("该记录不是待确认的结案申请");
+        }
+        if (!approve && !StringUtils.hasText(comment)) throw new BizException("退回须填写原因");
+        CaseInfo c = requireOpenCase(a.getCaseId());
+        a.setResult(approve ? "APPROVED" : "RETURNED");
+        a.setApproverId(AuthContext.userId());
+        a.setApproverName(AuthContext.userName());
+        a.setComment(StringUtils.hasText(comment) ? comment.trim() : "同意结案");
+        approvalMapper.updateById(a);
+        if (approve) {
+            applyOutcome(a.getCaseId(), a.getFlowAction());
+        }
+        logService.log("CASE", "CLOSE_REVIEW", "CASE", a.getCaseId(),
+                approve ? "确认结案，案件已办结" : "退回结案确认：" + abbrev(comment));
+    }
+
+    /**
+     * 承办人对「自动结案」提异议。
+     *
+     * <p>针对 result=AUTO 的 CLOSE 留痕：承办人认为不该结案（如移送有误），
+     * 提一条异议置为 DISPUTE，等领导审批。异议必填理由，且只能由本案现职承办人提出。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void disputeAutoClose(Long approvalId, String comment) {
+        CaseApproval a = approvalMapper.selectById(approvalId);
+        if (a == null || !"CLOSE".equals(a.getApproveType()) || !"AUTO".equals(a.getResult())) {
+            throw new BizException("该记录不是可异议的自动结案");
+        }
+        if (!StringUtils.hasText(comment)) throw new BizException("异议必须填写理由");
+        CaseInfo c = requireCase(a.getCaseId());
+        if (!AuthContext.isFullAccess()) {
+            requireHandler(a.getCaseId());
+        }
+        a.setResult("DISPUTE");
+        a.setComment("【异议】" + comment.trim());
+        a.setApplicantId(AuthContext.userId());
+        a.setApplicantName(AuthContext.userName());
+        a.setAppliedAt(LocalDateTime.now());
+        approvalMapper.updateById(a);
+        logService.log("CASE", "CLOSE_DISPUTE", "CASE", a.getCaseId(),
+                "对自动结案提异议（" + outcomeName(a.getFlowAction()) + "）：" + abbrev(comment));
+    }
+
+    /**
+     * 领导审批「自动结案异议」（同意退回 / 不同意退回）。
+     *
+     * <p>同意退回：把案件状态回退到结案前的 from_stage（重新打开案件）；
+     * 不同意：维持结案。两种都留审批意见。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void reviewCloseDispute(Long approvalId, boolean approve, String comment) {
+        if (!AuthContext.isFullAccess()) throw new BizException(403, "审批结案异议需管理层权限");
+        CaseApproval a = approvalMapper.selectById(approvalId);
+        if (a == null || !"CLOSE".equals(a.getApproveType()) || !"DISPUTE".equals(a.getResult())) {
+            throw new BizException("该记录不是待审批的结案异议");
+        }
+        if (approve && !StringUtils.hasText(comment)) throw new BizException("同意退回须填写退回意见");
+        CaseInfo c = requireCase(a.getCaseId());
+        a.setResult(approve ? "RETURNED" : "REJECTED");
+        a.setApproverId(AuthContext.userId());
+        a.setApproverName(AuthContext.userName());
+        a.setComment(approve ? ("同意退回：" + comment.trim())
+                : ("不同意退回" + (StringUtils.hasText(comment) ? "：" + comment.trim() : "")));
+        approvalMapper.updateById(a);
+        if (approve) {
+            reopenCase(c, a.getFromStage());
+        }
+        logService.log("CASE", "CLOSE_DISPUTE_REVIEW", "CASE", a.getCaseId(),
+                (approve ? "同意退回结案异议" : "不同意退回结案异议")
+                        + "（" + outcomeName(a.getFlowAction()) + "）");
+    }
+
+    /**
+     * 领导直接撤回「自动结案」，把案件状态回退到结案前。
+     *
+     * <p>不需要承办人异议，领导不认可这次自动结案即可直接撤回。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void withdrawAutoClose(Long approvalId, String comment) {
+        if (!AuthContext.isFullAccess()) throw new BizException(403, "撤回自动结案需管理层权限");
+        CaseApproval a = approvalMapper.selectById(approvalId);
+        if (a == null || !"CLOSE".equals(a.getApproveType())
+                || !("AUTO".equals(a.getResult()) || "DISPUTE".equals(a.getResult()))) {
+            throw new BizException("该记录不是可撤回的自动结案");
+        }
+        CaseInfo c = requireCase(a.getCaseId());
+        reopenCase(c, a.getFromStage());
+        a.setResult("WITHDRAWN");
+        a.setApproverId(AuthContext.userId());
+        a.setApproverName(AuthContext.userName());
+        a.setComment("撤回自动结案" + (StringUtils.hasText(comment) ? "：" + comment.trim() : ""));
+        approvalMapper.updateById(a);
+        logService.log("CASE", "CLOSE_WITHDRAW", "CASE", a.getCaseId(),
+                "撤回自动结案（" + outcomeName(a.getFlowAction()) + "）");
+    }
+
+    /** 把案件从结案态重新打开，回退到结案前的状态（回退时沿用变更状态链路留痕） */
+    private void reopenCase(CaseInfo c, String fromStatus) {
+        String back = (fromStatus == null || "DONE".equals(fromStatus) || "CANCELLED".equals(fromStatus))
+                ? "IN_PROGRESS" : fromStatus;
+        com.caseflow.dto.StatusRequest status = new com.caseflow.dto.StatusRequest();
+        status.setStatus(back);
+        status.setRemark("撤回/退回自动结案，恢复办案");
+        caseService.changeStatus(c.getId(), status);
+    }
+
+    /** 本案最近一条结案登记留痕（含 PENDING 待确认 / AUTO / DISPUTE），前端展示用 */
+    public CaseApproval latestCloseTraceOf(Long caseId) {
+        List<CaseApproval> list = approvalMapper.selectList(new LambdaQueryWrapper<CaseApproval>()
+                .eq(CaseApproval::getCaseId, caseId)
+                .eq(CaseApproval::getApproveType, "CLOSE")
+                .in(CaseApproval::getResult, "PENDING", "AUTO", "DISPUTE")
+                .orderByDesc(CaseApproval::getId));
+        return list.isEmpty() ? null : list.get(0);
+    }
+
+    /** 全局限的待确认结案申请（工作台用）；caseId 不为空时只看该案件 */
+    public List<CaseApproval> pendingCloseApprovals(Long caseId) {
+        LambdaQueryWrapper<CaseApproval> q = new LambdaQueryWrapper<CaseApproval>()
+                .eq(CaseApproval::getApproveType, "CLOSE")
+                .eq(CaseApproval::getResult, "PENDING")
+                .orderByAsc(CaseApproval::getAppliedAt);
+        if (caseId != null) q.eq(CaseApproval::getCaseId, caseId);
+        return approvalMapper.selectList(q);
+    }
+
+    /** 全局限的待审批自动结案异议（工作台用）；caseId 不为空时只看该案件 */
+    public List<CaseApproval> pendingCloseDisputes(Long caseId) {
+        LambdaQueryWrapper<CaseApproval> q = new LambdaQueryWrapper<CaseApproval>()
+                .eq(CaseApproval::getApproveType, "CLOSE")
+                .eq(CaseApproval::getResult, "DISPUTE")
+                .orderByAsc(CaseApproval::getAppliedAt);
+        if (caseId != null) q.eq(CaseApproval::getCaseId, caseId);
+        return approvalMapper.selectList(q);
+    }
+
+    private String abbrev(String s) {
+        String t = s == null ? "" : s.trim();
+        return t.length() <= 60 ? t : t.substring(0, 60) + "…";
+    }
+
+
     /** 结案结果是否对该案件类型合法 */
     private boolean validOutcome(String caseType, String outcome) {
         if (!StringUtils.hasText(outcome)) return false;
@@ -205,5 +461,10 @@ public class CaseCloseRequestService {
             case "TRANSFER_OTHER": return "移送其他单位";
             default: return outcome;
         }
+    }
+
+    /** 结案结果中文名（对外，前端/Controller 展示用） */
+    public String outcomeLabel(String outcome) {
+        return outcomeName(outcome);
     }
 }

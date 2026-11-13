@@ -63,4 +63,8 @@ public class DashboardVO implements Serializable {
     private long measurePending;
     /** 待审批的状态变更申请数（领导可见；普通民警恒 0） */
     private long flowPending;
+    /** 待确认的结案申请数（领导可见；普通民警恒 0） */
+    private long closePending;
+    /** 待审批的自动结案异议数（领导可见；普通民警恒 0） */
+    private long closeDispute;
 }

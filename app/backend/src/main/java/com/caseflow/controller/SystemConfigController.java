@@ -42,4 +42,25 @@ public class SystemConfigController {
         m.put("modeLabel", configService.modeLabel(mode));
         return Result.ok(m);
     }
+
+    /** 当前结案模式（登录即可读，前端据此渲染开关状态） */
+    @GetMapping("/close-mode")
+    public Result<Map<String, Object>> closeMode() {
+        String mode = configService.closeMode();
+        Map<String, Object> m = new HashMap<>();
+        m.put("mode", mode);
+        m.put("modeLabel", configService.modeLabel(mode));
+        return Result.ok(m);
+    }
+
+    /** 设置结案模式（管理层专属，service 内做权限校验） */
+    @PostMapping("/close-mode")
+    public Result<Map<String, Object>> setCloseMode(@RequestBody Map<String, String> body) {
+        String mode = body == null ? null : body.get("mode");
+        configService.setCloseMode(mode);
+        Map<String, Object> m = new HashMap<>();
+        m.put("mode", mode);
+        m.put("modeLabel", configService.modeLabel(mode));
+        return Result.ok(m);
+    }
 }

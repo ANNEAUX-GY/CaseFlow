@@ -153,6 +153,93 @@ public class CaseController {
                 body.get("comment") == null ? null : String.valueOf(body.get("comment"))));
     }
 
+    // ---------------- 结案结果的自动/手动登记（2026-11-13）----------------
+    // 与「案件阶段变更模式」同构：登记结案结果（撤案/移送/处罚等）后，
+    // 按全局开关 close_mode 自动结案或生成待确认结案；自动结案可异议/撤回。
+
+    /** 登记结案结果：自动模式直接结案+留痕；手动模式生成待确认结案 */
+    @PostMapping("/{id}/close-outcome")
+    public Result<com.caseflow.entity.CaseApproval> registerCloseOutcome(
+            @PathVariable Long id, @RequestBody Map<String, String> body) {
+        return Result.ok(closeRequestService.registerOutcome(id, body));
+    }
+
+    /** 本案最近一条结案登记留痕（待确认/已自动结案/异议待审批），前端据此渲染按钮 */
+    @GetMapping("/{id}/close-auto")
+    public Result<Map<String, Object>> latestAutoClose(@PathVariable Long id) {
+        com.caseflow.entity.CaseApproval a = closeRequestService.latestCloseTraceOf(id);
+        Map<String, Object> m = new java.util.HashMap<>();
+        m.put("has", a != null);
+        if (a != null) {
+            m.put("approvalId", a.getId());
+            m.put("result", a.getResult());
+            m.put("outcome", a.getFlowAction());
+            m.put("outcomeName", closeRequestService.outcomeLabel(a.getFlowAction()));
+            m.put("fromStatus", a.getFromStage());
+            m.put("comment", a.getComment());
+        }
+        return Result.ok(m);
+    }
+
+    /** 待确认结案申请列表（工作台用）；id 不为空时只看该案件 */
+    @GetMapping("/close-approvals/pending")
+    @FullAccessOnly("查看待确认结案")
+    public Result<List<com.caseflow.entity.CaseApproval>> pendingCloseApprovals(
+            @RequestParam(required = false) Long caseId) {
+        return Result.ok(closeRequestService.pendingCloseApprovals(caseId));
+    }
+
+    /** 待审批的自动结案异议列表（工作台用） */
+    @GetMapping("/close-approvals/disputes")
+    @FullAccessOnly("查看待审批结案异议")
+    public Result<List<com.caseflow.entity.CaseApproval>> pendingCloseDisputes(
+            @RequestParam(required = false) Long caseId) {
+        return Result.ok(closeRequestService.pendingCloseDisputes(caseId));
+    }
+
+    /** 领导审批「待确认结案」：approve=true 结案 / false 退回 */
+    @PostMapping("/close-approvals/{approvalId}/review")
+    @FullAccessOnly("确认结案")
+    public Result<Void> reviewManualClose(@PathVariable Long approvalId,
+                                          @RequestBody Map<String, Object> body) {
+        Object ap = body.get("approve");
+        boolean approve = ap == null || Boolean.parseBoolean(String.valueOf(ap));
+        closeRequestService.reviewManualClose(approvalId, approve,
+                body.get("comment") == null ? null : String.valueOf(body.get("comment")));
+        return Result.ok(null);
+    }
+
+    /** 承办人对自动结案提异议 */
+    @PostMapping("/close-approvals/{approvalId}/dispute")
+    public Result<Void> disputeClose(@PathVariable Long approvalId,
+                                     @RequestBody Map<String, Object> body) {
+        closeRequestService.disputeAutoClose(approvalId,
+                body.get("comment") == null ? null : String.valueOf(body.get("comment")));
+        return Result.ok(null);
+    }
+
+    /** 领导审批自动结案异议：approve=true 同意退回 / false 不同意退回 */
+    @PostMapping("/close-approvals/{approvalId}/review-dispute")
+    @FullAccessOnly("审批自动结案异议")
+    public Result<Void> reviewCloseDispute(@PathVariable Long approvalId,
+                                           @RequestBody Map<String, Object> body) {
+        Object ap = body.get("approve");
+        boolean approve = ap == null || Boolean.parseBoolean(String.valueOf(ap));
+        closeRequestService.reviewCloseDispute(approvalId, approve,
+                body.get("comment") == null ? null : String.valueOf(body.get("comment")));
+        return Result.ok(null);
+    }
+
+    /** 领导直接撤回自动结案 */
+    @PostMapping("/close-approvals/{approvalId}/withdraw")
+    @FullAccessOnly("撤回自动结案")
+    public Result<Void> withdrawClose(@PathVariable Long approvalId,
+                                      @RequestBody Map<String, Object> body) {
+        closeRequestService.withdrawAutoClose(approvalId,
+                body.get("comment") == null ? null : String.valueOf(body.get("comment")));
+        return Result.ok(null);
+    }
+
     @PostMapping
     public Result<CaseVO> create(@Validated @RequestBody CaseSaveRequest req) {
         return Result.ok(caseService.save(req));

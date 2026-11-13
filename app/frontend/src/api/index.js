@@ -166,6 +166,22 @@ export const caseApi = {
   reviewCloseRequest: (id, requestId, data) => http.post('/cases/' + id + '/close-requests/' + requestId + '/review', data),
   /** 案管/领导直接结案（2026-10-30）：不走审批，立即生效 */
   directClose: (id, data) => http.post(`/cases/${id}/close`, data),
+  /** 登记结案结果（2026-11-13）：按全局开关自动结案或生成待确认结案 */
+  registerCloseOutcome: (id, data) => http.post(`/cases/${id}/close-outcome`, data),
+  /** 本案最近一条可异议/可撤回的自动结案 */
+  closeAuto: (id) => http.get(`/cases/${id}/close-auto`, { silent: true }),
+  /** 待确认结案申请列表（工作台；传 caseId 只看该案） */
+  pendingCloseApprovals: (caseId) => http.get('/cases/close-approvals/pending', { params: caseId ? { caseId } : {} }),
+  /** 待审批的自动结案异议列表（工作台） */
+  pendingCloseDisputes: (caseId) => http.get('/cases/close-approvals/disputes', { params: caseId ? { caseId } : {} }),
+  /** 领导审批待确认结案：approve=true 结案 / false 退回 */
+  reviewManualClose: (approvalId, data) => http.post(`/cases/close-approvals/${approvalId}/review`, data),
+  /** 承办人对自动结案提异议 */
+  disputeClose: (approvalId, comment) => http.post(`/cases/close-approvals/${approvalId}/dispute`, { comment }),
+  /** 领导审批自动结案异议：approve=true 同意退回 / false 不同意退回 */
+  reviewCloseDispute: (approvalId, data) => http.post(`/cases/close-approvals/${approvalId}/review-dispute`, data),
+  /** 领导直接撤回自动结案 */
+  withdrawClose: (approvalId, comment) => http.post(`/cases/close-approvals/${approvalId}/withdraw`, { comment }),
   reminders: (params) => http.get('/cases/reminders', { params }),
   /** 一键重点关注（2026-10-09）：focus=1 标注 / 0 取消，列表里直接点星，不开详情 */
   focus: (id, focus) => http.post(`/cases/${id}/focus`, { focus: focus ? 1 : 0 }),
@@ -206,7 +222,9 @@ export const categoryApi = {
 /** 系统级配置（2026-11-13）：全局开关 */
 export const systemConfigApi = {
   flowChangeMode: () => http.get('/system-config/flow-change-mode'),
-  setFlowChangeMode: (mode) => http.post('/system-config/flow-change-mode', { mode })
+  setFlowChangeMode: (mode) => http.post('/system-config/flow-change-mode', { mode }),
+  closeMode: () => http.get('/system-config/close-mode'),
+  setCloseMode: (mode) => http.post('/system-config/close-mode', { mode })
 }
 
 export const watchApi = {

@@ -26,6 +26,7 @@ import java.util.List;
 public class SystemConfigService {
 
     public static final String FLOW_CHANGE_MODE = "flow_change_mode";
+    public static final String CLOSE_MODE = "close_mode";
 
     /** 三态取值 */
     public static final String MODE_AUTO = "AUTO";
@@ -93,5 +94,51 @@ public class SystemConfigService {
         if (MODE_MANUAL.equals(mode)) return "手动确认";
         if (MODE_BOTH.equals(mode)) return "两套都要";
         return mode;
+    }
+
+    // ------------------------------------------------------------------
+    // 结案模式（2026-11-13）：与变更阶段模式同构，独立 key、独立配置。
+    // ------------------------------------------------------------------
+
+    /** 当前结案模式；未配置时默认 MANUAL（手动确认，最稳妥） */
+    public String closeMode() {
+        String v = get(CLOSE_MODE);
+        return (v == null || !VALID_MODES.contains(v)) ? MODE_MANUAL : v;
+    }
+
+    /** 是否允许自动结案（AUTO / BOTH） */
+    public boolean autoCloseEnabled() {
+        String mode = closeMode();
+        return MODE_AUTO.equals(mode) || MODE_BOTH.equals(mode);
+    }
+
+    /** 是否保留手动确认结案入口（MANUAL / BOTH） */
+    public boolean manualCloseEnabled() {
+        String mode = closeMode();
+        return MODE_MANUAL.equals(mode) || MODE_BOTH.equals(mode);
+    }
+
+    /** 设置结案模式（管理层专属），校验取值 */
+    public void setCloseMode(String mode) {
+        if (!AuthContext.isFullAccess()) {
+            throw new BizException(403, "设置系统开关需管理层权限");
+        }
+        if (mode == null || !VALID_MODES.contains(mode)) {
+            throw new BizException("非法的结案模式，可选：AUTO / MANUAL / BOTH");
+        }
+        SystemConfig c = configMapper.selectById(CLOSE_MODE);
+        if (c == null) {
+            c = new SystemConfig();
+            c.setCfgKey(CLOSE_MODE);
+        }
+        c.setCfgValue(mode);
+        c.setUpdatedAt(LocalDateTime.now());
+        if (configMapper.selectById(CLOSE_MODE) != null) {
+            configMapper.updateById(c);
+        } else {
+            configMapper.insert(c);
+        }
+        logService.log("SYSTEM", "CONFIG", "SYSTEM", null,
+                "设置结案模式：" + modeLabel(mode));
     }
 }
