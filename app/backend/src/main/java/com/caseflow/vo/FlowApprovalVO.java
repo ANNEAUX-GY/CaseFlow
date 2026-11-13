@@ -4,6 +4,8 @@ import lombok.Data;
 
 import java.io.Serializable;
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
 
 /**
  * 待审批的案件状态变更（2026-10-30）：工作台审批面板用。
@@ -33,4 +35,9 @@ public class FlowApprovalVO implements Serializable {
     private String comment;
     private String applicantName;
     private LocalDateTime appliedAt;
+    /**
+     * 当前阶段的所有可选流转分支（2026-11-13）：管理用户审批时可自选目标阶段。
+     * 每个元素：action=流转动作编码、label=动作中文名、targetStage=目标阶段码、targetStageLabel=目标阶段中文名。
+     */
+    private List<Map<String, String>> options;
 }

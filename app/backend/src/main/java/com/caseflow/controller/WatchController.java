@@ -325,13 +325,13 @@ public class WatchController {
         return Result.ok(m);
     }
 
-    /** 审批状态变更申请：approve=true 同意（流转落地）；false 退回（须填意见） */
+    /** 审批状态变更申请：approve=true 同意（流转落地，可自选 targetAction 目标阶段）；false 退回（意见选填） */
     @PostMapping("/flow-approvals/{approvalId}/review")
     @FullAccessOnly("审批状态变更")
     public Result<Void> reviewFlow(@PathVariable Long approvalId, @RequestBody Map<String, Object> body) {
         Object ap = body.get("approve");
         boolean approve = ap == null || Boolean.parseBoolean(String.valueOf(ap));
-        flowService.reviewTransfer(approvalId, approve, str(body.get("comment")));
+        flowService.reviewTransfer(approvalId, approve, str(body.get("comment")), str(body.get("targetAction")));
         return Result.ok();
     }
 

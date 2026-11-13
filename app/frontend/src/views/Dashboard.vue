@@ -232,8 +232,8 @@
                 <span v-if="row.comment" class="cf-approve-item__meta cf-muted">说明：{{ row.comment }}</span>
               </div>
               <div class="cf-approve-item__ops">
-                <el-button type="primary" size="small" @click="reviewFlowOne(row, true)">同意</el-button>
-                <el-button type="danger" size="small" plain @click="reviewFlowOne(row, false)">退回</el-button>
+                <el-button type="primary" size="small" @click="reviewFlowOne(row, true)">确认转入</el-button>
+                <el-button type="danger" size="small" plain @click="reviewFlowOne(row, false)">驳回</el-button>
               </div>
             </div>
           </div>
@@ -528,13 +528,60 @@
         <el-table-column prop="applicantName" label="申请人" width="90" />
         <el-table-column label="操作" width="150" align="right">
           <template #default="{ row }">
-            <el-button link type="success" @click="reviewFlowOne(row, true)">同意</el-button>
-            <el-button link type="danger" @click="reviewFlowOne(row, false)">退回</el-button>
+            <el-button link type="success" @click="reviewFlowOne(row, true)">确认转入</el-button>
+            <el-button link type="danger" @click="reviewFlowOne(row, false)">驳回</el-button>
           </template>
         </el-table-column>
       </el-table>
       <template #footer>
         <el-button @click="flowDlg.visible = false">关闭</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 状态变更审批（2026-11-13）：管理用户同意时自选目标阶段，驳回时意见选填 -->
+    <el-dialog v-model="flowReviewDlg.visible" :title="flowReviewDlg.approve ? '同意状态变更' : '驳回转入申请'" width="520px" class="cf-dialog" append-to-body>
+      <div v-if="flowReviewDlg.row" style="margin-bottom: 14px">
+        <p class="cf-muted" style="margin: 0 0 8px; font-size: 13px">
+          案件：<b>{{ flowReviewDlg.row.caseName }}</b>
+          <span style="margin: 0 6px">·</span>
+          当前阶段：<b>{{ flowReviewDlg.row.fromStageName }}</b>
+        </p>
+        <p v-if="!flowReviewDlg.approve" class="cf-muted" style="margin: 0; font-size: 13px">
+          承办人申请：{{ flowReviewDlg.row.fromStageName }} → {{ flowReviewDlg.row.targetStageName }}
+        </p>
+      </div>
+      <el-form label-width="96px">
+        <el-form-item v-if="flowReviewDlg.approve" label="转入阶段" required>
+          <el-select v-model="flowReviewDlg.action" placeholder="请选择转入哪个阶段" style="width: 100%">
+            <el-option
+              v-for="opt in (flowReviewDlg.row && flowReviewDlg.row.options) || []"
+              :key="opt.action"
+              :label="`${opt.targetStageLabel}（${opt.label}）`"
+              :value="opt.action"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item :label="flowReviewDlg.approve ? '审批意见' : '驳回原因'">
+          <el-input
+            v-model="flowReviewDlg.comment"
+            type="textarea"
+            :rows="3"
+            maxlength="200"
+            show-word-limit
+            :placeholder="flowReviewDlg.approve ? '选填' : '选填，例如：事实尚待进一步查清'"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="flowReviewDlg.visible = false">取消</el-button>
+        <el-button
+          :type="flowReviewDlg.approve ? 'primary' : 'danger'"
+          :loading="flowReviewDlg.loading"
+          :disabled="flowReviewDlg.approve && !flowReviewDlg.action"
+          @click="doFlowReview"
+        >
+          {{ flowReviewDlg.approve ? '确认转入' : '确认驳回' }}
+        </el-button>
       </template>
     </el-dialog>
 
@@ -983,27 +1030,34 @@ const openFlowApprovals = async () => {
     flowDlg.loading = false
   }
 }
-const reviewFlowOne = async (row, approve) => {
-  let comment = ''
-  const tip = `案件：${row.caseName}\n变更：${row.fromStageName} → ${row.targetStageName}`
-  const r = await ElMessageBox.prompt(
-    approve ? `${tip}\n\n审批意见（可留空）` : `${tip}\n\n请填写退回原因（必填）`,
-    approve ? '同意状态变更' : '退回状态变更',
-    {
-      inputType: 'textarea',
-      inputPlaceholder: approve ? '同意' : '例如：尚未对全部嫌疑人采取强制措施',
-      inputValidator: (v) => (approve ? true : (!!v && !!v.trim()) || '退回必须填写意见'),
-      dangerouslyUseHTMLString: false,
-      customStyle: { whiteSpace: 'pre-line' }
-    }
-  ).catch(() => null)
-  if (!r) return
-  comment = (r.value || '').trim()
-  await watchApi.reviewFlow(row.id, { approve, comment })
-  ElMessage.success(approve ? '已同意，案件状态已变更' : '已退回，案件状态保持不变')
-  flowDlg.rows = (await watchApi.pendingFlowApprovals()) || []
-  if (!flowDlg.rows.length) flowDlg.visible = false
-  await load()
+// 状态变更审批（2026-11-13 改）：管理用户同意时可自选目标阶段，驳回时意见选填。
+const flowReviewDlg = reactive({ visible: false, row: null, approve: true, action: '', comment: '', loading: false })
+const reviewFlowOne = (row, approve) => {
+  flowReviewDlg.row = row
+  flowReviewDlg.approve = approve
+  // 同意时默认沿用承办人申请的目标阶段，管理用户可改选
+  flowReviewDlg.action = row.flowAction || ''
+  flowReviewDlg.comment = ''
+  flowReviewDlg.visible = true
+}
+const doFlowReview = async () => {
+  const row = flowReviewDlg.row
+  if (!row) return
+  flowReviewDlg.loading = true
+  try {
+    await watchApi.reviewFlow(row.id, {
+      approve: flowReviewDlg.approve,
+      comment: flowReviewDlg.comment.trim(),
+      targetAction: flowReviewDlg.approve ? flowReviewDlg.action : undefined
+    })
+    ElMessage.success(flowReviewDlg.approve ? '已同意，案件状态已变更' : '已驳回，案件状态保持不变')
+    flowReviewDlg.visible = false
+    flowDlg.rows = (await watchApi.pendingFlowApprovals()) || []
+    if (!flowDlg.rows.length) flowDlg.visible = false
+    await load()
+  } finally {
+    flowReviewDlg.loading = false
+  }
 }
 
 // ---- 待确认结案 + 待审批结案异议（2026-11-13）----

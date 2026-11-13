@@ -246,20 +246,20 @@ public class FlowService {
     /**
      * 审批状态变更申请（领导/案管专属，2026-10-30）。
      *
-     * <p>同意 → 调 {@link #doTransfer} 落地；退回 → 维持原阶段并留意见。
+     * <p>同意 → 调 {@link #doTransfer} 落地；退回 → 维持原阶段并留意见（选填）。
      * 审批前校验案件当前阶段是否仍是申请时的阶段，防止期间已被别人改过导致串档。
+     *
+     * @param targetAction 管理用户自选的目标流转动作（2026-11-13）；为空则沿用承办人申请时的动作。
+     *                     管理用户可改判目标阶段，不局限于承办人建议的那个分支。
      */
     @Transactional(rollbackFor = Exception.class)
-    public void reviewTransfer(Long approvalId, boolean approve, String comment) {
+    public void reviewTransfer(Long approvalId, boolean approve, String comment, String targetAction) {
         if (!AuthContext.isFullAccess()) {
             throw new BizException(403, "审批状态变更申请需所长/副所长/队长/法制员/案管/管理员");
         }
         com.caseflow.entity.CaseApproval a = approvalMapper.selectById(approvalId);
         if (a == null || !"FLOW".equals(a.getApproveType()) || !"PENDING".equals(a.getResult())) {
             throw new BizException("该申请不是待审批的状态变更申请");
-        }
-        if (!approve && !StringUtils.hasText(comment)) {
-            throw new BizException("退回必须填写意见");
         }
         CaseInfo c = requireCase(a.getCaseId());
         String cur = stageOf(c);
@@ -272,18 +272,24 @@ public class FlowService {
             approvalMapper.updateById(a);
             throw new BizException("案件阶段已变更（当前：" + CaseFlowTemplate.stageLabel(cur) + "），该申请已失效，请重新提交");
         }
+        // 管理用户自选目标阶段：targetAction 有值时校验其合法性（必须在当前阶段的可选分支内），
+        // 并据此落地；为空沿用承办人申请的动作。
+        String action = StringUtils.hasText(targetAction) ? targetAction.trim() : a.getFlowAction();
+        if (StringUtils.hasText(targetAction)) {
+            resolveTarget(c.getCaseType(), cur, action); // 非法动作直接抛异常
+        }
         a.setResult(approve ? "APPROVED" : "RETURNED");
         a.setApproverId(AuthContext.userId());
         a.setApproverName(AuthContext.userName());
-        a.setComment(StringUtils.hasText(comment) ? comment.trim() : "同意");
+        a.setComment(StringUtils.hasText(comment) ? comment.trim() : (approve ? "同意" : "驳回"));
         approvalMapper.updateById(a);
         if (!approve) {
             logService.log("CASE", "FLOW_RETURN_APPLY", "CASE", a.getCaseId(),
                     "退回状态变更申请：" + CaseFlowTemplate.actionLabel(a.getFlowAction())
-                            + "（意见：" + abbrev(comment) + "）");
+                            + (StringUtils.hasText(comment) ? "（意见：" + abbrev(comment) + "）" : ""));
             return;
         }
-        doTransfer(c, cur, a.getFlowAction());
+        doTransfer(c, cur, action);
     }
 
     /** 本案是否已有待审批的状态变更申请 */
@@ -365,6 +371,17 @@ public class FlowService {
             v.setComment(a.getComment());
             v.setApplicantName(a.getApplicantName());
             v.setAppliedAt(a.getAppliedAt());
+            // 可选流转分支（2026-11-13）：管理用户审批时可自选目标阶段，不局限于承办人申请的那个。
+            List<java.util.Map<String, String>> opts = new java.util.ArrayList<>();
+            for (String[] t : CaseFlowTemplate.transitionsOf(c.getCaseType(), a.getFromStage())) {
+                java.util.Map<String, String> m = new java.util.HashMap<>();
+                m.put("action", t[0]);
+                m.put("label", CaseFlowTemplate.actionLabel(t[0]));
+                m.put("targetStage", t[1]);
+                m.put("targetStageLabel", CaseFlowTemplate.stageLabel(t[1]));
+                opts.add(m);
+            }
+            v.setOptions(opts);
             list.add(v);
         }
         return list;
