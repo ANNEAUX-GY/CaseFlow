@@ -125,17 +125,12 @@
           <el-table-column v-if="canFocus" label="重点" width="60" align="center">
             <template #default="{ row }"><FocusStar :row="row" /></template>
           </el-table-column>
-          <!-- 报案/受案时间（2026-11-17 与案件管理对齐）：去掉「编号」「案件编号」两列，
-               换成业务上真正要看的时间点，并按该时间排序（后端 sortField 默认 case_time）。
-               标签与日期同一行，口径与案件管理 CaseTable 完全一致。 -->
-          <el-table-column label="报案/受案时间" width="132">
+          <!-- 时间列（2026-11-17）：列名随页签变——初查=报案/受案时间、刑拘在办=刑拘时间、
+               取保及监居=取保时间。单元格只放纯日期，不再加类型小标签（页签已说明是哪种时间）。
+               取值按页签直接取对应字段，与后端排序口径（case_time / measure_date）一致。 -->
+          <el-table-column :label="timeColumnLabel" width="132">
             <template #default="{ row }">
-              <template v-if="caseSortTimeText(row)">
-                <el-tag size="small" :type="row.acceptTime || row.flowStage === 'DETAIN' || row.flowStage === 'BAIL' ? 'primary' : 'info'" effect="plain">
-                  {{ caseSortTimeLabel(row) }}
-                </el-tag>
-                <span class="cf-muted" style="font-size: 12px; margin-left: 4px">{{ caseSortTimeText(row) }}</span>
-              </template>
+              <span v-if="timeColumnText(row)">{{ timeColumnText(row) }}</span>
               <span v-else class="cf-muted">—</span>
             </template>
           </el-table-column>
@@ -256,7 +251,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { watchApi, employeeApi } from '../api'
 import { useCategoryStore } from '../store/category'
 import { withCaseType, useCaseTypeStore } from '../store/caseType'
-import { CASE_TYPE_META, INVEST_STATUS_META, INVEST_STAGE_META, PROGRESS_STAGE_META, MEASURE_META, STAGE_META, stageLabel, suspectLabel, suspectNamesText, caseSortTimeLabel, caseSortTimeText } from '../utils/format'
+import { CASE_TYPE_META, INVEST_STATUS_META, INVEST_STAGE_META, PROGRESS_STAGE_META, MEASURE_META, STAGE_META, stageLabel, suspectLabel, suspectNamesText, caseTimeText, dateKeyOf } from '../utils/format'
 import { useUserStore } from '../store/user'
 import FocusStar from '../components/FocusStar.vue'
 import FocusOnlyToggle from '../components/FocusOnlyToggle.vue'
@@ -276,6 +271,23 @@ const canFocus = computed(() => userStore.isFullAccess)
 const route = useRoute()
 const router = useRouter()
 const module = ref('INITIAL')
+// 时间列名随页签切换（2026-11-17）：页签已经说明是哪种时间，列名直接对应，单元格不再加标签
+const timeColumnLabel = computed(() => {
+  if (isAdministrative.value) return '报案/受案时间'
+  if (module.value === 'DETENTION') return '刑拘时间'
+  if (module.value === 'BAIL_RESIDENCE') return '取保时间'
+  return '报案/受案时间'
+})
+// 时间列取值（2026-11-17）：按页签直接取对应字段，而不是靠 flowStage 猜——
+// 页签过滤走 case_measure，flowStage 可能与措施不同步（还没流转阶段的拘留案）。
+// 初查=报案/受案时间，刑拘/取保=采取措施时间 measureDate。
+const timeColumnText = (row) => {
+  if (isAdministrative.value) return caseTimeText(row)
+  if (module.value === 'DETENTION' || module.value === 'BAIL_RESIDENCE') {
+    return row?.measureDate ? dateKeyOf(row.measureDate) : ''
+  }
+  return caseTimeText(row)
+}
 const syncModuleFromRoute = () => {
   if (caseTypeStore.current !== 'CRIMINAL') return
   const selected = String(route.query.module || '')
