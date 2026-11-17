@@ -125,9 +125,19 @@
           <el-table-column v-if="canFocus" label="重点" width="60" align="center">
             <template #default="{ row }"><FocusStar :row="row" /></template>
           </el-table-column>
-          <el-table-column prop="caseNo" label="编号" width="140" />
-          <el-table-column label="案件编号" width="140">
-            <template #default="{ row }">{{ row.filingNo || '—' }}</template>
+          <!-- 报案/受案时间（2026-11-17 与案件管理对齐）：去掉「编号」「案件编号」两列，
+               换成业务上真正要看的时间点，并按该时间排序（后端 sortField 默认 case_time）。
+               标签与日期同一行，口径与案件管理 CaseTable 完全一致。 -->
+          <el-table-column label="报案/受案时间" width="132">
+            <template #default="{ row }">
+              <template v-if="caseSortTimeText(row)">
+                <el-tag size="small" :type="row.acceptTime || row.flowStage === 'DETAIN' || row.flowStage === 'BAIL' ? 'primary' : 'info'" effect="plain">
+                  {{ caseSortTimeLabel(row) }}
+                </el-tag>
+                <span class="cf-muted" style="font-size: 12px; margin-left: 4px">{{ caseSortTimeText(row) }}</span>
+              </template>
+              <span v-else class="cf-muted">—</span>
+            </template>
           </el-table-column>
           <el-table-column prop="name" label="案件名称" min-width="180" show-overflow-tooltip />
           <el-table-column label="类型" width="120">
@@ -246,7 +256,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { watchApi, employeeApi } from '../api'
 import { useCategoryStore } from '../store/category'
 import { withCaseType, useCaseTypeStore } from '../store/caseType'
-import { CASE_TYPE_META, INVEST_STATUS_META, INVEST_STAGE_META, PROGRESS_STAGE_META, MEASURE_META, STAGE_META, stageLabel, suspectLabel, suspectNamesText } from '../utils/format'
+import { CASE_TYPE_META, INVEST_STATUS_META, INVEST_STAGE_META, PROGRESS_STAGE_META, MEASURE_META, STAGE_META, stageLabel, suspectLabel, suspectNamesText, caseSortTimeLabel, caseSortTimeText } from '../utils/format'
 import { useUserStore } from '../store/user'
 import FocusStar from '../components/FocusStar.vue'
 import FocusOnlyToggle from '../components/FocusOnlyToggle.vue'
