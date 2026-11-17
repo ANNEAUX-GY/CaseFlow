@@ -405,14 +405,18 @@ public class CaseService {
         boolean asc = "asc".equalsIgnoreCase(query.getSortOrder());
         switch (field) {
             case "case_time":
-                // 案件时间（2026-10-29）：按办案阶段分两套时间系统排序——
-                //   初查 / 行政案件 → 按接报（受理）时间 case_time；
-                //   刑拘在办(DETAIN) / 取保在办(BAIL) → 按采取措施时间 measure_date（即刑拘/取保时间）。
-                // measure_date 为空（存量/未填）的刑事案回退 case_time，保证不漏序、不跳行。
+                // 案件时间（2026-10-29，2026-11-17 修正）：按强制措施分两套时间系统排序——
+                //   初查 / 行政案件（无措施/拘传）→ 按报案/受案时间 case_time；
+                //   刑拘在办（拘留/逮捕）/ 取保及监居（取保/监视居住）→ 按采取措施时间
+                //   measure_date（即刑拘/取保时间）。
+                // 判定用 case_measure（强制措施）而非 flow_stage：页签过滤（module）走的也是
+                // case_measure，两者口径必须一致，否则「刑拘在办」页签里尚未流转阶段
+                // 的拘留案件会按 case_time 排、已流转的按 measure_date 排，顺序错乱。
+                // measure_date 为空（存量/未填）回退 case_time，保证不漏序、不跳行。
                 // 二级按 created_at 兜底，保证同值行翻页顺序稳定。
-                q.last("ORDER BY CASE WHEN flow_stage IN ('DETAIN','BAIL') AND measure_date IS NOT NULL "
-                        + "THEN measure_date ELSE case_time END " + (asc ? "ASC" : "DESC")
-                        + ", created_at DESC");
+                q.last("ORDER BY CASE WHEN case_measure IN ('DETENTION','ARREST','BAIL','RESIDENCE') "
+                        + "AND measure_date IS NOT NULL THEN measure_date ELSE case_time END "
+                        + (asc ? "ASC" : "DESC") + ", created_at DESC");
                 break;
             case "deadline":
                 q.orderBy(true, asc, CaseInfo::getDeadline);
