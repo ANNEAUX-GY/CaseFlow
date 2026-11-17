@@ -658,6 +658,13 @@ public class CaseService {
             c.setCaseTime(req.getReportTime() != null ? req.getReportTime() : now);
         } else if (req.getReportTime() != null) {
             c.setCaseTime(req.getReportTime());
+            // 重新编辑报案时间（2026-11-17）：已受案的案件（导入时写入了 accept_time）
+            // 列表/详情/排序都以 accept_time 优先展示。若只改 case_time 不改 accept_time，
+            // 用户改了报案时间但界面上仍显示旧的受案时间，看起来"没生效"。
+            // 这里对已有受案时间的案件同步改写 accept_time，保证改完立刻可见、口径一致。
+            if (existing.getAcceptTime() != null) {
+                c.setAcceptTime(req.getReportTime());
+            }
         }
         // 调解书（mediationNo）2026-10-09 起不再由建案表单填写：这里**干脆不写**，
         // 免得表单一去掉该字段、保存时就把历史值抹成 null。列保留只为看得见老数据。

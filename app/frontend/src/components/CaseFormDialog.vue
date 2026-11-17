@@ -77,10 +77,11 @@
             <el-input v-model="form.filingNo" placeholder="案件编号（选填）" maxlength="64" />
           </el-form-item>
         </el-col>
-        <!-- 报案时间（2026-10-18）：手工录入的警情通常还没受案，列表「报案/受案时间」列
-             显示的就是这个时间（已受案的案件以受案时间为准）。留空 = 保存时按今天。
-             精度到天：只选日期，不选时分。 -->
-        <el-col v-if="!isEdit" :span="8" :xs="24">
+        <!-- 报案时间（2026-10-18，2026-11-17 编辑也放开）：手工录入的警情通常还没受案，
+             列表「报案/受案时间」列显示的就是这个时间（已受案的案件以受案时间为准）。
+             精度到天：只选日期，不选时分。新建留空 = 保存时按今天；
+             编辑时回填当前案件时间，改这里即重新编辑报案时间。 -->
+        <el-col :span="8" :xs="24">
           <el-form-item label="报案时间">
             <el-date-picker v-model="form.reportTime" type="date"
               value-format="YYYY-MM-DD" placeholder="默认今天" clearable
@@ -256,7 +257,7 @@ import TodoBatchEditor from './TodoBatchEditor.vue'
 import { caseApi, watchApi } from '../api'
 import { useCategoryStore } from '../store/category'
 import {
-  MEASURE_CHOICES, REMIND_DAY_PRESETS, TIME_NODE_PRESETS
+  MEASURE_CHOICES, REMIND_DAY_PRESETS, TIME_NODE_PRESETS, dateKeyOf
 } from '../utils/format'
 
 const categoryStore = useCategoryStore()
@@ -447,6 +448,9 @@ watch(() => props.modelValue, async (v) => {
     }
     formCascade.value = categoryStore.pathOf(form.value.caseType, form.value.category)
     form.value.filingNo = d.filingNo || ''
+    // 报案时间（2026-11-17）：编辑也回填当前案件时间，支持重新编辑。
+    // case_time 是「报案/受案」的汇总列，取它回显即可；压成 yyyy-MM-dd 给日期选择器。
+    if (d.caseTime) form.value.reportTime = dateKeyOf(d.caseTime)
     // 强制措施：盯办模块登记过的值原样回显（空/NONE 都算「未采取」）
     const m = (d.caseMeasure || '').toUpperCase()
     measureTaken.value = !!m && m !== 'NONE'
